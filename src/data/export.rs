@@ -73,9 +73,51 @@ impl TaskExporter {
         Ok(())
     }
 
-    fn import_csv(_path: &Path) -> Result<Vec<Task>> {
-        // TODO: Implement CSV import
-        todo!("CSV import not yet implemented")
+    fn import_csv(path: &Path) -> Result<Vec<Task>> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        
+        let file = File::open(path)
+            .with_context(|| format!("Failed to open CSV file: {:?}", path))?;
+        
+        let reader = BufReader::new(file);
+        let mut tasks = Vec::new();
+        
+        // Skip header line and parse CSV
+        for (line_num, line_result) in reader.lines().enumerate().skip(1) {
+            let line = line_result
+                .with_context(|| format!("Failed to read line {} from CSV", line_num + 1))?;
+                
+            // Basic CSV parsing - assumes: description,status,project,priority
+            let fields: Vec<&str> = line.split(',').collect();
+            if fields.len() >= 2 {
+                let task = Task {
+                    id: (line_num + 1) as u32,
+                    uuid: uuid::Uuid::new_v4().to_string(),
+                    description: fields[0].trim_matches('"').to_string(),
+                    status: match fields[1].trim_matches('"').to_lowercase().as_str() {
+                        "completed" => crate::data::models::TaskStatus::Completed,
+                        "deleted" => crate::data::models::TaskStatus::Deleted,
+                        _ => crate::data::models::TaskStatus::Pending,
+                    },
+                    project: fields.get(2).map(|s| s.trim_matches('"').to_string()),
+                    priority: fields.get(3).and_then(|s| match s.trim_matches('"').to_lowercase().as_str() {
+                        "high" => Some(crate::data::models::Priority::High),
+                        "medium" => Some(crate::data::models::Priority::Medium),
+                        "low" => Some(crate::data::models::Priority::Low),
+                        _ => None,
+                    }),
+                    tags: Vec::new(),
+                    due: None,
+                    entry: chrono::Utc::now(),
+                    modified: chrono::Utc::now(),
+                    urgency: 0.0,
+                };
+                tasks.push(task);
+            }
+        }
+        
+        Ok(tasks)
     }
 }
 
