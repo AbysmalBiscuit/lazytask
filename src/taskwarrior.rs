@@ -6,15 +6,28 @@ use std::process::Command;
 
 use crate::data::models::Task;
 
+#[derive(Debug)]
 pub struct TaskwarriorIntegration {
     cli: TaskwarriorCLI,
     db: Option<TaskChampionDB>,
 }
 
+impl Clone for TaskwarriorIntegration {
+    fn clone(&self) -> Self {
+        // Clone only the CLI part since Connection is not cloneable
+        TaskwarriorIntegration {
+            cli: self.cli.clone(),
+            db: None, // Don't clone database connections
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct TaskwarriorCLI {
     taskrc_path: Option<PathBuf>,
 }
 
+#[derive(Debug)]
 pub struct TaskChampionDB {
     conn: Connection,
 }
@@ -74,6 +87,10 @@ impl TaskwarriorIntegration {
         self.cli.delete_task(id).await
     }
 
+    pub async fn execute_command(&self, args: &[&str]) -> Result<String> {
+        self.cli.execute_command(args)
+    }
+
     fn get_data_location(cli: &TaskwarriorCLI) -> Result<String> {
         cli.execute_command(&["_get", "rc.data.location"])
     }
@@ -85,10 +102,15 @@ impl TaskwarriorCLI {
     }
 
     pub async fn list_tasks(&self, filter: Option<&str>) -> Result<Vec<Task>> {
-        let mut args = vec!["export"];
+        let mut args = Vec::new();
+        
+        // In Taskwarrior, filters come BEFORE the command
         if let Some(f) = filter {
-            args.insert(0, f);
+            let filter_parts: Vec<&str> = f.split_whitespace().collect();
+            args.extend(filter_parts);
         }
+        
+        args.push("export");
 
         let output = self.execute_command(&args)?;
         let tasks: Vec<Value> = serde_json::from_str(&output)
@@ -170,6 +192,7 @@ impl TaskwarriorCLI {
     pub async fn delete_task(&self, id: u32) -> Result<()> {
         let id_str = id.to_string();
         // Use rc.confirmation=no to avoid interactive confirmation prompt
+        // Try different syntax: task ID delete rc.confirmation=no
         self.execute_command(&[&id_str, "delete", "rc.confirmation=no"])?;
         Ok(())
     }
@@ -182,6 +205,43 @@ impl TaskwarriorCLI {
         }
         
         cmd.args(args);
+        
+        // For config commands, we need to handle interactive prompts
+        if args.len() >= 2 && args[0] == "config" {
+            let mut child = cmd.stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .with_context(|| format!("Failed to spawn task command: {:?}", args))?;
+            
+            // Send "yes" to confirm the configuration
+            if let Some(mut stdin) = child.stdin.take() {
+                use std::io::Write;
+                stdin.write_all(b"yes\n")?;
+                stdin.flush()?;
+            }
+            
+            let result = child.wait_with_output()
+                .with_context(|| format!("Failed to execute task command: {:?}", args))?;
+            
+            let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
+            
+            if !result.status.success() {
+                let error_msg = if stderr.is_empty() {
+                    if stdout.is_empty() {
+                        format!("Task command failed with no output. Command: task {}", args.join(" "))
+                    } else {
+                        format!("Task command failed. Output: {}", stdout)
+                    }
+                } else {
+                    format!("Task command failed: {}", stderr)
+                };
+                return Err(anyhow::anyhow!("{}", error_msg));
+            }
+            
+            return Ok(stdout);
+        }
         
         let output = cmd.output()
             .with_context(|| format!("Failed to execute task command: {:?}", args))?;
