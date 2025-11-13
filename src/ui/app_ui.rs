@@ -10,7 +10,10 @@ use ratatui::{
 use crate::config::Config;
 use crate::data::models::Task;
 use crate::handlers::input::Action;
-use crate::taskwarrior::TaskwarriorIntegration;
+use crate::handlers::sync::{SyncHandler, SyncPhase};
+use crate::taskchampion::TaskChampionIntegration;
+use crate::ui::components::sync_status::SyncStatusWidget;
+use crate::ui::components::sync_config::{SyncConfigWidget, SyncConfigResult};
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
 use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::ReportsView;
@@ -29,9 +32,15 @@ pub struct AppUI {
     show_help_bar: bool,
     main_view: MainView,
     reports_view: ReportsView,
+    sync_status_widget: SyncStatusWidget,
+    sync_config_widget: SyncConfigWidget,
     tasks: Vec<Task>,
     filtered_tasks: Vec<Task>,
     task_form: Option<TaskForm>,
+    show_sync_overlay: bool,
+    sync_result_message: Option<String>,
+    sync_message_timestamp: Option<std::time::Instant>,
+    needs_task_refresh: bool,
     // Track the task UUID to preserve selection after operations
     preserve_selection_uuid: Option<String>,
 }
@@ -44,24 +53,57 @@ impl AppUI {
             show_help_bar: config.ui.show_help_bar,
             main_view: MainView::new(),
             reports_view: ReportsView::new(),
+            sync_status_widget: SyncStatusWidget::new(),
+            sync_config_widget: SyncConfigWidget::new(),
             tasks: Vec::new(),
             filtered_tasks: Vec::new(),
             task_form: None,
+            show_sync_overlay: false,
+            sync_result_message: None,
+            sync_message_timestamp: None,
+            needs_task_refresh: false,
             preserve_selection_uuid: None,
         })
     }
 
-    pub async fn load_tasks(&mut self, taskwarrior: &TaskwarriorIntegration) -> Result<()> {
-        // Load all tasks (not just pending) and sort by entry date (newest first)
-        let mut tasks = taskwarrior.list_tasks(None).await?;
-        tasks.sort_by(|a, b| b.entry.cmp(&a.entry)); // Newest first
-        self.tasks = tasks.clone();
+    pub async fn load_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<()> {
+        // Load all tasks and sort by created date (newest first)
+        let mut tasks = taskchampion.list_tasks().await?;
+        tasks.sort_by(|a, b| b.created.cmp(&a.created)); // Newest first
+        
+        // Convert TaskChampion tasks to our Task format
+        let converted_tasks: Vec<crate::data::models::Task> = tasks.into_iter().map(|tc_task| {
+            crate::data::models::Task {
+                id: tc_task.uuid.parse().unwrap_or(0),
+                uuid: tc_task.uuid,
+                description: tc_task.description,
+                status: match tc_task.status {
+                    crate::taskchampion::TaskStatus::Pending => crate::data::models::TaskStatus::Pending,
+                    crate::taskchampion::TaskStatus::Completed => crate::data::models::TaskStatus::Completed,
+                    crate::taskchampion::TaskStatus::Deleted => crate::data::models::TaskStatus::Deleted,
+                },
+                priority: tc_task.priority.map(|p| match p {
+                    crate::taskchampion::Priority::High => crate::data::models::Priority::High,
+                    crate::taskchampion::Priority::Medium => crate::data::models::Priority::Medium,
+                    crate::taskchampion::Priority::Low => crate::data::models::Priority::Low,
+                }),
+                project: tc_task.project,
+                tags: tc_task.tags,
+                due: tc_task.due,
+                entry: tc_task.created,
+                modified: tc_task.modified,
+                urgency: tc_task.urgency,
+                ..Default::default()
+            }
+        }).collect();
+        
+        self.tasks = converted_tasks.clone();
         
         // Update available filters in main view
         self.main_view.update_available_filters(&self.tasks);
         
         // Update reports view with all tasks
-        self.reports_view.update_tasks(tasks);
+        self.reports_view.update_tasks(converted_tasks);
         
         self.apply_filters();
         Ok(())
@@ -84,7 +126,26 @@ impl AppUI {
     }
 
     pub fn has_active_form(&self) -> bool {
-        self.task_form.is_some() || self.main_view.is_filter_focused()
+        self.task_form.is_some() || self.main_view.is_filter_focused() || self.sync_config_widget.is_active()
+    }
+
+    pub fn clear_sync_message(&mut self) {
+        self.sync_result_message = None;
+        self.sync_message_timestamp = None;
+    }
+
+    pub fn set_sync_message(&mut self, message: String) {
+        self.sync_result_message = Some(message);
+        self.sync_message_timestamp = Some(std::time::Instant::now());
+    }
+
+    pub fn check_sync_message_timeout(&mut self) {
+        if let (Some(_), Some(timestamp)) = (&self.sync_result_message, &self.sync_message_timestamp) {
+            // Clear message after 3 seconds
+            if timestamp.elapsed().as_secs() >= 3 {
+                self.clear_sync_message();
+            }
+        }
     }
 
     fn task_to_attributes(task: &Task) -> Vec<(String, String)> {
@@ -179,9 +240,52 @@ impl AppUI {
         if let Some(ref form) = self.task_form {
             form.render(f, size);
         }
+
+        // Draw sync config as overlay if open
+        if self.sync_config_widget.is_active() {
+            self.sync_config_widget.render(f, size);
+        }
     }
 
-    pub async fn handle_action(&mut self, action: Action, taskwarrior: &TaskwarriorIntegration) -> Result<()> {
+    pub fn render_with_sync(&mut self, f: &mut Frame, sync_handler: &SyncHandler) {
+        // Check if sync message should timeout
+        self.check_sync_message_timeout();
+        
+        let size = f.size();
+        
+        // Draw main UI
+        self.draw(f);
+        
+        // Draw sync overlay if needed and check for completion
+        if self.show_sync_overlay {
+            if let Some(sync_status) = sync_handler.get_sync_status() {
+                self.sync_status_widget.render_sync_overlay(f, size, &sync_status);
+                
+                // Check if sync is complete and handle completion
+                if !sync_status.is_syncing {
+                    self.show_sync_overlay = false;
+                    if sync_status.progress.phase == SyncPhase::Complete {
+                        self.set_sync_message(format!("✅ {}", sync_status.progress.message));
+                        self.needs_task_refresh = true;
+                    } else if sync_status.progress.phase == SyncPhase::Error {
+                        if let Some(error) = &sync_status.sync_error {
+                            self.set_sync_message(format!("❌ Sync failed: {}", error));
+                        } else {
+                            self.set_sync_message("❌ Sync failed".to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn handle_action(&mut self, action: Action, taskchampion: &mut TaskChampionIntegration, sync_handler: &mut SyncHandler) -> Result<()> {
+        // Handle task refresh if needed after sync completion
+        if self.needs_task_refresh {
+            self.load_tasks(taskchampion).await?;
+            self.needs_task_refresh = false;
+        }
+
         // Remove old filter handling that was intercepting actions
 
         // Handle form actions if form is open
@@ -214,7 +318,7 @@ impl AppUI {
                             self.preserve_selection_uuid = None; // Let it go to newest task
                         }
                         self.task_form = None;
-                        self.load_tasks(taskwarrior).await?;
+                        self.load_tasks(taskchampion).await?;
                     }
                     TaskFormResult::Cancel => {
                         self.task_form = None;
@@ -222,6 +326,33 @@ impl AppUI {
                 }
                 return Ok(());
             }
+        }
+
+        // Handle sync config actions if sync config is open
+        if self.sync_config_widget.is_active() {
+            // Always consume input when sync config is active
+            if let Some(result) = self.sync_config_widget.handle_input(action.clone())? {
+                match result {
+                    SyncConfigResult::Save(config) => {
+                        match sync_handler.configure_sync(&config).await {
+                            Ok(result) => {
+                                self.set_sync_message(format!("✅ {}", result));
+                                // Reinitialize sync handler to pick up new config
+                                sync_handler.initialize().await?;
+                            }
+                            Err(e) => {
+                                self.set_sync_message(format!("❌ Sync configuration failed: {}", e));
+                            }
+                        }
+                        self.sync_config_widget.deactivate();
+                    }
+                    SyncConfigResult::Cancel => {
+                        self.sync_config_widget.deactivate();
+                    }
+                }
+            }
+            // Always return early when sync config is active to prevent other handlers from processing input
+            return Ok(());
         }
 
         match action {
@@ -284,7 +415,44 @@ impl AppUI {
                 }
             }
             Action::Refresh => {
-                self.load_tasks(taskwarrior).await?;
+                self.load_tasks(taskchampion).await?;
+            }
+            Action::Sync => {
+                // Show sync overlay during operation
+                self.show_sync_overlay = true;
+                match sync_handler.start_sync().await {
+                    Ok(_) => {
+                        // Sync started, overlay will show progress and handle completion in render
+                    }
+                    Err(e) => {
+                        // Hide overlay and show error message
+                        self.show_sync_overlay = false;
+                        self.set_sync_message(format!("❌ Sync failed: {}", e));
+                    }
+                }
+            }
+            Action::ForceSync => {
+                // Show sync overlay during operation
+                self.show_sync_overlay = true;
+                match sync_handler.force_sync().await {
+                    Ok(_) => {
+                        // Sync started, overlay will show progress and handle completion in render
+                    }
+                    Err(e) => {
+                        // Hide overlay and show error message
+                        self.show_sync_overlay = false;
+                        self.set_sync_message(format!("❌ Force sync failed: {}", e));
+                    }
+                }
+            }
+            Action::SyncConfig => {
+                // Check if sync is already configured
+                if sync_handler.is_sync_configured().await? {
+                    self.set_sync_message("ℹ️ Sync is already configured. Use 's' to sync.".to_string());
+                } else {
+                    // Open sync configuration
+                    self.sync_config_widget.activate();
+                }
             }
             Action::Filter => {
                 // Only allow filter toggle in TaskList view
@@ -371,6 +539,12 @@ impl AppUI {
             Span::raw("    "),
             Span::styled("[r]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::styled(" Reports", Style::default().fg(Color::White)),
+            Span::raw("    "),
+            Span::styled("[s]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" Sync", Style::default().fg(Color::White)),
+            Span::raw("    "),
+            Span::styled("[S]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" Config", Style::default().fg(Color::White)),
         ]);
 
         let header = Paragraph::new(header_content)
@@ -448,6 +622,19 @@ impl AppUI {
 
 
     fn draw_footer_panel(&self, f: &mut Frame, area: Rect) {
+        // Show sync result message if available
+        if let Some(ref message) = self.sync_result_message {
+            let sync_message = Paragraph::new(message.clone())
+                .block(Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Green))
+                )
+                .style(Style::default().fg(Color::Green))
+                .alignment(ratatui::layout::Alignment::Center);
+            f.render_widget(sync_message, area);
+            return;
+        }
+
         let help_content = if self.task_form.is_some() {
             Line::from(vec![
                 Span::styled("↑↓", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
@@ -488,6 +675,8 @@ impl AppUI {
                         Span::raw("filter  "),
                         Span::styled("[r]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                         Span::raw("eports  "),
+                        Span::styled("[s]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                        Span::raw("ync  "),
                         Span::styled("[q]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
                         Span::raw("uit"),
                     ])
@@ -578,7 +767,7 @@ impl AppUI {
                         match taskwarrior.done_task(task_id).await {
                             Ok(_) => {
                                 // Successfully completed, reload tasks
-                                self.load_tasks(taskwarrior).await?;
+                                self.load_tasks(taskchampion).await?;
                             }
                             Err(e) => {
                                 // If completion fails, don't crash - just show the error and continue
@@ -611,7 +800,7 @@ impl AppUI {
                         match taskwarrior.delete_task(task_id).await {
                             Ok(_) => {
                                 // Successfully deleted, reload tasks
-                                self.load_tasks(taskwarrior).await?;
+                                self.load_tasks(taskchampion).await?;
                             }
                             Err(e) => {
                                 // If delete fails, don't crash - just show the error and continue
