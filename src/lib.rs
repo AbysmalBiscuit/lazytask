@@ -3,6 +3,7 @@
 pub mod app;
 pub mod config;
 pub mod taskwarrior;
+pub mod taskchampion;
 pub mod ui;
 pub mod handlers;
 pub mod data;

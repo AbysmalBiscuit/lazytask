@@ -14,7 +14,8 @@ use tokio::sync::mpsc;
 
 use crate::config::Config;
 use crate::handlers::input::InputHandler;
-use crate::taskwarrior::TaskwarriorIntegration;
+use crate::handlers::sync::SyncHandler;
+use crate::taskchampion::TaskChampionIntegration;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -24,7 +25,8 @@ pub struct App {
     pub terminal: AppTerminal,
     pub ui: AppUI,
     pub input_handler: InputHandler,
-    pub taskwarrior: TaskwarriorIntegration,
+    pub taskchampion: TaskChampionIntegration,
+    pub sync_handler: SyncHandler,
     pub should_quit: bool,
 }
 
@@ -40,11 +42,11 @@ impl App {
         // Load configuration
         let config = Config::load(config_path)?;
         
-        // Initialize Taskwarrior integration
-        let taskwarrior = TaskwarriorIntegration::new(
-            config.taskwarrior.taskrc_path.clone(),
-            config.taskwarrior.data_location.clone(),
-        )?;
+        // Initialize TaskChampion integration
+        let taskchampion = TaskChampionIntegration::new(None)?;
+        
+        // Initialize sync handler
+        let sync_handler = SyncHandler::new(taskchampion.clone());
         
         // Initialize components
         let ui = AppUI::new(&config)?;
@@ -55,7 +57,8 @@ impl App {
             terminal,
             ui,
             input_handler,
-            taskwarrior,
+            taskchampion,
+            sync_handler,
             should_quit: false,
         })
     }
@@ -64,8 +67,11 @@ impl App {
         // Create channels for async communication
         let (_tx, mut _rx) = mpsc::channel::<String>(32);
 
+        // Initialize sync handler
+        self.sync_handler.initialize().await?;
+
         // Initialize with tasks
-        self.ui.load_tasks(&self.taskwarrior).await?;
+        self.ui.load_tasks(&mut self.taskchampion).await?;
 
         // Flag to track when we need to redraw
         let mut needs_redraw = true;
@@ -73,7 +79,7 @@ impl App {
         loop {
             // Only draw if needed
             if needs_redraw {
-                self.terminal.draw(|f| self.ui.draw(f))?;
+                self.terminal.draw(|f| self.ui.render_with_sync(f, &self.sync_handler))?;
                 needs_redraw = false;
             }
 
@@ -89,7 +95,7 @@ impl App {
                             }
                             _ => {
                                 // Handle other actions and trigger redraw
-                                self.ui.handle_action(action, &self.taskwarrior).await?;
+                                self.ui.handle_action(action, &mut self.taskchampion, &mut self.sync_handler).await?;
                                 needs_redraw = true;
                             }
                         }
