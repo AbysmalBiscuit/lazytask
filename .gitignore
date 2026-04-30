@@ -1,2 +1,5 @@
 /target
 .DS_*
+# Runtime data created when running a local taskchampion-sync-server
+# directly (not in a container) from the repo root.
+/data
