@@ -213,24 +213,40 @@ impl Task {
 }
 
 fn parse_taskwarrior_datetime(date_str: &str) -> Option<DateTime<Utc>> {
-    // Taskwarrior uses format: 20251007T192937Z
-    // We need to convert to: 2025-10-07T19:29:37Z for parsing
-    if date_str.len() == 16 && date_str.ends_with('Z') {
+    let trimmed = date_str.trim();
+
+    // First try RFC3339 (e.g. 2024-01-01T10:00:00Z or with offset)
+    if let Ok(dt) = DateTime::parse_from_rfc3339(trimmed) {
+        return Some(dt.with_timezone(&Utc));
+    }
+
+    // Then Taskwarrior compact form: YYYYMMDDTHHMMSSZ (16 chars)
+    if trimmed.len() == 16
+        && trimmed.ends_with('Z')
+        && trimmed.as_bytes().get(8) == Some(&b'T')
+    {
         let formatted = format!(
             "{}-{}-{}T{}:{}:{}Z",
-            &date_str[0..4],   // YYYY
-            &date_str[4..6],   // MM
-            &date_str[6..8],   // DD
-            &date_str[9..11],  // HH (skip T at index 8)
-            &date_str[11..13], // MM
-            &date_str[13..15]  // SS (skip Z at index 15)
+            &trimmed[0..4],
+            &trimmed[4..6],
+            &trimmed[6..8],
+            &trimmed[9..11],
+            &trimmed[11..13],
+            &trimmed[13..15]
         );
-        DateTime::parse_from_rfc3339(&formatted)
-            .ok()
-            .map(|dt| dt.with_timezone(&Utc))
-    } else {
-        None
+        if let Ok(dt) = DateTime::parse_from_rfc3339(&formatted) {
+            return Some(dt.with_timezone(&Utc));
+        }
     }
+
+    // Unix timestamp (seconds since epoch)
+    if let Ok(ts) = trimmed.parse::<i64>() {
+        if let Some(dt) = DateTime::from_timestamp(ts, 0) {
+            return Some(dt);
+        }
+    }
+
+    None
 }
 
 impl TaskStatus {
