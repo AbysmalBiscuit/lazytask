@@ -4,3 +4,4 @@ pub mod task_form;
 pub mod calendar_view;
 pub mod report_panel;
 pub mod sync_status;
+pub mod sync_config;
