@@ -1,10 +1,16 @@
-on: [pull_request]
-
 name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    name: Check
+    name: cargo check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -15,9 +21,10 @@ jobs:
       - uses: clechasseur/rs-cargo@v4
         with:
           command: check
+          args: --all-targets
 
   fmt:
-    name: Rustfmt
+    name: cargo fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -32,7 +39,7 @@ jobs:
           args: --all -- --check
 
   clippy:
-    name: Clippy
+    name: cargo clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -41,7 +48,27 @@ jobs:
           toolchain: stable
           override: true
           components: clippy
+      # Warn (don't deny) to keep CI informative without gating PRs on
+      # accumulated style lints. Tighten to `-D warnings` after a clippy
+      # cleanup pass.
       - uses: clechasseur/rs-cargo@v4
         with:
           command: clippy
-          args: -- -W warnings
+          args: --all-targets -- -W warnings
+
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      # The 2 tests in `integration_remote_sync` skip cleanly when
+      # LAZYTASK_REMOTE_SYNC_URL is unset, so the 64 offline tests of the
+      # 66-test suite (plus the 2 skip-passes) always run here.
+      - uses: clechasseur/rs-cargo@v4
+        with:
+          command: test
+          args: --all-targets --no-fail-fast

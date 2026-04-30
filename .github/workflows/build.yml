@@ -50,9 +50,12 @@ jobs:
             strip: false
     env:
       RUSTFLAGS: ${{ matrix.rust_flags }}
-      MACOSX_DEPLOYMENT_TARGET: 10.7
+      # macOS 11 (Big Sur, Nov 2020) is the oldest version Apple still
+      # provides security updates for; bumped from 10.7 (2011) which is
+      # well below modern rustc requirements.
+      MACOSX_DEPLOYMENT_TARGET: 11.0
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
