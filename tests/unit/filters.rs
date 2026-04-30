@@ -6,7 +6,7 @@ use lazytask::data::models::{Priority, Task, TaskStatus};
 
 #[test]
 fn test_basic_status_filtering() {
-    let mut tasks = create_test_tasks();
+    let tasks = create_test_tasks();
     
     // Test pending filter
     let pending_filter = TaskFilter {

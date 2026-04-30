@@ -32,10 +32,6 @@ tempfile = "3.8"
 tokio-test = "0.4"
 
 [[test]]
-name = "taskwarrior_compat"
-path = "tests/integration/taskwarrior_compat.rs"
-
-[[test]]
 name = "models"
 path = "tests/unit/models.rs"
 
@@ -46,3 +42,23 @@ path = "tests/unit/filters.rs"
 [[test]]
 name = "config"
 path = "tests/unit/config.rs"
+
+[[test]]
+name = "integration_engine"
+path = "tests/integration_engine.rs"
+
+[[test]]
+name = "integration_sync"
+path = "tests/integration_sync.rs"
+
+[[test]]
+name = "integration_ui"
+path = "tests/integration_ui.rs"
+
+[[test]]
+name = "integration_remote_sync"
+path = "tests/integration_remote_sync.rs"
+
+[[test]]
+name = "integration_tui_input"
+path = "tests/integration_tui_input.rs"

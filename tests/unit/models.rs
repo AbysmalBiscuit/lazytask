@@ -43,6 +43,23 @@ fn test_task_from_json() {
 }
 
 #[test]
+fn test_task_from_json_taskwarrior_compact_date() {
+    // Taskwarrior emits dates as YYYYMMDDTHHMMSSZ. Make sure we accept that
+    // format alongside RFC3339 — this was previously silently rejected.
+    let json_data = json!({
+        "uuid": "tw-uuid",
+        "description": "Compact-date task",
+        "status": "pending",
+        "entry": "20251007T192937Z",
+        "due":   "20251010T120000Z"
+    });
+    let task = Task::from_json(&json_data).expect("Should parse compact dates");
+    assert_eq!(task.entry.format("%Y-%m-%d %H:%M:%S").to_string(), "2025-10-07 19:29:37");
+    let due = task.due.expect("due should be parsed");
+    assert_eq!(due.format("%Y-%m-%d %H:%M:%S").to_string(), "2025-10-10 12:00:00");
+}
+
+#[test]
 fn test_task_status_conversion() {
     assert_eq!(TaskStatus::from_str("pending"), TaskStatus::Pending);
     assert_eq!(TaskStatus::from_str("completed"), TaskStatus::Completed);

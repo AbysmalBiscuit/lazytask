@@ -1,7 +1,5 @@
 // Unit tests for configuration system
 
-use std::fs;
-use std::path::PathBuf;
 use tempfile::tempdir;
 
 use lazytask::config::{Config, ThemeConfig, UIConfig};
