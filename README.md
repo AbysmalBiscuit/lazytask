@@ -133,24 +133,50 @@ Tags use Taskwarrior-style syntax inside the Tags field: `+work +urgent` to add,
 
 LazyTask speaks the official TaskChampion sync protocol. To use it you need a `taskchampion-sync-server` reachable over HTTP/HTTPS.
 
-### Run a local sync server (Podman or Docker)
+### Quick start with Compose (recommended)
 
-The server image takes its config via **environment variables**, not CLI flags:
+The repo ships a `compose.yaml` that works with both `docker compose` and `podman compose` (or `podman-compose`):
+
+```bash
+# 1. Generate a client UUID and put it in .env
+echo "CLIENT_ID=$(uuidgen | tr 'A-Z' 'a-z')" > .env
+
+# 2. Bring the server up
+docker compose up -d            # or: podman compose up -d
+
+# 3. Confirm it's listening
+docker compose logs sync-server | tail
+```
+
+The server is now reachable at `http://localhost:8810`. Use the UUID from your `.env` file as the **Client ID** in LazyTask's sync config modal (see below).
+
+To stop:
+
+```bash
+docker compose down              # keep the database
+docker compose down --volumes    # also wipe the database
+```
+
+See [docs/sync-server.md](docs/sync-server.md) for the full reference (custom ports, log levels, multi-device sync, the no-compose `docker run` form).
+
+### Run the sync server directly (no compose)
+
+If you'd rather not keep `compose.yaml` around, the equivalent one-shot command is:
 
 ```bash
 CLIENT_ID=$(uuidgen | tr 'A-Z' 'a-z')   # macOS BSD uuidgen emits uppercase
 
-# With Podman:
 podman run -d --name=lazytask-sync -p 8810:8080 \
   -e CLIENT_ID=$CLIENT_ID \
   ghcr.io/gothenburgbitfactory/taskchampion-sync-server:0.7.1
-
-# With Docker, swap `podman` for `docker`. Same flags.
+# Or replace `podman` with `docker` — same flags.
 
 echo "Use this client_id in LazyTask: $CLIENT_ID"
 ```
 
 `-p 8810:8080` maps the container port; pick whatever host port is free.
+
+> The image's entrypoint reads `CLIENT_ID` from the environment, **not** as a CLI flag. Don't try `--allow-client-id <uuid>` style invocations — they fail with `eval: --allow-client-id: not found`.
 
 ### Configure LazyTask
 

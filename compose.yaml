@@ -1,0 +1,65 @@
+# Compose file for spinning up a TaskChampion sync server locally so you can
+# test LazyTask's sync feature end-to-end.
+#
+# Works with both Docker (`docker compose ...`) and Podman
+# (`podman compose ...` or `podman-compose ...`).
+#
+# Quick start:
+#
+#   1. Generate a client ID (lowercase UUID):
+#
+#        echo "CLIENT_ID=$(uuidgen | tr 'A-Z' 'a-z')" > .env
+#
+#      (or copy `.env.example` to `.env` and edit it)
+#
+#   2. Start the server:
+#
+#        docker compose up -d        # or: podman compose up -d
+#
+#   3. Verify it's up:
+#
+#        docker compose logs sync-server | tail
+#
+#   4. Configure LazyTask:
+#
+#        ./target/release/lazytask
+#        # press Shift+S in the TUI:
+#        #   Server URL:        http://localhost:8810
+#        #   Client ID:         <the same UUID from .env>
+#        #   Encryption Secret: any string (must match across replicas)
+#        # press Enter to save, then `s` to sync.
+#
+#   5. Stop / clean up when done:
+#
+#        docker compose down              # stops & removes the container
+#        docker compose down --volumes    # also removes the persisted DB
+
+services:
+  sync-server:
+    image: ghcr.io/gothenburgbitfactory/taskchampion-sync-server:0.7.1
+    container_name: lazytask-sync-server
+    restart: unless-stopped
+    ports:
+      # Host:container. Change the host port (left side) if 8810 is in use.
+      - "${LAZYTASK_SYNC_PORT:-8810}:8080"
+    environment:
+      # The image's entrypoint reads CLIENT_ID from the env (not as a CLI flag).
+      # Setting this restricts the server to only accept syncs from this UUID.
+      # Leave unset to allow any client UUID (less safe; fine for local dev).
+      CLIENT_ID: "${CLIENT_ID:-}"
+      RUST_LOG: "${RUST_LOG:-info}"
+    volumes:
+      # Persist the sync-server's SQLite database across container restarts.
+      # Use a named volume so it survives `docker compose down` (and only
+      # vanishes with `down --volumes`).
+      - sync-data:/var/lib/taskchampion-sync-server/data
+    healthcheck:
+      # The image doesn't ship curl/wget, so reach the HTTP port via /dev/tcp.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 && echo > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  sync-data:

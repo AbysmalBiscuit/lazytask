@@ -3,3 +3,7 @@
 # Runtime data created when running a local taskchampion-sync-server
 # directly (not in a container) from the repo root.
 /data
+# Local environment overrides for `compose.yaml` (commit `.env.example`
+# instead). Likely contains a client UUID and is harmless on its own,
+# but keep the convention.
+.env
