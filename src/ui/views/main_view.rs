@@ -8,7 +8,6 @@ use ratatui::{
 };
 
 use crate::data::models::{Task, TaskStatus};
-use crate::ui::components::filter_bar::FilterBarWidget;
 use crate::ui::components::task_detail::TaskDetailWidget;
 use crate::ui::components::task_list::TaskListWidget;
 
@@ -23,7 +22,6 @@ pub enum FilterSection {
 pub struct MainView {
     task_list_widget: TaskListWidget,
     task_detail_widget: TaskDetailWidget,
-    filter_bar_widget: FilterBarWidget,
     filter_focused: bool,
     active_filter_section: FilterSection,
     status_selection_index: usize,
@@ -44,7 +42,6 @@ impl MainView {
         MainView {
             task_list_widget: TaskListWidget::new(),
             task_detail_widget: TaskDetailWidget::new(),
-            filter_bar_widget: FilterBarWidget::new(),
             filter_focused: false,
             active_filter_section: FilterSection::Status,
             status_selection_index: 0,
@@ -141,9 +138,7 @@ impl MainView {
         tags.sort();
         tags.dedup();
         self.available_tags = tags.clone();
-
-        // Update filter bar widget with current projects and tags
-        self.filter_bar_widget.update_available_options(projects, tags);
+        let _ = projects; // available projects already stored above
     }
 
     pub fn set_tasks_with_preserved_selection(&mut self, tasks: Vec<Task>, preserve_uuid: Option<&str>) {
@@ -242,14 +237,10 @@ impl MainView {
 
     pub fn toggle_filter_focus(&mut self) {
         self.filter_focused = !self.filter_focused;
-        if self.filter_focused {
-            self.filter_bar_widget.is_visible = true;
-        }
     }
 
     pub fn exit_filter_mode(&mut self) {
         self.filter_focused = false;
-        self.filter_bar_widget.is_visible = false;
     }
 
     pub fn next_filter_section(&mut self) {
