@@ -1,232 +1,393 @@
+// TaskChampion replica integration. This is the live data engine for LazyTask.
+// Targets the taskchampion 3.0.x API: Replica<S: Storage> with async methods,
+// SqliteStorage built directly, ServerConfig::into_server() async.
+
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::Utc;
 use std::path::PathBuf;
-use taskchampion::{Replica, Server, Storage};
+use taskchampion::storage::AccessMode;
+use taskchampion::{
+    Operations, Replica, ServerConfig, SqliteStorage, Status as TcStatus, Tag,
+};
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+use crate::data::models::{Priority, Task, TaskStatus};
+
+#[derive(Debug, Clone, Default)]
+pub struct SyncSettings {
+    pub server_url: String,
+    pub client_id: String,
+    pub encryption_secret: String,
+    /// Optional override for the local sync-server directory. When `server_url` is empty,
+    /// this path is used as a `ServerConfig::Local` target. Useful for testing two replicas
+    /// against one shared server directory. When `None`, defaults to `<data_dir>/sync-server`.
+    pub local_server_dir: Option<PathBuf>,
+}
+
 pub struct TaskChampionIntegration {
-    replica: Replica,
-    server: Option<Server>,
+    replica: Replica<SqliteStorage>,
+    sync_settings: Option<SyncSettings>,
     data_dir: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Task {
-    pub uuid: String,
-    pub description: String,
-    pub status: TaskStatus,
-    pub priority: Option<Priority>,
-    pub project: Option<String>,
-    pub tags: Vec<String>,
-    pub due: Option<DateTime<Utc>>,
-    pub created: DateTime<Utc>,
-    pub modified: DateTime<Utc>,
-    pub urgency: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TaskStatus {
-    Pending,
-    Completed,
-    Deleted,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Priority {
-    High,
-    Medium,
-    Low,
-}
-
-impl TaskChampionIntegration {
-    pub fn new(data_dir: Option<PathBuf>) -> Result<Self> {
-        let data_dir = data_dir.unwrap_or_else(|| {
-            dirs::data_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("lazytask")
-        });
-
-        // Ensure data directory exists
-        std::fs::create_dir_all(&data_dir)
-            .context("Failed to create data directory")?;
-
-        let storage = Storage::new(data_dir.clone())
-            .context("Failed to create TaskChampion storage")?;
-
-        let replica = Replica::new(Uuid::new_v4(), storage)
-            .context("Failed to create TaskChampion replica")?;
-
-        Ok(TaskChampionIntegration {
-            replica,
-            server: None,
-            data_dir,
-        })
-    }
-
-    pub async fn configure_sync(&mut self, server_url: &str, client_id: &str) -> Result<()> {
-        let server = Server::new(server_url, client_id)
-            .context("Failed to create TaskChampion server")?;
-        
-        self.server = Some(server);
-        Ok(())
-    }
-
-    pub async fn list_tasks(&mut self) -> Result<Vec<Task>> {
-        let tasks = self.replica
-            .all_tasks()
-            .context("Failed to list tasks")?;
-
-        let mut result = Vec::new();
-        for task in tasks {
-            let task_data = self.replica
-                .get_task(task)
-                .context("Failed to get task data")?;
-
-            if let Some(task_data) = task_data {
-                let tc_task = taskchampion::Task::from(task_data);
-                
-                let status = match tc_task.status() {
-                    taskchampion::Status::Pending => TaskStatus::Pending,
-                    taskchampion::Status::Completed => TaskStatus::Completed,
-                    taskchampion::Status::Deleted => TaskStatus::Deleted,
-                };
-
-                let priority = tc_task.priority().map(|p| match p {
-                    taskchampion::Priority::High => Priority::High,
-                    taskchampion::Priority::Medium => Priority::Medium,
-                    taskchampion::Priority::Low => Priority::Low,
-                });
-
-                let task = Task {
-                    uuid: task.to_string(),
-                    description: tc_task.description().to_string(),
-                    status,
-                    priority,
-                    project: tc_task.project().map(|s| s.to_string()),
-                    tags: tc_task.tags().iter().map(|s| s.to_string()).collect(),
-                    due: tc_task.due().map(|d| DateTime::from(d)),
-                    created: DateTime::from(tc_task.created()),
-                    modified: DateTime::from(tc_task.modified()),
-                    urgency: tc_task.urgency(),
-                };
-
-                result.push(task);
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub async fn add_task(&mut self, description: &str) -> Result<String> {
-        let mut builder = self.replica
-            .new_task(description)
-            .context("Failed to create new task")?;
-
-        let task = builder
-            .build()
-            .context("Failed to build task")?;
-
-        Ok(task.to_string())
-    }
-
-    pub async fn update_task(&mut self, uuid: &str, updates: TaskUpdate) -> Result<()> {
-        let task_uuid = uuid.parse::<Uuid>()
-            .context("Invalid task UUID")?;
-
-        let mut task_data = self.replica
-            .get_task(task_uuid)
-            .context("Failed to get task")?
-            .ok_or_else(|| anyhow::anyhow!("Task not found"))?;
-
-        if let Some(description) = updates.description {
-            task_data.description = description;
-        }
-
-        if let Some(status) = updates.status {
-            task_data.status = match status {
-                TaskStatus::Pending => taskchampion::Status::Pending,
-                TaskStatus::Completed => taskchampion::Status::Completed,
-                TaskStatus::Deleted => taskchampion::Status::Deleted,
-            };
-        }
-
-        if let Some(priority) = updates.priority {
-            task_data.priority = priority.map(|p| match p {
-                Priority::High => taskchampion::Priority::High,
-                Priority::Medium => taskchampion::Priority::Medium,
-                Priority::Low => taskchampion::Priority::Low,
-            });
-        }
-
-        if let Some(project) = updates.project {
-            task_data.project = project;
-        }
-
-        if let Some(tags) = updates.tags {
-            task_data.tags = tags;
-        }
-
-        if let Some(due) = updates.due {
-            task_data.due = Some(due.into());
-        }
-
-        self.replica
-            .update_task(task_uuid, task_data)
-            .context("Failed to update task")?;
-
-        Ok(())
-    }
-
-    pub async fn delete_task(&mut self, uuid: &str) -> Result<()> {
-        let task_uuid = uuid.parse::<Uuid>()
-            .context("Invalid task UUID")?;
-
-        self.replica
-            .delete_task(task_uuid)
-            .context("Failed to delete task")?;
-
-        Ok(())
-    }
-
-    pub async fn sync(&mut self) -> Result<SyncResult> {
-        if let Some(server) = &self.server {
-            let sync_result = self.replica
-                .sync(server)
-                .await
-                .context("Failed to sync with server")?;
-
-            Ok(SyncResult {
-                uploaded: sync_result.uploaded,
-                downloaded: sync_result.downloaded,
-                conflicts: sync_result.conflicts,
-            })
-        } else {
-            Err(anyhow::anyhow!("No server configured"))
-        }
-    }
-
-    pub fn is_sync_configured(&self) -> bool {
-        self.server.is_some()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct TaskUpdate {
-    pub description: Option<String>,
-    pub status: Option<TaskStatus>,
-    pub priority: Option<Option<Priority>>,
-    pub project: Option<Option<String>>,
-    pub tags: Option<Vec<String>>,
-    pub due: Option<Option<DateTime<Utc>>>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SyncResult {
     pub uploaded: usize,
     pub downloaded: usize,
     pub conflicts: usize,
 }
 
+impl TaskChampionIntegration {
+    pub async fn new(data_dir: Option<PathBuf>) -> Result<Self> {
+        let data_dir = data_dir.unwrap_or_else(|| {
+            dirs::data_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("lazytask")
+        });
 
+        std::fs::create_dir_all(&data_dir).context("Failed to create data directory")?;
+
+        let storage = SqliteStorage::new(&data_dir, AccessMode::ReadWrite, true)
+            .await
+            .context("Failed to open TaskChampion storage")?;
+
+        let replica = Replica::new(storage);
+
+        Ok(TaskChampionIntegration {
+            replica,
+            sync_settings: None,
+            data_dir,
+        })
+    }
+
+    pub fn data_dir(&self) -> &PathBuf {
+        &self.data_dir
+    }
+
+    pub async fn list_tasks(&mut self) -> Result<Vec<Task>> {
+        let tasks = self
+            .replica
+            .all_tasks()
+            .await
+            .context("Failed to load tasks")?;
+
+        let mut result = Vec::with_capacity(tasks.len());
+        for (uuid, tc_task) in tasks {
+            result.push(map_task(uuid, &tc_task));
+        }
+        Ok(result)
+    }
+
+    pub async fn add_task(
+        &mut self,
+        description: &str,
+        attributes: &[(&str, &str)],
+    ) -> Result<String> {
+        let uuid = Uuid::new_v4();
+        let mut ops = Operations::new();
+        let mut task = self
+            .replica
+            .create_task(uuid, &mut ops)
+            .await
+            .context("Failed to create task")?;
+        task.set_description(description.to_string(), &mut ops)
+            .context("Failed to set task description")?;
+        task.set_status(TcStatus::Pending, &mut ops)
+            .context("Failed to set task status")?;
+        task.set_entry(Some(Utc::now()), &mut ops)
+            .context("Failed to set task entry")?;
+
+        apply_attributes(&mut task, attributes, &mut ops)?;
+
+        self.replica
+            .commit_operations(ops)
+            .await
+            .context("Failed to commit new task")?;
+        Ok(uuid.to_string())
+    }
+
+    pub async fn modify_task(
+        &mut self,
+        uuid: &str,
+        attributes: &[(&str, &str)],
+    ) -> Result<()> {
+        let task_uuid = uuid.parse::<Uuid>().context("Invalid task UUID")?;
+        let mut ops = Operations::new();
+        let mut task = self
+            .replica
+            .get_task(task_uuid)
+            .await
+            .context("Failed to get task")?
+            .ok_or_else(|| anyhow::anyhow!("Task {} not found", uuid))?;
+
+        apply_attributes(&mut task, attributes, &mut ops)?;
+
+        self.replica
+            .commit_operations(ops)
+            .await
+            .context("Failed to commit modifications")?;
+        Ok(())
+    }
+
+    pub async fn done_task(&mut self, uuid: &str) -> Result<()> {
+        self.set_status(uuid, TcStatus::Completed).await
+    }
+
+    pub async fn delete_task(&mut self, uuid: &str) -> Result<()> {
+        // Soft-delete: mark status=deleted. Use `purge_task` for permanent removal.
+        self.set_status(uuid, TcStatus::Deleted).await
+    }
+
+    pub async fn purge_task(&mut self, uuid: &str) -> Result<()> {
+        let task_uuid = uuid.parse::<Uuid>().context("Invalid task UUID")?;
+        let mut ops = Operations::new();
+        let mut data = self
+            .replica
+            .get_task_data(task_uuid)
+            .await
+            .context("Failed to get task")?
+            .ok_or_else(|| anyhow::anyhow!("Task {} not found", uuid))?;
+        data.delete(&mut ops);
+        self.replica
+            .commit_operations(ops)
+            .await
+            .context("Failed to purge task")?;
+        Ok(())
+    }
+
+    async fn set_status(&mut self, uuid: &str, status: TcStatus) -> Result<()> {
+        let task_uuid = uuid.parse::<Uuid>().context("Invalid task UUID")?;
+        let mut ops = Operations::new();
+        let mut task = self
+            .replica
+            .get_task(task_uuid)
+            .await
+            .context("Failed to get task")?
+            .ok_or_else(|| anyhow::anyhow!("Task {} not found", uuid))?;
+        task.set_status(status, &mut ops)
+            .context("Failed to set status")?;
+        self.replica
+            .commit_operations(ops)
+            .await
+            .context("Failed to commit status change")?;
+        Ok(())
+    }
+
+    pub fn configure_sync(&mut self, settings: SyncSettings) -> Result<()> {
+        // Validate the server settings by trying to build a ServerConfig.
+        let _ = build_server_config(&settings, &self.data_dir)?;
+        self.sync_settings = Some(settings);
+        Ok(())
+    }
+
+    pub fn is_sync_configured(&self) -> bool {
+        self.sync_settings.is_some()
+    }
+
+    pub async fn sync(&mut self) -> Result<SyncResult> {
+        let settings = self
+            .sync_settings
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Sync not configured"))?
+            .clone();
+
+        let pending_before = self.replica.num_local_operations().await.unwrap_or(0);
+
+        let mut server = build_server_config(&settings, &self.data_dir)?
+            .into_server()
+            .await
+            .context("Failed to construct sync server")?;
+        self.replica
+            .sync(&mut server, false)
+            .await
+            .context("Failed to sync with server")?;
+
+        let pending_after = self.replica.num_local_operations().await.unwrap_or(0);
+        let uploaded = pending_before.saturating_sub(pending_after);
+
+        Ok(SyncResult {
+            uploaded,
+            downloaded: 0, // TaskChampion sync doesn't expose download counts.
+            conflicts: 0,
+        })
+    }
+}
+
+fn build_server_config(settings: &SyncSettings, data_dir: &PathBuf) -> Result<ServerConfig> {
+    if settings.server_url.is_empty() {
+        let server_dir = settings
+            .local_server_dir
+            .clone()
+            .unwrap_or_else(|| data_dir.join("sync-server"));
+        std::fs::create_dir_all(&server_dir)
+            .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
+        return Ok(ServerConfig::Local { server_dir });
+    }
+    let client_id = settings
+        .client_id
+        .parse::<Uuid>()
+        .context("Sync client_id must be a UUID")?;
+    Ok(ServerConfig::Remote {
+        url: settings.server_url.clone(),
+        client_id,
+        encryption_secret: settings.encryption_secret.as_bytes().to_vec(),
+    })
+}
+
+fn apply_attributes(
+    task: &mut taskchampion::Task,
+    attributes: &[(&str, &str)],
+    ops: &mut Operations,
+) -> Result<()> {
+    for (key, value) in attributes {
+        match *key {
+            "description" => {
+                if !value.is_empty() {
+                    task.set_description((*value).to_string(), ops)
+                        .context("Failed to set description")?;
+                }
+            }
+            "project" => {
+                let v = if value.is_empty() {
+                    None
+                } else {
+                    Some((*value).to_string())
+                };
+                task.set_value("project", v, ops)
+                    .context("Failed to set project")?;
+            }
+            "priority" => {
+                let v = if value.is_empty() {
+                    None
+                } else {
+                    Some((*value).to_string())
+                };
+                task.set_value("priority", v, ops)
+                    .context("Failed to set priority")?;
+            }
+            "due" => {
+                let v = if value.is_empty() {
+                    None
+                } else {
+                    Some(parse_due_date(value)?)
+                };
+                task.set_due(v, ops).context("Failed to set due")?;
+            }
+            "tags" if value.is_empty() => {
+                // Clear all user tags.
+                let existing: Vec<Tag> = task
+                    .get_tags()
+                    .filter(|t| !t.is_synthetic())
+                    .collect();
+                for tag in existing {
+                    task.remove_tag(&tag, ops).context("Failed to remove tag")?;
+                }
+            }
+            other if other.starts_with('+') => {
+                let raw = &other[1..];
+                let tag: Tag = raw
+                    .try_into()
+                    .map_err(|e| anyhow::anyhow!("Invalid tag '{}': {}", raw, e))?;
+                task.add_tag(&tag, ops).context("Failed to add tag")?;
+            }
+            other if other.starts_with('-') => {
+                let raw = &other[1..];
+                let tag: Tag = raw
+                    .try_into()
+                    .map_err(|e| anyhow::anyhow!("Invalid tag '{}': {}", raw, e))?;
+                task.remove_tag(&tag, ops).context("Failed to remove tag")?;
+            }
+            _ => {
+                // Treat any other key as a UDA passthrough.
+                let v = if value.is_empty() {
+                    None
+                } else {
+                    Some((*value).to_string())
+                };
+                task.set_value(*key, v, ops)
+                    .context("Failed to set attribute")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_due_date(value: &str) -> Result<chrono::DateTime<Utc>> {
+    // Accept YYYY-MM-DD (treated as end-of-day UTC) or RFC3339.
+    if let Ok(naive) = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d") {
+        let dt = naive
+            .and_hms_opt(23, 59, 59)
+            .ok_or_else(|| anyhow::anyhow!("Invalid date"))?;
+        return Ok(chrono::DateTime::from_naive_utc_and_offset(dt, Utc));
+    }
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| anyhow::anyhow!("Invalid due date '{}': {}", value, e))
+}
+
+fn map_task(uuid: Uuid, tc: &taskchampion::Task) -> Task {
+    let status = match tc.get_status() {
+        TcStatus::Pending => TaskStatus::Pending,
+        TcStatus::Completed => TaskStatus::Completed,
+        TcStatus::Deleted => TaskStatus::Deleted,
+        TcStatus::Recurring => TaskStatus::Recurring,
+        TcStatus::Unknown(_) => TaskStatus::Pending,
+    };
+
+    let priority = match tc.get_priority() {
+        "H" => Some(Priority::High),
+        "M" => Some(Priority::Medium),
+        "L" => Some(Priority::Low),
+        _ => None,
+    };
+
+    let tags: Vec<String> = tc
+        .get_tags()
+        .filter(|t| !t.is_synthetic())
+        .map(|t| t.to_string())
+        .collect();
+
+    let project = tc.get_value("project").map(|s| s.to_string());
+
+    let entry = tc.get_entry().unwrap_or_else(Utc::now);
+    let modified = tc.get_modified();
+    let due = tc.get_due();
+    let wait = tc.get_wait();
+
+    let start = tc
+        .get_value("start")
+        .and_then(|s| parse_unix_or_rfc3339(s));
+
+    let end = tc.get_value("end").and_then(|s| parse_unix_or_rfc3339(s));
+
+    Task {
+        id: None,
+        uuid: uuid.to_string(),
+        status,
+        description: tc.get_description().to_string(),
+        project,
+        priority,
+        due,
+        entry,
+        modified,
+        end,
+        start,
+        wait,
+        scheduled: None,
+        until: None,
+        depends: tc.get_dependencies().map(|u| u.to_string()).collect(),
+        tags,
+        annotations: Vec::new(),
+        urgency: 0.0,
+        udas: std::collections::HashMap::new(),
+    }
+}
+
+fn parse_unix_or_rfc3339(s: &str) -> Option<chrono::DateTime<Utc>> {
+    if let Ok(ts) = s.parse::<i64>() {
+        return chrono::DateTime::from_timestamp(ts, 0);
+    }
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}

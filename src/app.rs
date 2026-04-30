@@ -4,16 +4,12 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::{self, Stdout};
 use std::time::Duration;
-use tokio::sync::mpsc;
 
 use crate::config::Config;
-use crate::handlers::input::InputHandler;
+use crate::handlers::input::{Action, InputHandler};
 use crate::handlers::sync::SyncHandler;
 use crate::taskchampion::TaskChampionIntegration;
 use crate::ui::app_ui::AppUI;
@@ -31,24 +27,16 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
-        // Initialize terminal
+    pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
 
-        // Load configuration
         let config = Config::load(config_path)?;
-        
-        // Initialize TaskChampion integration
-        let taskchampion = TaskChampionIntegration::new(None)?;
-        
-        // Initialize sync handler
-        let sync_handler = SyncHandler::new(taskchampion.clone());
-        
-        // Initialize components
+        let taskchampion = TaskChampionIntegration::new(None).await?;
+        let sync_handler = SyncHandler::new();
         let ui = AppUI::new(&config)?;
         let input_handler = InputHandler::new(&config);
 
@@ -64,49 +52,45 @@ impl App {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        // Create channels for async communication
-        let (_tx, mut _rx) = mpsc::channel::<String>(32);
-
-        // Initialize sync handler
-        self.sync_handler.initialize().await?;
-
-        // Initialize with tasks
+        self.sync_handler.initialize(&self.taskchampion)?;
         self.ui.load_tasks(&mut self.taskchampion).await?;
 
-        // Flag to track when we need to redraw
         let mut needs_redraw = true;
 
         loop {
-            // Only draw if needed
             if needs_redraw {
-                self.terminal.draw(|f| self.ui.render_with_sync(f, &self.sync_handler))?;
+                self.terminal
+                    .draw(|f| self.ui.render_with_sync(f, &self.sync_handler))?;
                 needs_redraw = false;
             }
 
-            // Handle input and resize events - block for a bit longer to reduce CPU usage
             if event::poll(Duration::from_millis(250))? {
                 match event::read()? {
                     Event::Key(key) => {
                         let in_form = self.ui.has_active_form();
-                        let action = self.input_handler.handle_key_event_with_context(key, in_form);
+                        let action = self
+                            .input_handler
+                            .handle_key_event_with_context(key, in_form);
                         match action {
-                            crate::handlers::input::Action::Quit => {
+                            Action::Quit => {
                                 self.should_quit = true;
                             }
                             _ => {
-                                // Handle other actions and trigger redraw
-                                self.ui.handle_action(action, &mut self.taskchampion, &mut self.sync_handler).await?;
+                                self.ui
+                                    .handle_action(
+                                        action,
+                                        &mut self.taskchampion,
+                                        &mut self.sync_handler,
+                                    )
+                                    .await?;
                                 needs_redraw = true;
                             }
                         }
                     }
                     Event::Resize(_, _) => {
-                        // Terminal was resized - trigger immediate redraw
                         needs_redraw = true;
                     }
-                    _ => {
-                        // Ignore other events (mouse, focus, etc.)
-                    }
+                    _ => {}
                 }
             }
 
@@ -121,7 +105,6 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
-        // Restore terminal
         let _ = disable_raw_mode();
         let _ = execute!(
             self.terminal.backend_mut(),

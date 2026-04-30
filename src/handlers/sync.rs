@@ -1,28 +1,19 @@
-// Background synchronization operations with progress indicators and conflict resolution
+// Background-style synchronization wrapper around TaskChampionIntegration::sync.
+// Owns the watch channel that the UI reads for live status; does not hold a replica
+// (only one Replica may be open against a given on-disk database at a time).
 
 use anyhow::{Context, Result};
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
-use crate::taskchampion::TaskChampionIntegration;
+use crate::taskchampion::{SyncSettings, TaskChampionIntegration};
+use crate::ui::components::sync_config::{SyncConfig, SyncConfigType};
 
-// Re-export sync config types for convenience
-pub use crate::ui::components::sync_config::{SyncConfig, SyncConfigType, SyncConfigResult};
+pub use crate::ui::components::sync_config::SyncConfigResult;
 
-#[derive(Debug, Clone)]
 pub struct SyncHandler {
-    sync_tx: Option<mpsc::Sender<SyncMessage>>,
     sync_status_rx: Option<watch::Receiver<SyncStatus>>,
     sync_status_tx: Option<watch::Sender<SyncStatus>>,
-    taskchampion: TaskChampionIntegration,
-}
-
-#[derive(Debug, Clone)]
-pub enum SyncMessage {
-    Start,
-    Stop,
-    Status,
-    ForceSync,
 }
 
 #[derive(Debug, Clone)]
@@ -59,279 +50,30 @@ pub enum SyncPhase {
 }
 
 impl SyncHandler {
-    pub fn new(taskchampion: TaskChampionIntegration) -> Self {
+    pub fn new() -> Self {
         SyncHandler {
-            sync_tx: None,
             sync_status_rx: None,
             sync_status_tx: None,
-            taskchampion,
         }
     }
 
-    pub async fn initialize(&mut self) -> Result<()> {
-        let (status_tx, status_rx) = watch::channel(SyncStatus::default());
-        self.sync_status_rx = Some(status_rx);
-        self.sync_status_tx = Some(status_tx.clone());
-
-        // Check if sync is configured
-        let server_configured = self.is_sync_configured().await?;
-        
-        // Update initial status
-        let initial_status = SyncStatus {
-            server_configured,
+    pub fn initialize(&mut self, taskchampion: &TaskChampionIntegration) -> Result<()> {
+        let initial = SyncStatus {
+            server_configured: taskchampion.is_sync_configured(),
             ..SyncStatus::default()
         };
-        let _ = status_tx.send(initial_status);
-
+        let (tx, rx) = watch::channel(initial);
+        self.sync_status_tx = Some(tx);
+        self.sync_status_rx = Some(rx);
         Ok(())
     }
 
-    pub async fn start_sync(&mut self) -> Result<String> {
-        // Update sync status to show syncing
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Connecting;
-            status.progress.message = "Starting sync...".to_string();
-            let _ = status_tx.send(status);
-        }
-        
-        // Run sync operation directly but with proper async handling
-        let result = self.execute_sync_operation().await;
-        
-        // Update sync status to show completion
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = false;
-            status.last_sync = Some(std::time::Instant::now());
-            if result.is_err() {
-                status.progress.phase = SyncPhase::Error;
-                status.sync_error = Some(result.as_ref().unwrap_err().to_string());
-            } else {
-                status.progress.phase = SyncPhase::Complete;
-                status.progress.message = "Sync completed".to_string();
-            }
-            let _ = status_tx.send(status);
-        }
-        
-        result
-    }
-
-    pub async fn force_sync(&mut self) -> Result<String> {
-        // Update sync status to show syncing
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Connecting;
-            status.progress.message = "Starting force sync...".to_string();
-            let _ = status_tx.send(status);
-        }
-        
-        // Run sync operation directly but with proper async handling
-        let result = self.execute_sync_operation().await;
-        
-        // Update sync status to show completion
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = false;
-            status.last_sync = Some(std::time::Instant::now());
-            if result.is_err() {
-                status.progress.phase = SyncPhase::Error;
-                status.sync_error = Some(result.as_ref().unwrap_err().to_string());
-            } else {
-                status.progress.phase = SyncPhase::Complete;
-                status.progress.message = "Force sync completed".to_string();
-            }
-            let _ = status_tx.send(status);
-        }
-        
-        result
-    }
-
-    async fn execute_sync_operation(&mut self) -> Result<String> {
-        if !self.is_sync_configured().await? {
-            return Err(anyhow::anyhow!("TaskChampion sync not configured. Please configure server URL and client ID."));
-        }
-
-        // Update progress: Connecting
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Connecting;
-            status.progress.message = "Connecting to TaskChampion server...".to_string();
-            status.progress.progress_percent = 10.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show connecting phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Update progress: Uploading
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Uploading;
-            status.progress.message = "Uploading local changes...".to_string();
-            status.progress.progress_percent = 30.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show uploading phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Update progress: Downloading
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Downloading;
-            status.progress.message = "Downloading remote changes...".to_string();
-            status.progress.progress_percent = 60.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show downloading phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Update progress: Finalizing
-        if let Some(status_tx) = &self.sync_status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Finalizing;
-            status.progress.message = "Finalizing sync...".to_string();
-            status.progress.progress_percent = 90.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Execute TaskChampion sync
-        let sync_result = self.taskchampion.sync().await
-            .context("Failed to sync with TaskChampion server")?;
-
-        // Create result message
-        let result = if sync_result.uploaded > 0 || sync_result.downloaded > 0 {
-            format!("Sync completed: {} uploaded, {} downloaded", 
-                   sync_result.uploaded, sync_result.downloaded)
-        } else if sync_result.conflicts > 0 {
-            format!("Sync completed with {} conflicts", sync_result.conflicts)
-        } else {
-            "Sync completed - no changes".to_string()
-        };
-
-        Ok(result)
-    }
-
-    async fn execute_sync_operation_background(
-        taskwarrior: &TaskwarriorIntegration,
-        status_tx: Option<watch::Sender<SyncStatus>>,
-    ) -> Result<String> {
-        // Check if sync is configured
-        if !Self::is_sync_configured_static(taskwarrior).await? {
-            if let Some(status_tx) = &status_tx {
-                let mut status = SyncStatus::default();
-                status.is_syncing = false;
-                status.progress.phase = SyncPhase::Error;
-                status.sync_error = Some("Taskwarrior sync not configured. Please configure sync.server.url, sync.server.client_id, etc.".to_string());
-                let _ = status_tx.send(status);
-            }
-            return Err(anyhow::anyhow!("Taskwarrior sync not configured"));
-        }
-
-        // Update progress: Connecting
-        if let Some(status_tx) = &status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Connecting;
-            status.progress.message = "Connecting to server...".to_string();
-            status.progress.progress_percent = 10.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show connecting phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-
-        // Update progress: Uploading
-        if let Some(status_tx) = &status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Uploading;
-            status.progress.message = "Uploading local changes...".to_string();
-            status.progress.progress_percent = 30.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show uploading phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-
-        // Update progress: Downloading
-        if let Some(status_tx) = &status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Downloading;
-            status.progress.message = "Downloading remote changes...".to_string();
-            status.progress.progress_percent = 60.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Small delay to show downloading phase
-        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-
-        // Update progress: Finalizing
-        if let Some(status_tx) = &status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = true;
-            status.progress.phase = SyncPhase::Finalizing;
-            status.progress.message = "Finalizing sync...".to_string();
-            status.progress.progress_percent = 90.0;
-            let _ = status_tx.send(status);
-        }
-
-        // Execute sync command
-        let sync_output = taskwarrior.execute_command(&["synchronize"]).await
-            .context("Failed to execute synchronize command")?;
-
-        // Parse output for meaningful result
-        let result = if sync_output.contains("Sync successful") {
-            "Sync completed successfully".to_string()
-        } else if sync_output.contains("No changes") {
-            "No changes to synchronize".to_string()
-        } else if sync_output.contains("Syncing with sync server") {
-            // This indicates Taskwarrior connected but got no meaningful response
-            // This usually happens when connecting to a TaskChampion server with Taskwarrior
-            "⚠️ Connected to server but no sync data exchanged. You may be using incompatible sync protocols (TaskChampion vs Taskwarrior)".to_string()
-        } else if sync_output.is_empty() {
-            "Sync completed".to_string()
-        } else {
-            format!("Sync result: {}", sync_output.lines().next().unwrap_or("Done"))
-        };
-
-        // Update sync status to show completion
-        if let Some(status_tx) = &status_tx {
-            let mut status = SyncStatus::default();
-            status.is_syncing = false;
-            status.last_sync = Some(std::time::Instant::now());
-            status.progress.phase = SyncPhase::Complete;
-            status.progress.message = result.clone();
-            status.progress.progress_percent = 100.0;
-            let _ = status_tx.send(status);
-        }
-
-        Ok(result)
-    }
-
-    async fn is_sync_configured_static(taskwarrior: &TaskwarriorIntegration) -> Result<bool> {
-        // Check if Taskwarrior sync is configured by trying to get sync server info
-        match taskwarrior.execute_command(&["_get", "rc.sync.server.url"]).await {
-            Ok(server) => Ok(!server.trim().is_empty()),
-            Err(_) => Ok(false),
-        }
-    }
-
     pub fn get_sync_status(&self) -> Option<SyncStatus> {
-        self.sync_status_rx.as_ref()
-            .map(|rx| rx.borrow().clone())
+        self.sync_status_rx.as_ref().map(|rx| rx.borrow().clone())
     }
 
-    pub async fn is_sync_configured(&self) -> Result<bool> {
-        Ok(self.taskchampion.is_sync_configured())
+    pub fn is_sync_configured(&self, taskchampion: &TaskChampionIntegration) -> bool {
+        taskchampion.is_sync_configured()
     }
 
     pub fn is_syncing(&self) -> bool {
@@ -340,22 +82,113 @@ impl SyncHandler {
             .unwrap_or(false)
     }
 
-    pub async fn configure_sync(&mut self, config: &SyncConfig) -> Result<String> {
+    pub async fn start_sync(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<String> {
+        self.run_sync(taskchampion, "Starting sync...").await
+    }
+
+    pub async fn force_sync(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<String> {
+        self.run_sync(taskchampion, "Starting force sync...").await
+    }
+
+    async fn run_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+        opening_message: &str,
+    ) -> Result<String> {
+        if !taskchampion.is_sync_configured() {
+            self.set_status(SyncPhase::Error, "Sync not configured", 0.0, false);
+            return Err(anyhow::anyhow!(
+                "TaskChampion sync not configured. Use Shift+S to configure."
+            ));
+        }
+
+        self.set_status(SyncPhase::Connecting, opening_message, 10.0, true);
+
+        let result = taskchampion
+            .sync()
+            .await
+            .context("Failed to sync with server");
+
+        match result {
+            Ok(stats) => {
+                let msg = if stats.uploaded == 0 && stats.downloaded == 0 {
+                    "Sync complete - no changes".to_string()
+                } else {
+                    format!(
+                        "Sync complete: {} uploaded, {} downloaded",
+                        stats.uploaded, stats.downloaded
+                    )
+                };
+                self.complete_status(SyncPhase::Complete, &msg);
+                Ok(msg)
+            }
+            Err(e) => {
+                let err_msg = format!("{}", e);
+                self.complete_status_error(&err_msg);
+                Err(e)
+            }
+        }
+    }
+
+    pub async fn configure_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+        config: &SyncConfig,
+    ) -> Result<String> {
         match config.config_type {
-            SyncConfigType::Server => {
-                // Configure TaskChampion sync
-                self.taskchampion.configure_sync(&config.server_url, &config.client_id).await?;
-                Ok("TaskChampion sync configured successfully".to_string())
+            SyncConfigType::Server | SyncConfigType::Local => {
+                taskchampion.configure_sync(SyncSettings {
+                    server_url: config.server_url.clone(),
+                    client_id: config.client_id.clone(),
+                    encryption_secret: config.encryption_secret.clone(),
+                    local_server_dir: None,
+                })?;
+                if let Some(tx) = &self.sync_status_tx {
+                    let mut s = tx.borrow().clone();
+                    s.server_configured = true;
+                    let _ = tx.send(s);
+                }
+                Ok("TaskChampion sync configured".to_string())
             }
-            SyncConfigType::Local => {
-                Ok("Local sync configured (no server needed)".to_string())
-            }
-            SyncConfigType::GCP => {
-                Ok("GCP sync configured".to_string())
-            }
-            SyncConfigType::AWS => {
-                Ok("AWS sync configured".to_string())
-            }
+            SyncConfigType::GCP | SyncConfigType::AWS => Err(anyhow::anyhow!(
+                "Cloud sync providers are not yet supported"
+            )),
+        }
+    }
+
+    fn set_status(&self, phase: SyncPhase, message: &str, percent: f32, syncing: bool) {
+        if let Some(tx) = &self.sync_status_tx {
+            let mut status = tx.borrow().clone();
+            status.is_syncing = syncing;
+            status.progress.phase = phase;
+            status.progress.message = message.to_string();
+            status.progress.progress_percent = percent;
+            status.sync_error = None;
+            let _ = tx.send(status);
+        }
+    }
+
+    fn complete_status(&self, phase: SyncPhase, message: &str) {
+        if let Some(tx) = &self.sync_status_tx {
+            let mut status = tx.borrow().clone();
+            status.is_syncing = false;
+            status.last_sync = Some(Instant::now());
+            status.progress.phase = phase;
+            status.progress.message = message.to_string();
+            status.progress.progress_percent = 100.0;
+            status.sync_error = None;
+            let _ = tx.send(status);
+        }
+    }
+
+    fn complete_status_error(&self, error: &str) {
+        if let Some(tx) = &self.sync_status_tx {
+            let mut status = tx.borrow().clone();
+            status.is_syncing = false;
+            status.progress.phase = SyncPhase::Error;
+            status.progress.message = error.to_string();
+            status.sync_error = Some(error.to_string());
+            let _ = tx.send(status);
         }
     }
 }
@@ -369,7 +202,7 @@ impl Default for SyncStatus {
             progress: SyncProgress::default(),
             server_configured: false,
             auto_sync_enabled: false,
-            sync_interval: Duration::from_secs(300), // 5 minutes default
+            sync_interval: Duration::from_secs(300),
         }
     }
 }
@@ -386,15 +219,3 @@ impl Default for SyncProgress {
         }
     }
 }
-
-// Extension methods for TaskwarriorIntegration to support sync operations  
-impl TaskwarriorIntegration {
-    pub async fn execute_sync_command(&self) -> Result<String> {
-        self.execute_command(&["synchronize"]).await
-    }
-
-    pub async fn execute_helper_command(&self, args: &[&str]) -> Result<String> {
-        self.execute_command(args).await
-    }
-}
-

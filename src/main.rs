@@ -1,15 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-mod app;
-mod config;
-mod taskwarrior;
-mod ui;
-mod handlers;
-mod data;
-mod utils;
-
-use app::App;
+use lazytask::app::App;
 
 #[derive(Parser)]
 #[command(
@@ -21,7 +13,7 @@ struct Cli {
     /// Configuration file path
     #[arg(short, long)]
     config: Option<String>,
-    
+
     /// Verbose output
     #[arg(short, long)]
     verbose: bool,
@@ -30,10 +22,9 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    
-    let mut app = App::new(cli.config.as_deref(), cli.verbose)?;
+
+    let mut app = App::new(cli.config.as_deref(), cli.verbose).await?;
     app.run().await?;
-    
+
     Ok(())
 }
-

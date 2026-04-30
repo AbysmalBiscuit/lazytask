@@ -2,8 +2,6 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
 
-use crate::config::Config;
-
 #[derive(Debug, Clone)]
 pub enum Action {
     Quit,
@@ -32,15 +30,11 @@ pub enum Action {
     Tab,
 }
 
-pub struct InputHandler {
-    config: Config,
-}
+pub struct InputHandler;
 
 impl InputHandler {
-    pub fn new(config: &Config) -> Self {
-        InputHandler {
-            config: config.clone(),
-        }
+    pub fn new(_config: &crate::config::Config) -> Self {
+        InputHandler
     }
 
     pub async fn handle_events(&self) -> Result<Option<Action>> {
