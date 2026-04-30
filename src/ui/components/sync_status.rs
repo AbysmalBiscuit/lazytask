@@ -170,11 +170,7 @@ impl SyncStatusWidget {
         ];
 
         if let Some(ref error) = status.sync_error {
-            let error_text = if error.len() > 40 {
-                format!("{}...", &error[..37])
-            } else {
-                error.clone()
-            };
+            let error_text = crate::utils::formatting::truncate_chars(error, 40);
             sync_text.push(Line::from(vec![
                 Span::styled("Error: ", Style::default().fg(Color::Red)),
                 Span::styled(error_text, Style::default().fg(Color::Red)),

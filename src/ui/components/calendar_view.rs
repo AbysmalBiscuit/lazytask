@@ -439,11 +439,7 @@ impl CalendarWidget {
                     None => "",
                 };
                 
-                let description = if task.description.len() > 50 {
-                    format!("{}...", &task.description[..47])
-                } else {
-                    task.description.clone()
-                };
+                let description = crate::utils::formatting::truncate_chars(&task.description, 50);
                 
                 stats_text.push(Line::from(vec![
                     Span::raw("  "),

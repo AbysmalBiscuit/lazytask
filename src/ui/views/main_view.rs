@@ -503,12 +503,10 @@ impl MainView {
                     if self.selected_projects.is_empty() {
                         "None".to_string()
                     } else {
-                        let selection = self.selected_projects.join(", ");
-                        if selection.len() > 20 {
-                            format!("{}...", &selection[..17])
-                        } else {
-                            selection
-                        }
+                        crate::utils::formatting::truncate_chars(
+                            &self.selected_projects.join(", "),
+                            20,
+                        )
                     },
                     Style::default().fg(Color::Green)
                 ),
@@ -620,12 +618,10 @@ impl MainView {
                     if self.selected_tags.is_empty() {
                         "None".to_string()
                     } else {
-                        let selection = format!("+{}", self.selected_tags.join(" +"));
-                        if selection.len() > 20 {
-                            format!("{}...", &selection[..17])
-                        } else {
-                            selection
-                        }
+                        crate::utils::formatting::truncate_chars(
+                            &format!("+{}", self.selected_tags.join(" +")),
+                            20,
+                        )
                     },
                     Style::default().fg(Color::Green)
                 ),

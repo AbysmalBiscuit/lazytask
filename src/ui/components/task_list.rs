@@ -192,7 +192,7 @@ impl TaskTableFormatter {
     }
     
     // Format a complete task row with intelligent row-level color coding
-    fn format_task_row(&self, task: &Task) -> Row {
+    fn format_task_row(&self, task: &Task) -> Row<'static> {
         // Determine the most important styling factor for the entire row
         let row_style = self.get_row_style(task);
         
@@ -257,11 +257,6 @@ impl TaskTableFormatter {
         }
     }
     
-    // Helper method to check if task is due soon (today/tomorrow)
-    fn is_due_soon(&self, due: Option<chrono::DateTime<Utc>>) -> bool {
-        self.is_due_within_days(due, 1) // Today or tomorrow
-    }
-    
     // Helper method to check if task is due within N days
     fn is_due_within_days(&self, due: Option<chrono::DateTime<Utc>>, days: i64) -> bool {
         if let Some(due_date) = due {
@@ -309,47 +304,9 @@ impl TaskTableFormatter {
     // ===== FIELD FORMATTERS =====
     
     fn format_id(&self, id: Option<u32>) -> String {
-        id.map(|i| i.to_string()).unwrap_or_else(|| "".to_string())
+        id.map(|i| i.to_string()).unwrap_or_default()
     }
-    
-    fn format_age(&self, entry: chrono::DateTime<Utc>) -> String {
-        let now = Utc::now();
-        let duration = now - entry;
-        
-        if duration.num_minutes() < 60 {
-            format!("{}m", duration.num_minutes().max(1))
-        } else if duration.num_hours() < 24 {
-            format!("{}h", duration.num_hours())
-        } else if duration.num_days() < 30 {
-            format!("{}d", duration.num_days())
-        } else if duration.num_days() < 365 {
-            let weeks = duration.num_days() / 7;
-            if weeks < 10 {
-                format!("{}w", weeks)
-            } else {
-                format!("{}mo", duration.num_days() / 30)
-            }
-        } else {
-            format!("{}y", duration.num_days() / 365)
-        }
-    }
-    
-    fn format_status(&self, status: &crate::data::models::TaskStatus) -> String {
-        match status {
-            crate::data::models::TaskStatus::Pending => "P".to_string(),
-            crate::data::models::TaskStatus::Completed => "C".to_string(),
-            crate::data::models::TaskStatus::Deleted => "D".to_string(),
-            crate::data::models::TaskStatus::Waiting => "W".to_string(),
-            crate::data::models::TaskStatus::Recurring => "R".to_string(),
-        }
-    }
-    
-    fn format_priority(&self, priority: &Option<crate::data::models::Priority>) -> String {
-        priority.as_ref()
-            .map(|p| p.as_char().to_string())
-            .unwrap_or_else(|| " ".to_string())
-    }
-    
+
     fn format_priority_full(&self, priority: &Option<crate::data::models::Priority>) -> String {
         match priority {
             Some(crate::data::models::Priority::High) => "High".to_string(),
@@ -360,24 +317,12 @@ impl TaskTableFormatter {
     }
     
     fn format_project(&self, project: &Option<String>) -> String {
-        project.as_deref()
-            .map(|p| if p.len() > 14 { format!("{}...", &p[..11]) } else { p.to_string() })
-            .unwrap_or_else(|| "".to_string())
+        project
+            .as_deref()
+            .map(|p| crate::utils::formatting::truncate_chars(p, 14))
+            .unwrap_or_default()
     }
-    
-    fn format_tags(&self, tags: &[String]) -> String {
-        if tags.is_empty() {
-            "".to_string()
-        } else {
-            let joined = tags.join(",");
-            if joined.len() > 7 { 
-                format!("{}...", &joined[..4])
-            } else { 
-                joined 
-            }
-        }
-    }
-    
+
     fn format_due(&self, due: Option<chrono::DateTime<Utc>>) -> String {
         if let Some(due) = due {
             let now = Utc::now();
@@ -396,15 +341,6 @@ impl TaskTableFormatter {
     }
     
     fn format_description(&self, description: &str) -> String {
-        // Maximum space for description in simplified layout - up to 45+ characters!
-        if description.len() > 45 {
-            format!("{}...", &description[..42])
-        } else {
-            description.to_string()
-        }
-    }
-    
-    fn format_urgency(&self, urgency: f64) -> String {
-        format!("{:.1}", urgency)
+        crate::utils::formatting::truncate_chars(description, 45)
     }
 }

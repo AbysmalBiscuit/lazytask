@@ -408,11 +408,7 @@ impl DashboardWidget {
             activity_text.push(Line::from("No recent activity"));
         } else {
             for (_, action, description, _project, time_str) in recent_activities {
-                let short_desc = if description.len() > 45 {
-                    format!("{}...", &description[..42])
-                } else {
-                    description
-                };
+                let short_desc = crate::utils::formatting::truncate_chars(&description, 45);
                 
                 let action_color = if action.contains("Completed") {
                     Color::Green
