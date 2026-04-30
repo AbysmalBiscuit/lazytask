@@ -1,7 +1,19 @@
 name: Build
 on:
+  # Build on PRs to verify cross-platform compilation.
   pull_request:
+  # Build + create a GitHub Release when a `v*` tag is pushed.
+  push:
+    tags:
+      - "v*"
+  # Allow manual re-runs (e.g. to re-attach assets if a release was edited).
+  workflow_dispatch:
+  # Allow other workflows (e.g. a future release.yml) to call this one.
   workflow_call:
+permissions:
+  # Needed for softprops/action-gh-release to create the Release on tag push.
+  contents: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -9,8 +21,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macOS-latest
+          - os: macos-13
             target: x86_64-apple-darwin
+            rust_flags: ""
+            features: ""
+          # Apple Silicon (M1/M2/M3): macos-14+ runners are arm64.
+          - os: macos-14
+            target: aarch64-apple-darwin
             rust_flags: ""
             features: ""
           - os: ubuntu-latest
@@ -71,8 +88,9 @@ jobs:
           files: target/${{ matrix.target }}/release/lazytask${{ matrix.binary_postfix }}
           args: ${{ matrix.upx_args }}
           strip: ${{ matrix.strip }}
-        # MacOS Compression disabled due to bug https://github.com/upx/upx/blob/44e4bd0b5454ff8aee1ff3376974dfe6014300d9/NEWS#L31
-        if: ${{ matrix.os  != 'macOS-latest' }}
+        # MacOS UPX is unsupported (codesigning + Mach-O quirks):
+        # https://github.com/upx/upx/blob/44e4bd0b5454ff8aee1ff3376974dfe6014300d9/NEWS#L31
+        if: ${{ !startsWith(matrix.os, 'macos') }}
       - name: Packaging binary
         shell: bash
         run: |
@@ -95,5 +113,14 @@ jobs:
           files: |
             target/${{ matrix.target }}/release/lazytask-${{ matrix.target }}.tar.gz
             target/${{ matrix.target }}/release/lazytask-${{ matrix.target }}.sha256
+          # Auto-fill the release body from commit messages between this tag
+          # and the previous one. You can edit the release after publish to
+          # tweak the wording without re-uploading assets.
+          generate_release_notes: true
+          # Mark pre-1.0 / pre-release tags (e.g. v0.2.0-alpha.1) as prerelease.
+          prerelease: ${{ contains(github.ref, '-') }}
+          # Stay as draft for v0.x — flip to false once you reach a stable v1.0.0.
+          draft: false
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

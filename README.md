@@ -29,6 +29,33 @@ LazyTask is **standalone**: you do **not** need the `task` binary installed. The
 
 ## Installation
 
+### Pre-built binaries (recommended)
+
+Grab the latest tarball for your platform from the [GitHub Releases page](https://github.com/osamamahmood/lazytask/releases). Each release ships static binaries for:
+
+| Platform | Tarball |
+|---|---|
+| macOS Intel | `lazytask-x86_64-apple-darwin.tar.gz` |
+| macOS Apple Silicon (M1/M2/M3) | `lazytask-aarch64-apple-darwin.tar.gz` |
+| Linux x86_64 (glibc) | `lazytask-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux x86_64 (musl, static) | `lazytask-x86_64-unknown-linux-musl.tar.gz` |
+| Windows x86_64 (MSVC) | `lazytask-x86_64-pc-windows-msvc.tar.gz` |
+| Windows x86_64 (MinGW) | `lazytask-x86_64-pc-windows-gnu.tar.gz` |
+| Windows i686 | `lazytask-i686-pc-windows-msvc.tar.gz` |
+
+Each tarball has a matching `.sha256` file for integrity verification.
+
+```bash
+# Quick install on Linux/macOS:
+TAG=v0.1.0
+TARGET=x86_64-unknown-linux-gnu     # or whatever matches your platform
+curl -L "https://github.com/osamamahmood/lazytask/releases/download/$TAG/lazytask-$TARGET.tar.gz" | tar xz
+./lazytask --version
+sudo mv lazytask /usr/local/bin/    # optional
+```
+
+### From source
+
 ```bash
 git clone https://github.com/osamamahmood/lazytask
 cd lazytask
@@ -331,6 +358,10 @@ podman rm -f lazytask-sync-test
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
 - **The Catppuccin theme is configured but unused.** Live colors are bare named-color terminals defaults.
+
+## Releasing
+
+Maintainers: see [docs/releasing.md](docs/releasing.md) for the full release procedure. TL;DR — bump the version in `Cargo.toml`, push a `v*` tag, and the [`Build` workflow](.github/workflows/build.yml) cross-builds binaries for every supported platform and attaches them to a freshly-created GitHub Release.
 
 ## Contributing
 
