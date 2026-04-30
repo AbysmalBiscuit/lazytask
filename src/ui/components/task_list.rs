@@ -30,9 +30,13 @@ impl TaskListWidget {
         }
     }
 
-    pub fn set_tasks_with_preserved_selection(&mut self, tasks: Vec<Task>, preserve_uuid: Option<&str>) {
+    pub fn set_tasks_with_preserved_selection(
+        &mut self,
+        tasks: Vec<Task>,
+        preserve_uuid: Option<&str>,
+    ) {
         self.tasks = tasks;
-        
+
         if self.tasks.is_empty() {
             self.state.select(None);
             return;
@@ -47,7 +51,7 @@ impl TaskListWidget {
                 }
             }
         }
-        
+
         // Fallback to first task if UUID not found or not provided
         self.state.select(Some(0));
     }
@@ -94,11 +98,18 @@ impl TaskListWidget {
 
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         let formatter = TaskTableFormatter::new();
-        
+
         // Create clean, minimal headers
-        let header_cells = formatter.headers()
+        let header_cells = formatter
+            .headers()
             .iter()
-            .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
+            .map(|h| {
+                Cell::from(*h).style(
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            })
             .collect::<Vec<_>>();
 
         let header = Row::new(header_cells)
@@ -106,7 +117,8 @@ impl TaskListWidget {
             .height(1);
 
         // Create data rows with intelligent color coding
-        let rows: Vec<Row> = self.tasks
+        let rows: Vec<Row> = self
+            .tasks
             .iter()
             .map(|task| formatter.format_task_row(task))
             .collect();
@@ -115,15 +127,16 @@ impl TaskListWidget {
         let column_widths = formatter.responsive_column_widths(area.width);
         let task_count = self.tasks.len();
         let title = format!(" Tasks ({}) ", task_count);
-        
+
         let table = Table::new(rows, &column_widths)
             .header(header)
-            .block(Block::default()
-                .title(title)
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
+            .block(
+                Block::default()
+                    .title(title)
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
             )
-            .column_spacing(2)  // Clean spacing between columns
+            .column_spacing(2) // Clean spacing between columns
             .style(Style::default().fg(Color::White))
             .row_highlight_style(
                 Style::default()
@@ -144,58 +157,58 @@ impl TaskTableFormatter {
     fn new() -> Self {
         TaskTableFormatter
     }
-    
+
     // Define column headers - simplified, clean layout
     fn headers(&self) -> [&'static str; 5] {
         ["ID", "Project", "Priority", "Due", "Description"]
     }
-    
+
     // Define responsive column widths that adapt to terminal size
     fn responsive_column_widths(&self, terminal_width: u16) -> Vec<Constraint> {
         if terminal_width < 80 {
             // Very narrow terminal - minimize columns, focus on description
             vec![
-                Constraint::Length(3),   // ID - minimal
-                Constraint::Length(8),   // Project - abbreviated
-                Constraint::Length(4),   // Priority - single char (H/M/L)
-                Constraint::Length(8),   // Due - short date
-                Constraint::Min(20),     // Description - rest of space
+                Constraint::Length(3), // ID - minimal
+                Constraint::Length(8), // Project - abbreviated
+                Constraint::Length(4), // Priority - single char (H/M/L)
+                Constraint::Length(8), // Due - short date
+                Constraint::Min(20),   // Description - rest of space
             ]
         } else if terminal_width < 120 {
             // Narrow terminal - compact but readable
             vec![
-                Constraint::Length(4),   // ID
-                Constraint::Length(12),  // Project
-                Constraint::Length(8),   // Priority
-                Constraint::Length(10),  // Due
-                Constraint::Min(30),     // Description - grows with available space
+                Constraint::Length(4),  // ID
+                Constraint::Length(12), // Project
+                Constraint::Length(8),  // Priority
+                Constraint::Length(10), // Due
+                Constraint::Min(30),    // Description - grows with available space
             ]
         } else if terminal_width < 160 {
             // Medium terminal - balanced layout
             vec![
-                Constraint::Length(4),   // ID
-                Constraint::Length(15),  // Project
-                Constraint::Length(10),  // Priority
-                Constraint::Length(12),  // Due
-                Constraint::Min(40),     // Description
+                Constraint::Length(4),  // ID
+                Constraint::Length(15), // Project
+                Constraint::Length(10), // Priority
+                Constraint::Length(12), // Due
+                Constraint::Min(40),    // Description
             ]
         } else {
             // Wide terminal - generous spacing
             vec![
-                Constraint::Length(5),   // ID
-                Constraint::Length(20),  // Project - more space
-                Constraint::Length(10),  // Priority
-                Constraint::Length(14),  // Due - full datetime if needed
-                Constraint::Min(50),     // Description - maximum space
+                Constraint::Length(5),  // ID
+                Constraint::Length(20), // Project - more space
+                Constraint::Length(10), // Priority
+                Constraint::Length(14), // Due - full datetime if needed
+                Constraint::Min(50),    // Description - maximum space
             ]
         }
     }
-    
+
     // Format a complete task row with intelligent row-level color coding
     fn format_task_row(&self, task: &Task) -> Row<'static> {
         // Determine the most important styling factor for the entire row
         let row_style = self.get_row_style(task);
-        
+
         let cells = vec![
             Cell::from(self.format_id(task.id)),
             Cell::from(self.format_project(&task.project)),
@@ -205,14 +218,14 @@ impl TaskTableFormatter {
         ];
         Row::new(cells).height(1).style(row_style)
     }
-    
+
     // ===== INTELLIGENT ROW-LEVEL COLOR CODING SYSTEM =====
-    
-    // Get overall row style based on intelligent task priority hierarchy  
+
+    // Get overall row style based on intelligent task priority hierarchy
     fn get_row_style(&self, task: &Task) -> Style {
         // Intelligent priority hierarchy combining multiple factors:
         // 1. High priority + overdue/due soon = CRITICAL RED BOLD
-        // 2. Any overdue tasks = URGENT RED BOLD  
+        // 2. Any overdue tasks = URGENT RED BOLD
         // 3. High priority + due within 2 days = URGENT RED BOLD
         // 4. Due today/tomorrow = URGENT YELLOW BOLD
         // 5. High priority tasks = RED
@@ -220,22 +233,24 @@ impl TaskTableFormatter {
         // 7. Completed tasks = DIMMED GRAY
         // 8. Low priority tasks = GREEN
         // 9. Default/no priority tasks = WHITE
-        
+
         let is_high_priority = task.priority == Some(crate::data::models::Priority::High);
         let is_overdue = self.is_overdue(task.due);
         let is_due_today = self.is_due_today(task.due);
         let is_due_within_2_days = self.is_due_within_days(task.due, 2);
         let is_due_tomorrow = self.is_due_tomorrow(task.due);
-        
+
         if is_overdue || is_due_today || (is_high_priority && is_due_within_2_days) {
-            // CRITICAL RED: 
+            // CRITICAL RED:
             // - All overdue tasks (regardless of priority)
-            // - All tasks due today (regardless of priority) 
+            // - All tasks due today (regardless of priority)
             // - High priority tasks due within 2 days
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
         } else if is_due_tomorrow {
-            // URGENT YELLOW: Due tomorrow = high urgency  
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            // URGENT YELLOW: Due tomorrow = high urgency
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else if is_high_priority {
             // HIGH PRIORITY - Important but not time-critical
             Style::default().fg(Color::Red)
@@ -249,14 +264,16 @@ impl TaskTableFormatter {
             // LOW PRIORITY - Less urgent
             Style::default().fg(Color::Green)
         } else if task.urgency >= 10.0 {
-            // HIGH URGENCY (calculated, without explicit priority) 
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+            // HIGH URGENCY (calculated, without explicit priority)
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
         } else {
             // DEFAULT - Normal tasks
             Style::default().fg(Color::White)
         }
     }
-    
+
     // Helper method to check if task is due within N days
     fn is_due_within_days(&self, due: Option<chrono::DateTime<Utc>>, days: i64) -> bool {
         if let Some(due_date) = due {
@@ -267,7 +284,7 @@ impl TaskTableFormatter {
             false
         }
     }
-    
+
     // Helper method to check if task is due today specifically
     fn is_due_today(&self, due: Option<chrono::DateTime<Utc>>) -> bool {
         if let Some(due_date) = due {
@@ -278,7 +295,7 @@ impl TaskTableFormatter {
             false
         }
     }
-    
+
     // Helper method to check if task is due tomorrow specifically
     fn is_due_tomorrow(&self, due: Option<chrono::DateTime<Utc>>) -> bool {
         if let Some(due_date) = due {
@@ -289,7 +306,7 @@ impl TaskTableFormatter {
             false
         }
     }
-    
+
     // Helper method to check if task is overdue
     fn is_overdue(&self, due: Option<chrono::DateTime<Utc>>) -> bool {
         if let Some(due_date) = due {
@@ -300,9 +317,9 @@ impl TaskTableFormatter {
             false
         }
     }
-    
+
     // ===== FIELD FORMATTERS =====
-    
+
     fn format_id(&self, id: Option<u32>) -> String {
         id.map(|i| i.to_string()).unwrap_or_default()
     }
@@ -315,7 +332,7 @@ impl TaskTableFormatter {
             None => "".to_string(),
         }
     }
-    
+
     fn format_project(&self, project: &Option<String>) -> String {
         project
             .as_deref()
@@ -327,11 +344,11 @@ impl TaskTableFormatter {
         if let Some(due) = due {
             let now = Utc::now();
             let days_until_due = (due.date_naive() - now.date_naive()).num_days();
-            
+
             if days_until_due < 0 {
                 format!("{}d", days_until_due)
             } else if days_until_due <= 7 {
-                format!("{}d", days_until_due)  
+                format!("{}d", days_until_due)
             } else {
                 due.format("%m/%d").to_string()
             }
@@ -339,7 +356,7 @@ impl TaskTableFormatter {
             "".to_string()
         }
     }
-    
+
     fn format_description(&self, description: &str) -> String {
         crate::utils::formatting::truncate_chars(description, 45)
     }

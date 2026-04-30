@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::data::models::{Task, TaskStatus, Priority};
+use crate::data::models::{Priority, Task, TaskStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskFilter {
@@ -109,12 +109,16 @@ impl TaskFilter {
         if let Some(text) = &self.description_contains {
             let search_text = text.to_lowercase();
             let matches_description = task.description.to_lowercase().contains(&search_text);
-            let matches_project = task.project.as_ref()
+            let matches_project = task
+                .project
+                .as_ref()
                 .map(|p| p.to_lowercase().contains(&search_text))
                 .unwrap_or(false);
-            let matches_tags = task.tags.iter()
+            let matches_tags = task
+                .tags
+                .iter()
                 .any(|tag| tag.to_lowercase().contains(&search_text));
-            
+
             if !matches_description && !matches_project && !matches_tags {
                 return false;
             }
@@ -143,7 +147,8 @@ impl TaskFilter {
     }
 
     pub fn apply(&self, tasks: &[Task]) -> Vec<Task> {
-        tasks.iter()
+        tasks
+            .iter()
             .filter(|task| self.matches(task))
             .cloned()
             .collect()

@@ -66,13 +66,14 @@ impl TaskForm {
         };
 
         let tags_str = task.tags.join(", ");
-        let due_str = task.due
+        let due_str = task
+            .due
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_default();
 
         let description_text = task.description.clone();
         let project_text = task.project.clone().unwrap_or_default();
-        
+
         TaskForm {
             description_input: description_text.clone(),
             project_input: project_text.clone(),
@@ -299,7 +300,7 @@ impl TaskForm {
         // Set cursor to end of text for the new field
         self.set_cursor_to_end();
     }
-    
+
     fn set_cursor_to_end(&mut self) {
         match self.active_field {
             FormField::Description => {
@@ -328,10 +329,10 @@ impl TaskForm {
         } else {
             Some(self.project_input.clone())
         };
-        
+
         task.priority = match self.priority_index {
             1 => Some(Priority::High),
-            2 => Some(Priority::Medium), 
+            2 => Some(Priority::Medium),
             3 => Some(Priority::Low),
             _ => None,
         };
@@ -359,14 +360,14 @@ impl TaskForm {
 
         task
     }
-    
+
     /// Parse Taskwarrior date formats
     /// Supports: today, tomorrow, eow, eom, eoy, sow, som, soy, 1d, 2w, 3mo, 1y, YYYY-MM-DD, MM/DD/YYYY, etc.
     fn parse_taskwarrior_date(input: &str) -> Option<chrono::DateTime<Utc>> {
         let input = input.trim().to_lowercase();
         let now = Utc::now();
         let today = now.date_naive();
-        
+
         match input.as_str() {
             // Relative dates
             "today" => {
@@ -380,12 +381,14 @@ impl TaskForm {
                 let yesterday = today - Duration::days(1);
                 return Some(Utc.from_utc_datetime(&yesterday.and_hms_opt(0, 0, 0)?));
             }
-            
+
             // End of periods
-            "eod" => { // End of day (23:59:59 today)
+            "eod" => {
+                // End of day (23:59:59 today)
                 return Some(Utc.from_utc_datetime(&today.and_hms_opt(23, 59, 59)?));
             }
-            "eow" => { // End of week (Sunday)
+            "eow" => {
+                // End of week (Sunday)
                 let days_until_sunday = (7 - today.weekday().number_from_monday()) % 7;
                 let eow = if days_until_sunday == 0 {
                     today + Duration::days(7)
@@ -394,7 +397,8 @@ impl TaskForm {
                 };
                 return Some(Utc.from_utc_datetime(&eow.and_hms_opt(23, 59, 59)?));
             }
-            "eom" => { // End of month
+            "eom" => {
+                // End of month
                 let year = today.year();
                 let month = today.month();
                 let last_day = NaiveDate::from_ymd_opt(year, month + 1, 1)
@@ -402,7 +406,8 @@ impl TaskForm {
                     .pred_opt()?;
                 return Some(Utc.from_utc_datetime(&last_day.and_hms_opt(23, 59, 59)?));
             }
-            "eoq" => { // End of quarter
+            "eoq" => {
+                // End of quarter
                 let year = today.year();
                 let quarter = (today.month() - 1) / 3;
                 let last_month_of_quarter = (quarter + 1) * 3;
@@ -411,39 +416,44 @@ impl TaskForm {
                     .pred_opt()?;
                 return Some(Utc.from_utc_datetime(&last_day.and_hms_opt(23, 59, 59)?));
             }
-            "eoy" => { // End of year
+            "eoy" => {
+                // End of year
                 let eoy = NaiveDate::from_ymd_opt(today.year(), 12, 31)?;
                 return Some(Utc.from_utc_datetime(&eoy.and_hms_opt(23, 59, 59)?));
             }
-            
+
             // Start of periods
-            "sow" | "bow" => { // Start/beginning of week (Monday)
+            "sow" | "bow" => {
+                // Start/beginning of week (Monday)
                 let days_since_monday = today.weekday().number_from_monday() - 1;
                 let sow = today - Duration::days(days_since_monday as i64);
                 return Some(Utc.from_utc_datetime(&sow.and_hms_opt(0, 0, 0)?));
             }
-            "som" | "bom" => { // Start/beginning of month
+            "som" | "bom" => {
+                // Start/beginning of month
                 let som = NaiveDate::from_ymd_opt(today.year(), today.month(), 1)?;
                 return Some(Utc.from_utc_datetime(&som.and_hms_opt(0, 0, 0)?));
             }
-            "soq" | "boq" => { // Start/beginning of quarter
+            "soq" | "boq" => {
+                // Start/beginning of quarter
                 let quarter = (today.month() - 1) / 3;
                 let first_month_of_quarter = quarter * 3 + 1;
                 let soq = NaiveDate::from_ymd_opt(today.year(), first_month_of_quarter, 1)?;
                 return Some(Utc.from_utc_datetime(&soq.and_hms_opt(0, 0, 0)?));
             }
-            "soy" | "boy" => { // Start/beginning of year
+            "soy" | "boy" => {
+                // Start/beginning of year
                 let soy = NaiveDate::from_ymd_opt(today.year(), 1, 1)?;
                 return Some(Utc.from_utc_datetime(&soy.and_hms_opt(0, 0, 0)?));
             }
-            
+
             _ => {
                 // Try relative offsets like "1d", "2w", "3mo", "1y"
                 if let Some(duration) = Self::parse_duration(&input) {
                     let future = today + duration;
                     return Some(Utc.from_utc_datetime(&future.and_hms_opt(0, 0, 0)?));
                 }
-                
+
                 // Try standard date formats
                 if let Ok(parsed_date) = NaiveDate::parse_from_str(&input, "%Y-%m-%d") {
                     return Some(Utc.from_utc_datetime(&parsed_date.and_hms_opt(0, 0, 0)?));
@@ -454,29 +464,29 @@ impl TaskForm {
                 if let Ok(parsed_date) = NaiveDate::parse_from_str(&input, "%d-%m-%Y") {
                     return Some(Utc.from_utc_datetime(&parsed_date.and_hms_opt(0, 0, 0)?));
                 }
-                
+
                 None
             }
         }
     }
-    
+
     /// Parse duration strings like "1d", "2w", "3mo", "1y"
     fn parse_duration(input: &str) -> Option<Duration> {
         let input = input.trim();
-        
+
         // Match patterns like "1d", "2w", "3mo", "1y"
         if input.len() < 2 {
             return None;
         }
-        
+
         let (num_str, unit) = if input.ends_with("mo") {
-            (&input[..input.len()-2], "mo")
+            (&input[..input.len() - 2], "mo")
         } else {
-            (&input[..input.len()-1], &input[input.len()-1..])
+            (&input[..input.len() - 1], &input[input.len() - 1..])
         };
-        
+
         let num: i64 = num_str.parse().ok()?;
-        
+
         match unit {
             "d" => Some(Duration::days(num)),
             "w" => Some(Duration::weeks(num)),
@@ -489,24 +499,28 @@ impl TaskForm {
     pub fn render(&self, f: &mut Frame, area: Rect) {
         // Responsive dialog sizing based on terminal size
         let (width_pct, height_pct) = if area.width < 80 {
-            (90, 80)  // Nearly full screen on very narrow terminals
+            (90, 80) // Nearly full screen on very narrow terminals
         } else if area.width < 120 {
-            (80, 75)  // Large dialog on narrow terminals
+            (80, 75) // Large dialog on narrow terminals
         } else if area.width < 180 {
-            (70, 70)  // Medium dialog on medium terminals
+            (70, 70) // Medium dialog on medium terminals
         } else {
-            (60, 65)  // Standard dialog on wide terminals
+            (60, 65) // Standard dialog on wide terminals
         };
-        
+
         let popup_area = Self::centered_rect(width_pct, height_pct, area);
-        
+
         // Clear the background
         f.render_widget(Clear, popup_area);
-        
+
         // Main container with better visibility
         let block = Block::default()
             .title("Task Details")
-            .title_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .title_style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan))
             .style(Style::default().bg(Color::Black));
@@ -520,15 +534,15 @@ impl TaskForm {
 
         // Responsive field sizing based on available space
         let field_height = if inner_area.height < 15 {
-            2  // Compact fields for very small dialogs
+            2 // Compact fields for very small dialogs
         } else {
-            3  // Standard field height
+            3 // Standard field height
         };
 
         let instruction_space = if inner_area.height < 20 {
-            Constraint::Min(1)     // Minimal instruction area
+            Constraint::Min(1) // Minimal instruction area
         } else {
-            Constraint::Min(3)     // Standard instruction area
+            Constraint::Min(3) // Standard instruction area
         };
 
         let chunks = Layout::default()
@@ -539,7 +553,7 @@ impl TaskForm {
                 Constraint::Length(field_height), // Priority
                 Constraint::Length(field_height), // Due
                 Constraint::Length(field_height), // Tags
-                instruction_space,                 // Instructions (responsive)
+                instruction_space,                // Instructions (responsive)
             ])
             .split(inner_area);
 
@@ -592,19 +606,47 @@ impl TaskForm {
         let instructions = Paragraph::new(vec![
             Line::from(""),
             Line::from(vec![
-                Span::styled("↑↓", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "↑↓",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Navigate fields  ", Style::default().fg(Color::White)),
-                Span::styled("←→", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "←→",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Move cursor  ", Style::default().fg(Color::White)),
-                Span::styled("Type", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Type",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" to edit  ", Style::default().fg(Color::White)),
             ]),
             Line::from(vec![
-                Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Enter",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Save  ", Style::default().fg(Color::White)),
-                Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Cancel  ", Style::default().fg(Color::White)),
-                Span::styled("Backspace", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Backspace",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" Delete", Style::default().fg(Color::White)),
             ]),
         ])
@@ -616,35 +658,47 @@ impl TaskForm {
     fn render_due_field(&self, f: &mut Frame, area: Rect) {
         let is_active = matches!(self.active_field, FormField::Due);
         let label = "Due:";
-        
+
         let (style, border_color) = if is_active && self.is_editing {
             (
-                Style::default().bg(Color::Black).fg(Color::Green).add_modifier(Modifier::BOLD),
-                Color::Green
+                Style::default()
+                    .bg(Color::Black)
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+                Color::Green,
             )
         } else if is_active {
             (
-                Style::default().bg(Color::Black).fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                Color::Yellow
+                Style::default()
+                    .bg(Color::Black)
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+                Color::Yellow,
             )
         } else {
-            (Style::default().bg(Color::Black).fg(Color::White), Color::Gray)
+            (
+                Style::default().bg(Color::Black).fg(Color::White),
+                Color::Gray,
+            )
         };
 
         // Build content with hint when active
-        let mut content_lines = vec![
-            format!("{} {}", label, self.due_input)
-        ];
-        
+        let mut content_lines = vec![format!("{} {}", label, self.due_input)];
+
         if is_active && self.is_editing {
             content_lines.push(String::new()); // Empty line
-            content_lines.push("  Examples: today, tomorrow, eow, eom, 1d, 2w, 3mo, YYYY-MM-DD".to_string());
+            content_lines
+                .push("  Examples: today, tomorrow, eow, eom, 1d, 2w, 3mo, YYYY-MM-DD".to_string());
         }
-        
+
         let content = content_lines.join("\n");
         let paragraph = Paragraph::new(content)
             .style(style)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(border_color)))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
+            )
             .wrap(ratatui::widgets::Wrap { trim: true });
 
         f.render_widget(paragraph, area);
@@ -653,12 +707,16 @@ impl TaskForm {
             let cursor_pos = self.get_cursor_position_for_field();
             let cursor_area = Rect {
                 x: area.x + label.len() as u16 + 1 + cursor_pos as u16 + 1, // Position cursor at cursor_pos
-                y: area.y + 1, // +1 for border
+                y: area.y + 1,                                              // +1 for border
                 width: 1,
                 height: 1,
             };
             f.render_widget(
-                Paragraph::new("█").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Paragraph::new("█").style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 cursor_area,
             );
         }
@@ -667,22 +725,35 @@ impl TaskForm {
     fn render_field(&self, f: &mut Frame, area: Rect, label: &str, value: &str, is_active: bool) {
         let (style, border_color) = if is_active && self.is_editing {
             (
-                Style::default().bg(Color::Black).fg(Color::Green).add_modifier(Modifier::BOLD),
-                Color::Green
+                Style::default()
+                    .bg(Color::Black)
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+                Color::Green,
             )
         } else if is_active {
             (
-                Style::default().bg(Color::Black).fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                Color::Yellow
+                Style::default()
+                    .bg(Color::Black)
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+                Color::Yellow,
             )
         } else {
-            (Style::default().bg(Color::Black).fg(Color::White), Color::Gray)
+            (
+                Style::default().bg(Color::Black).fg(Color::White),
+                Color::Gray,
+            )
         };
 
         let content = format!("{} {}", label, value);
         let paragraph = Paragraph::new(content)
             .style(style)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(border_color)))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
+            )
             .wrap(ratatui::widgets::Wrap { trim: true });
 
         f.render_widget(paragraph, area);
@@ -691,17 +762,21 @@ impl TaskForm {
             let cursor_pos = self.get_cursor_position_for_field();
             let cursor_area = Rect {
                 x: area.x + label.len() as u16 + 1 + cursor_pos as u16 + 1, // Position cursor at cursor_pos
-                y: area.y + 1, // +1 for border
+                y: area.y + 1,                                              // +1 for border
                 width: 1,
                 height: 1,
             };
             f.render_widget(
-                Paragraph::new("█").style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Paragraph::new("█").style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 cursor_area,
             );
         }
     }
-    
+
     fn get_cursor_position_for_field(&self) -> usize {
         match self.active_field {
             FormField::Description => self.description_cursor,

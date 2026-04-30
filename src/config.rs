@@ -101,10 +101,10 @@ impl Config {
         if config_file_path.exists() {
             let config_contents = fs::read_to_string(&config_file_path)
                 .with_context(|| format!("Failed to read config file: {:?}", config_file_path))?;
-            
-            let config: Config = toml::from_str(&config_contents)
-                .with_context(|| "Failed to parse config file")?;
-            
+
+            let config: Config =
+                toml::from_str(&config_contents).with_context(|| "Failed to parse config file")?;
+
             Ok(config)
         } else {
             // Create default config file
@@ -120,8 +120,8 @@ impl Config {
                 .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
         }
 
-        let config_string = toml::to_string_pretty(self)
-            .with_context(|| "Failed to serialize config")?;
+        let config_string =
+            toml::to_string_pretty(self).with_context(|| "Failed to serialize config")?;
 
         fs::write(path, config_string)
             .with_context(|| format!("Failed to write config file: {:?}", path))?;
@@ -130,10 +130,9 @@ impl Config {
     }
 
     fn default_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+
         Ok(config_dir.join("lazytask").join("config.toml"))
     }
 }
-

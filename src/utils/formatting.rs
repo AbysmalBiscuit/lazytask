@@ -15,7 +15,7 @@ pub fn format_datetime(datetime: &DateTime<Utc>) -> String {
 pub fn format_relative_date(date: &DateTime<Utc>) -> String {
     let now = Utc::now();
     let duration = now.signed_duration_since(*date);
-    
+
     if duration.num_days() > 0 {
         format!("{} days ago", duration.num_days())
     } else if duration.num_hours() > 0 {
@@ -47,4 +47,3 @@ pub fn truncate_chars(text: &str, max_chars: usize) -> String {
 pub fn truncate_text(text: &str, max_length: usize) -> String {
     truncate_chars(text, max_length)
 }
-

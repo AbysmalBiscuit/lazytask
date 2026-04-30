@@ -31,14 +31,18 @@ impl SyncStatusWidget {
 
         // Create centered overlay for sync progress
         let popup_area = Self::centered_rect(60, 40, area);
-        
+
         // Clear background
         f.render_widget(ratatui::widgets::Clear, popup_area);
-        
+
         // Main sync dialog
         let block = Block::default()
             .title("Synchronizing with Taskserver")
-            .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan))
             .style(Style::default().bg(Color::Black));
@@ -151,7 +155,7 @@ impl SyncStatusWidget {
                     Span::styled("✅ Configured", Style::default().fg(Color::Green))
                 } else {
                     Span::styled("❌ Not configured", Style::default().fg(Color::Red))
-                }
+                },
             ]),
             Line::from(vec![
                 Span::styled("Status: ", Style::default().fg(Color::Yellow)),
@@ -161,7 +165,7 @@ impl SyncStatusWidget {
                     Span::styled("❌ Error", Style::default().fg(Color::Red))
                 } else {
                     Span::styled("✅ Ready", Style::default().fg(Color::Green))
-                }
+                },
             ]),
             Line::from(vec![
                 Span::styled("Last Sync: ", Style::default().fg(Color::Yellow)),
@@ -177,23 +181,26 @@ impl SyncStatusWidget {
             ]));
         }
 
-        let sync_panel = Paragraph::new(sync_text)
-            .block(Block::default()
-                .title("Sync Status") 
+        let sync_panel = Paragraph::new(sync_text).block(
+            Block::default()
+                .title("Sync Status")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)));
-        
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+
         f.render_widget(sync_panel, area);
     }
 
     fn render_no_sync(&self, f: &mut Frame, area: Rect) {
         let no_sync = Paragraph::new("Sync not initialized")
-            .block(Block::default()
-                .title("Sync Status")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Gray)))
+            .block(
+                Block::default()
+                    .title("Sync Status")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Gray)),
+            )
             .style(Style::default().fg(Color::Gray));
-        
+
         f.render_widget(no_sync, area);
     }
 

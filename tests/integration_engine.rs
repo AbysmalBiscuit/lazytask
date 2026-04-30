@@ -41,7 +41,9 @@ async fn add_and_list_task() {
         t.tags
     );
     assert!(
-        !t.tags.iter().any(|tag| tag.chars().all(|c| c.is_ascii_uppercase())),
+        !t.tags
+            .iter()
+            .any(|tag| tag.chars().all(|c| c.is_ascii_uppercase())),
         "synthetic tags leaked: {:?}",
         t.tags
     );
@@ -143,10 +145,7 @@ async fn tag_add_and_remove_round_trip() {
     assert!(tags_before.contains(&"alpha".to_string()));
     assert!(tags_before.contains(&"beta".to_string()));
 
-    engine
-        .modify_task(&uuid, &[("-alpha", "")])
-        .await
-        .unwrap();
+    engine.modify_task(&uuid, &[("-alpha", "")]).await.unwrap();
 
     let tags_after: Vec<String> = engine
         .list_tasks()
@@ -156,8 +155,14 @@ async fn tag_add_and_remove_round_trip() {
         .find(|t| t.uuid == uuid)
         .unwrap()
         .tags;
-    assert!(!tags_after.contains(&"alpha".to_string()), "alpha not removed");
-    assert!(tags_after.contains(&"beta".to_string()), "beta should remain");
+    assert!(
+        !tags_after.contains(&"alpha".to_string()),
+        "alpha not removed"
+    );
+    assert!(
+        tags_after.contains(&"beta".to_string()),
+        "beta should remain"
+    );
 }
 
 #[tokio::test]
@@ -168,10 +173,7 @@ async fn modify_with_empty_tags_clears_all_user_tags() {
         .await
         .unwrap();
 
-    engine
-        .modify_task(&uuid, &[("tags", "")])
-        .await
-        .unwrap();
+    engine.modify_task(&uuid, &[("tags", "")]).await.unwrap();
 
     let tags = engine
         .list_tasks()
@@ -181,7 +183,11 @@ async fn modify_with_empty_tags_clears_all_user_tags() {
         .find(|t| t.uuid == uuid)
         .unwrap()
         .tags;
-    assert!(tags.is_empty(), "user tags should be cleared, got {:?}", tags);
+    assert!(
+        tags.is_empty(),
+        "user tags should be cleared, got {:?}",
+        tags
+    );
 }
 
 #[tokio::test]

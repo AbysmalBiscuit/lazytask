@@ -61,45 +61,46 @@ impl MainView {
     pub fn render(&mut self, f: &mut Frame, area: Rect, terminal_width: u16) {
         let available_height = area.height;
         let filter_height = if available_height < 20 {
-            9   // Compact filter area for small screens
+            9 // Compact filter area for small screens
         } else if available_height < 30 {
-            12  // Medium filter area for medium screens
+            12 // Medium filter area for medium screens
         } else {
-            15  // Larger filter area for large screens
+            15 // Larger filter area for large screens
         };
 
         let main_content_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(10),                    // Top area (minimum 10 lines for task list)
-                Constraint::Length(filter_height),     // Responsive filters pane
+                Constraint::Min(10),               // Top area (minimum 10 lines for task list)
+                Constraint::Length(filter_height), // Responsive filters pane
             ])
             .split(area);
 
         // Responsive horizontal split based on terminal width
         let (left_pct, right_pct) = if terminal_width < 100 {
-            (50, 50)  // Equal split for narrow terminals
+            (50, 50) // Equal split for narrow terminals
         } else if terminal_width < 150 {
-            (50, 50)  // Slightly favor detail panel for medium terminals  
+            (50, 50) // Slightly favor detail panel for medium terminals
         } else {
-            (50, 50)  // More space for detail panel on wide terminals
+            (50, 50) // More space for detail panel on wide terminals
         };
 
         let top_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(left_pct),   // Responsive task list
-                Constraint::Percentage(right_pct),  // Responsive task detail
+                Constraint::Percentage(left_pct),  // Responsive task list
+                Constraint::Percentage(right_pct), // Responsive task detail
             ])
             .split(main_content_chunks[0]);
 
         // Draw task list on the left
         self.task_list_widget.render(f, top_chunks[0]);
-        
+
         // Draw task detail on the right
         let selected_task = self.task_list_widget.selected_task();
-        self.task_detail_widget.render(f, top_chunks[1], selected_task);
-        
+        self.task_detail_widget
+            .render(f, top_chunks[1], selected_task);
+
         // Draw filters at the bottom spanning full width
         self.draw_filters_panel(f, main_content_chunks[1], terminal_width);
     }
@@ -109,10 +110,9 @@ impl MainView {
         let mut projects: Vec<String> = tasks
             .iter()
             .filter(|task| {
-                matches!(task.status, 
-                    TaskStatus::Pending | 
-                    TaskStatus::Waiting |
-                    TaskStatus::Recurring
+                matches!(
+                    task.status,
+                    TaskStatus::Pending | TaskStatus::Waiting | TaskStatus::Recurring
                 )
             })
             .filter_map(|task| task.project.as_ref())
@@ -126,10 +126,9 @@ impl MainView {
         let mut tags: Vec<String> = tasks
             .iter()
             .filter(|task| {
-                matches!(task.status, 
-                    TaskStatus::Pending | 
-                    TaskStatus::Waiting |
-                    TaskStatus::Recurring
+                matches!(
+                    task.status,
+                    TaskStatus::Pending | TaskStatus::Waiting | TaskStatus::Recurring
                 )
             })
             .flat_map(|task| task.tags.iter())
@@ -141,29 +140,34 @@ impl MainView {
         let _ = projects; // available projects already stored above
     }
 
-    pub fn set_tasks_with_preserved_selection(&mut self, tasks: Vec<Task>, preserve_uuid: Option<&str>) {
-        self.task_list_widget.set_tasks_with_preserved_selection(tasks, preserve_uuid);
+    pub fn set_tasks_with_preserved_selection(
+        &mut self,
+        tasks: Vec<Task>,
+        preserve_uuid: Option<&str>,
+    ) {
+        self.task_list_widget
+            .set_tasks_with_preserved_selection(tasks, preserve_uuid);
     }
 
     pub fn matches_filters(&self, task: &Task) -> bool {
         // Status filter (including computed states)
         if !self.selected_statuses.is_empty() || self.filter_active || self.filter_overdue {
             let mut status_matches = false;
-            
+
             // Check basic status matches
             if !self.selected_statuses.is_empty() {
                 status_matches = self.selected_statuses.contains(&task.status);
             }
-            
+
             // Check computed state filters
             if self.filter_active && task.is_active() {
                 status_matches = true;
             }
-            
+
             if self.filter_overdue && task.is_overdue() {
                 status_matches = true;
             }
-            
+
             if !status_matches {
                 return false;
             }
@@ -183,7 +187,8 @@ impl MainView {
 
         // Tags filter
         if !self.selected_tags.is_empty() {
-            let has_selected_tag = self.selected_tags
+            let has_selected_tag = self
+                .selected_tags
                 .iter()
                 .any(|selected_tag| task.tags.contains(selected_tag));
             if !has_selected_tag {
@@ -195,12 +200,16 @@ impl MainView {
         if !self.search_text.is_empty() {
             let search_text = self.search_text.to_lowercase();
             let matches_description = task.description.to_lowercase().contains(&search_text);
-            let matches_project = task.project.as_ref()
+            let matches_project = task
+                .project
+                .as_ref()
                 .map(|p| p.to_lowercase().contains(&search_text))
                 .unwrap_or(false);
-            let matches_tags = task.tags.iter()
+            let matches_tags = task
+                .tags
+                .iter()
                 .any(|tag| tag.to_lowercase().contains(&search_text));
-            
+
             if !matches_description && !matches_project && !matches_tags {
                 return false;
             }
@@ -284,12 +293,16 @@ impl MainView {
                 }
             }
             FilterSection::Project => {
-                if !self.available_projects.is_empty() && self.project_selection_index < self.available_projects.len() - 1 {
+                if !self.available_projects.is_empty()
+                    && self.project_selection_index < self.available_projects.len() - 1
+                {
                     self.project_selection_index += 1;
                 }
             }
             FilterSection::Tags => {
-                if !self.available_tags.is_empty() && self.tag_selection_index < self.available_tags.len() - 1 {
+                if !self.available_tags.is_empty()
+                    && self.tag_selection_index < self.available_tags.len() - 1
+                {
                     self.tag_selection_index += 1;
                 }
             }
@@ -317,7 +330,7 @@ impl MainView {
                         self.filter_active = !self.filter_active;
                     }
                     2 => {
-                        // Overdue (computed filter)  
+                        // Overdue (computed filter)
                         self.filter_overdue = !self.filter_overdue;
                     }
                     3 => {
@@ -396,12 +409,12 @@ impl MainView {
             } else {
                 [25, 25, 25, 25] // Full layout
             };
-            
+
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
                     Constraint::Percentage(widths[0]), // Status filters
-                    Constraint::Percentage(widths[1]), // Project filters 
+                    Constraint::Percentage(widths[1]), // Project filters
                     Constraint::Percentage(widths[2]), // Tag filters
                     Constraint::Percentage(widths[3]), // Search filters
                 ])
@@ -418,7 +431,7 @@ impl MainView {
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(filter_chunks[1]);
-                
+
             self.draw_status_filters(f, top_row[0]);
             self.draw_project_filters(f, top_row[1]);
             self.draw_tag_filters(f, bottom_row[0]);
@@ -440,7 +453,7 @@ impl MainView {
             ("Completed", TaskStatus::Completed),
             ("Deleted", TaskStatus::Deleted),
         ];
-        
+
         let status_text: Vec<Line> = statuses
             .iter()
             .enumerate()
@@ -453,45 +466,51 @@ impl MainView {
                     4 => self.selected_statuses.contains(&TaskStatus::Deleted),
                     _ => false,
                 };
-                
-                let is_highlighted = self.active_filter_section == FilterSection::Status 
+
+                let is_highlighted = self.active_filter_section == FilterSection::Status
                     && self.status_selection_index == i;
-                
+
                 let checkbox = if is_selected {
-                    Span::styled("[✓] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                    Span::styled(
+                        "[✓] ",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    )
                 } else {
                     Span::styled("[ ] ", Style::default().fg(Color::Gray))
                 };
-                
+
                 let text_style = if is_highlighted {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
-                
-                Line::from(vec![
-                    checkbox,
-                    Span::styled(*name, text_style),
-                ])
+
+                Line::from(vec![checkbox, Span::styled(*name, text_style)])
             })
             .collect();
 
-        let border_color = if self.filter_focused && self.active_filter_section == FilterSection::Status {
-            Color::Yellow
-        } else if self.filter_focused {
-            Color::DarkGray
-        } else {
-            Color::Cyan
-        };
-        
+        let border_color =
+            if self.filter_focused && self.active_filter_section == FilterSection::Status {
+                Color::Yellow
+            } else if self.filter_focused {
+                Color::DarkGray
+            } else {
+                Color::Cyan
+            };
+
         let status_panel = Paragraph::new(status_text)
-            .block(Block::default()
-                .title("Status")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
+            .block(
+                Block::default()
+                    .title("Status")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
             )
             .style(Style::default().fg(Color::White));
-        
+
         f.render_widget(status_panel, area);
     }
 
@@ -508,7 +527,7 @@ impl MainView {
                             20,
                         )
                     },
-                    Style::default().fg(Color::Green)
+                    Style::default().fg(Color::Green),
                 ),
             ]),
             Line::from(""),
@@ -516,16 +535,20 @@ impl MainView {
 
         let base_visible_items = (area.height as usize).saturating_sub(4).max(1);
         let total_items = self.available_projects.len();
-        
+
         let needs_scrolling = total_items > base_visible_items;
         let scroll_indicator_space = if needs_scrolling { 2 } else { 0 };
-        let max_visible_items = base_visible_items.saturating_sub(scroll_indicator_space).max(1);
-        
+        let max_visible_items = base_visible_items
+            .saturating_sub(scroll_indicator_space)
+            .max(1);
+
         let scroll_offset = if total_items <= max_visible_items {
             0
         } else {
-            let selected_index = self.project_selection_index.min(total_items.saturating_sub(1));
-            
+            let selected_index = self
+                .project_selection_index
+                .min(total_items.saturating_sub(1));
+
             if selected_index < max_visible_items / 2 {
                 0
             } else if selected_index >= total_items - (max_visible_items / 2) {
@@ -535,7 +558,8 @@ impl MainView {
             }
         };
 
-        let visible_projects: Vec<_> = self.available_projects
+        let visible_projects: Vec<_> = self
+            .available_projects
             .iter()
             .enumerate()
             .skip(scroll_offset)
@@ -543,70 +567,82 @@ impl MainView {
             .collect();
 
         if scroll_offset > 0 {
-            project_text.push(Line::from(vec![
-                Span::styled(
-                    format!("↑ {} more above", scroll_offset),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC)
-                ),
-            ]));
+            project_text.push(Line::from(vec![Span::styled(
+                format!("↑ {} more above", scroll_offset),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
 
         for (original_i, project) in visible_projects.iter() {
             let is_selected = self.selected_projects.contains(project);
-            let is_highlighted = self.active_filter_section == FilterSection::Project 
+            let is_highlighted = self.active_filter_section == FilterSection::Project
                 && self.project_selection_index == *original_i;
-            
+
             let checkbox = if is_selected {
-                Span::styled("[✓] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "[✓] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::styled("[ ] ", Style::default().fg(Color::Gray))
             };
-            
+
             let text_style = if is_highlighted {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
-            
+
             let max_chars = (area.width as usize).saturating_sub(6).max(8);
             let display_name = if project.len() > max_chars {
                 format!("{}...", &project[..max_chars.saturating_sub(3)])
             } else {
                 project.to_string()
             };
-            
+
             project_text.push(Line::from(vec![
                 checkbox,
                 Span::styled(display_name, text_style),
             ]));
         }
 
-        let items_below = self.available_projects.len().saturating_sub(scroll_offset + visible_projects.len());
+        let items_below = self
+            .available_projects
+            .len()
+            .saturating_sub(scroll_offset + visible_projects.len());
         if items_below > 0 {
-            project_text.push(Line::from(vec![
-                Span::styled(
-                    format!("↓ {} more below", items_below),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC)
-                ),
-            ]));
+            project_text.push(Line::from(vec![Span::styled(
+                format!("↓ {} more below", items_below),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
 
-        let border_color = if self.filter_focused && self.active_filter_section == FilterSection::Project {
-            Color::Yellow
-        } else if self.filter_focused {
-            Color::DarkGray
-        } else {
-            Color::Cyan
-        };
+        let border_color =
+            if self.filter_focused && self.active_filter_section == FilterSection::Project {
+                Color::Yellow
+            } else if self.filter_focused {
+                Color::DarkGray
+            } else {
+                Color::Cyan
+            };
 
         let project_panel = Paragraph::new(project_text)
-            .block(Block::default()
-                .title("Project")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
+            .block(
+                Block::default()
+                    .title("Project")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
             )
             .style(Style::default().fg(Color::White));
-        
+
         f.render_widget(project_panel, area);
     }
 
@@ -623,7 +659,7 @@ impl MainView {
                             20,
                         )
                     },
-                    Style::default().fg(Color::Green)
+                    Style::default().fg(Color::Green),
                 ),
             ]),
             Line::from(""),
@@ -631,16 +667,18 @@ impl MainView {
 
         let base_visible_items = (area.height as usize).saturating_sub(4).max(1);
         let total_items = self.available_tags.len();
-        
+
         let needs_scrolling = total_items > base_visible_items;
         let scroll_indicator_space = if needs_scrolling { 2 } else { 0 };
-        let max_visible_items = base_visible_items.saturating_sub(scroll_indicator_space).max(1);
-        
+        let max_visible_items = base_visible_items
+            .saturating_sub(scroll_indicator_space)
+            .max(1);
+
         let scroll_offset = if total_items <= max_visible_items {
             0
         } else {
             let selected_index = self.tag_selection_index.min(total_items.saturating_sub(1));
-            
+
             if selected_index < max_visible_items / 2 {
                 0
             } else if selected_index >= total_items - (max_visible_items / 2) {
@@ -650,7 +688,8 @@ impl MainView {
             }
         };
 
-        let visible_tags: Vec<_> = self.available_tags
+        let visible_tags: Vec<_> = self
+            .available_tags
             .iter()
             .enumerate()
             .skip(scroll_offset)
@@ -658,76 +697,88 @@ impl MainView {
             .collect();
 
         if scroll_offset > 0 {
-            tag_text.push(Line::from(vec![
-                Span::styled(
-                    format!("↑ {} more above", scroll_offset),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC)
-                ),
-            ]));
+            tag_text.push(Line::from(vec![Span::styled(
+                format!("↑ {} more above", scroll_offset),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
 
         for (original_i, tag) in visible_tags.iter() {
             let is_selected = self.selected_tags.contains(tag);
-            let is_highlighted = self.active_filter_section == FilterSection::Tags 
+            let is_highlighted = self.active_filter_section == FilterSection::Tags
                 && self.tag_selection_index == *original_i;
-            
+
             let checkbox = if is_selected {
-                Span::styled("[✓] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "[✓] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::styled("[ ] ", Style::default().fg(Color::Gray))
             };
-            
+
             let text_style = if is_highlighted {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
-            
+
             let max_chars = (area.width as usize).saturating_sub(6).max(6);
             let display_name = if tag.len() > max_chars {
                 format!("{}...", &tag[..max_chars.saturating_sub(3)])
             } else {
                 tag.to_string()
             };
-            
+
             tag_text.push(Line::from(vec![
                 checkbox,
                 Span::styled(display_name, text_style),
             ]));
         }
 
-        let items_below = self.available_tags.len().saturating_sub(scroll_offset + visible_tags.len());
+        let items_below = self
+            .available_tags
+            .len()
+            .saturating_sub(scroll_offset + visible_tags.len());
         if items_below > 0 {
-            tag_text.push(Line::from(vec![
-                Span::styled(
-                    format!("↓ {} more below", items_below),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC)
-                ),
-            ]));
+            tag_text.push(Line::from(vec![Span::styled(
+                format!("↓ {} more below", items_below),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         }
 
-        let border_color = if self.filter_focused && self.active_filter_section == FilterSection::Tags {
-            Color::Yellow
-        } else if self.filter_focused {
-            Color::DarkGray
-        } else {
-            Color::Cyan
-        };
+        let border_color =
+            if self.filter_focused && self.active_filter_section == FilterSection::Tags {
+                Color::Yellow
+            } else if self.filter_focused {
+                Color::DarkGray
+            } else {
+                Color::Cyan
+            };
 
         let tag_panel = Paragraph::new(tag_text)
-            .block(Block::default()
-                .title("Tags")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
+            .block(
+                Block::default()
+                    .title("Tags")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
             )
             .style(Style::default().fg(Color::White));
-        
+
         f.render_widget(tag_panel, area);
     }
 
     fn draw_search_filter(&self, f: &mut Frame, area: Rect) {
         let is_active = self.active_filter_section == FilterSection::Search;
-        
+
         let mut search_text = vec![
             Line::from(vec![
                 Span::styled("Search: ", Style::default().fg(Color::Yellow)),
@@ -738,19 +789,24 @@ impl MainView {
                         self.search_text.clone()
                     },
                     if is_active {
-                        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::Green)
-                    }
+                    },
                 ),
             ]),
             Line::from(""),
         ];
 
         if is_active {
-            search_text.push(Line::from(vec![
-                Span::styled("Type to search", Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)),
-            ]));
+            search_text.push(Line::from(vec![Span::styled(
+                "Type to search",
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
+            )]));
         } else {
             search_text.extend(vec![
                 Line::from("Searches in:"),
@@ -760,22 +816,24 @@ impl MainView {
             ]);
         }
 
-        let border_color = if self.filter_focused && self.active_filter_section == FilterSection::Search {
-            Color::Yellow
-        } else if self.filter_focused {
-            Color::DarkGray
-        } else {
-            Color::Cyan
-        };
+        let border_color =
+            if self.filter_focused && self.active_filter_section == FilterSection::Search {
+                Color::Yellow
+            } else if self.filter_focused {
+                Color::DarkGray
+            } else {
+                Color::Cyan
+            };
 
         let search_panel = Paragraph::new(search_text)
-            .block(Block::default()
-                .title("Search")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
+            .block(
+                Block::default()
+                    .title("Search")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(border_color)),
             )
             .style(Style::default().fg(Color::White));
-        
+
         f.render_widget(search_panel, area);
     }
 }

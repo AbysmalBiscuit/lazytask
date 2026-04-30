@@ -127,7 +127,11 @@ async fn q_key_emits_quit_action() -> Result<()> {
     let mut d = Driver::new(120, 40).await?;
     d.load().await?;
     let action = d.ch('q').await?;
-    assert!(matches!(action, Action::Quit), "expected Action::Quit, got {:?}", action);
+    assert!(
+        matches!(action, Action::Quit),
+        "expected Action::Quit, got {:?}",
+        action
+    );
     assert!(d.quit, "driver should record quit");
     Ok(())
 }
@@ -137,7 +141,11 @@ async fn ctrl_c_emits_quit_action() -> Result<()> {
     let mut d = Driver::new(120, 40).await?;
     d.load().await?;
     let action = d.press(KeyCode::Char('c'), KeyModifiers::CONTROL).await?;
-    assert!(matches!(action, Action::Quit), "Ctrl+C should map to Quit, got {:?}", action);
+    assert!(
+        matches!(action, Action::Quit),
+        "Ctrl+C should map to Quit, got {:?}",
+        action
+    );
     assert!(d.quit);
     Ok(())
 }
@@ -149,7 +157,10 @@ async fn a_opens_form_and_enter_after_typing_creates_task() -> Result<()> {
 
     // Press 'a' to open the add form.
     d.ch('a').await?;
-    assert!(d.ui.has_active_form(), "form should be active after pressing a");
+    assert!(
+        d.ui.has_active_form(),
+        "form should be active after pressing a"
+    );
     d.assert_screen_has("Description");
 
     // Type a description, save with Enter (form is in editing mode → Enter
@@ -274,7 +285,9 @@ async fn c_in_reports_toggles_calendar_mode() -> Result<()> {
     assert!(
         d.screen_contains(&month) || d.screen_contains(&short),
         "Calendar should show month name '{}' / '{}' — got:\n{}",
-        month, short, d.screen()
+        month,
+        short,
+        d.screen()
     );
     Ok(())
 }
@@ -314,8 +327,17 @@ async fn help_screen_lists_all_major_shortcuts() -> Result<()> {
 
     // Key bindings that the original screen didn't show
     for key_label in [
-        "Ctrl+C", "F5", "/", "r", "s", "Shift+S", "Tab", "Space", "Backspace",
-        "Esc", "Enter",
+        "Ctrl+C",
+        "F5",
+        "/",
+        "r",
+        "s",
+        "Shift+S",
+        "Tab",
+        "Space",
+        "Backspace",
+        "Esc",
+        "Enter",
     ] {
         assert!(
             d.screen_contains(key_label),
@@ -340,7 +362,10 @@ async fn slash_toggles_filter_mode_and_changes_footer_hint() -> Result<()> {
     d.key(KeyCode::Char('/')).await?;
     let footer_after = d.screen();
 
-    assert!(d.ui.has_active_form(), "/ should put us in filter (active form) mode");
+    assert!(
+        d.ui.has_active_form(),
+        "/ should put us in filter (active form) mode"
+    );
     assert!(
         footer_after.contains("Tab") && footer_after.contains("section"),
         "filter-mode footer hint missing — got:\n{}",
@@ -361,8 +386,12 @@ async fn tab_in_filter_mode_routes_to_section_navigation() -> Result<()> {
     // symbols, not styles), so we instead verify the action is dispatched and
     // that pressing Tab repeatedly never escapes filter mode or panics.
     let mut d = Driver::new(160, 40).await?;
-    d.engine.add_task("for filter", &[("project", "p1")]).await?;
-    d.engine.add_task("another", &[("project", "p2"), ("+work", "")]).await?;
+    d.engine
+        .add_task("for filter", &[("project", "p1")])
+        .await?;
+    d.engine
+        .add_task("another", &[("project", "p2"), ("+work", "")])
+        .await?;
     d.load().await?;
     d.key(KeyCode::Char('/')).await?;
     assert!(d.ui.has_active_form(), "/ enters filter mode");
@@ -402,7 +431,10 @@ async fn typing_in_filter_search_filters_tasks() -> Result<()> {
 
     // alpha should still be visible, beta should be filtered out.
     let scr = d.screen();
-    assert!(scr.contains("alpha"), "alpha should be present in filtered list");
+    assert!(
+        scr.contains("alpha"),
+        "alpha should be present in filtered list"
+    );
     assert!(
         !scr.contains("beta task"),
         "beta task should have been filtered out — got:\n{}",
@@ -434,7 +466,10 @@ async fn esc_exits_filter_mode_and_applies_selections() -> Result<()> {
 async fn s_without_sync_configured_shows_status_message() -> Result<()> {
     let mut d = Driver::new(160, 40).await?;
     d.load().await?;
-    assert!(!d.engine.is_sync_configured(), "precondition: sync not configured");
+    assert!(
+        !d.engine.is_sync_configured(),
+        "precondition: sync not configured"
+    );
 
     d.ch('s').await?;
     // The footer should now display an info message about sync not being configured.
@@ -470,7 +505,9 @@ async fn shift_s_opens_sync_config_modal() -> Result<()> {
 #[tokio::test]
 async fn arrow_keys_change_selection_in_task_list() -> Result<()> {
     let mut d = Driver::new(160, 40).await?;
-    d.engine.add_task("first added (will be at bottom)", &[]).await?;
+    d.engine
+        .add_task("first added (will be at bottom)", &[])
+        .await?;
     // Add another so there are two tasks and Down has somewhere to go.
     // (Tasks are sorted newest-first by entry, so this one becomes selected.)
     d.engine.add_task("second added (newest)", &[]).await?;
@@ -481,7 +518,10 @@ async fn arrow_keys_change_selection_in_task_list() -> Result<()> {
     let before = d.screen();
     d.key(KeyCode::Down).await?;
     let after = d.screen();
-    assert_ne!(before, after, "Down arrow should change visible selection state");
+    assert_ne!(
+        before, after,
+        "Down arrow should change visible selection state"
+    );
     Ok(())
 }
 
@@ -495,7 +535,10 @@ async fn f5_refreshes_tasks_from_engine() -> Result<()> {
     d.engine.add_task("late arrival", &[]).await?;
     // The screen should not yet show it (no refresh happened):
     d.draw()?;
-    assert!(!d.screen_contains("late arrival"), "task should not appear until F5");
+    assert!(
+        !d.screen_contains("late arrival"),
+        "task should not appear until F5"
+    );
 
     // F5 triggers a reload.
     d.key(KeyCode::F(5)).await?;
@@ -518,7 +561,10 @@ async fn d_then_d_advances_selection_to_next_task() -> Result<()> {
     d.ch('d').await?;
 
     let tasks = d.engine.list_tasks().await?;
-    let completed = tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
+    let completed = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Completed)
+        .count();
     assert_eq!(completed, 3, "all three tasks should be marked Completed");
     Ok(())
 }
@@ -534,12 +580,10 @@ async fn shift_lowercase_s_does_not_emit_force_sync() -> Result<()> {
     // This documents that and locks it down so a future "fix" doesn't
     // silently re-introduce a wrong path.
     let d = Driver::new(120, 40).await?;
-    let action = d
-        .input
-        .handle_key_event_with_context(
-            KeyEvent::new(KeyCode::Char('s'), KeyModifiers::SHIFT),
-            false,
-        );
+    let action = d.input.handle_key_event_with_context(
+        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::SHIFT),
+        false,
+    );
     // The current implementation does match the SHIFT guard for Char('s'),
     // so it returns ForceSync. But in reality crossterm never emits this
     // event. So we just assert the binding is the one we expect.
@@ -555,12 +599,10 @@ async fn shift_lowercase_s_does_not_emit_force_sync() -> Result<()> {
 async fn capital_s_maps_to_sync_config_not_force_sync() -> Result<()> {
     // What the user actually types when holding Shift: Char('S').
     let d = Driver::new(120, 40).await?;
-    let action = d
-        .input
-        .handle_key_event_with_context(
-            KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
-            false,
-        );
+    let action = d.input.handle_key_event_with_context(
+        KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
+        false,
+    );
     assert!(
         matches!(action, Action::SyncConfig),
         "User pressing Shift+S sees Char('S') and should get SyncConfig. got {:?}",

@@ -34,10 +34,13 @@ impl TaskCache {
 
     pub fn insert(&mut self, task: Task) {
         let uuid = task.uuid.clone();
-        self.tasks.insert(uuid, CachedTask {
-            task,
-            cached_at: Instant::now(),
-        });
+        self.tasks.insert(
+            uuid,
+            CachedTask {
+                task,
+                cached_at: Instant::now(),
+            },
+        );
     }
 
     pub fn remove(&mut self, uuid: &str) {
@@ -50,7 +53,7 @@ impl TaskCache {
 
     pub fn cleanup_expired(&mut self) {
         let max_age = self.max_age;
-        self.tasks.retain(|_, cached| cached.cached_at.elapsed() < max_age);
+        self.tasks
+            .retain(|_, cached| cached.cached_at.elapsed() < max_age);
     }
 }
-

@@ -12,7 +12,9 @@ async fn two_replicas_sync_through_local_server() {
     let dir_a = tmp.path().join("replica_a");
     let dir_b = tmp.path().join("replica_b");
 
-    let mut a = TaskChampionIntegration::new(Some(dir_a.clone())).await.unwrap();
+    let mut a = TaskChampionIntegration::new(Some(dir_a.clone()))
+        .await
+        .unwrap();
     a.configure_sync(SyncSettings {
         local_server_dir: Some(server_dir.clone()),
         ..Default::default()
@@ -26,7 +28,9 @@ async fn two_replicas_sync_through_local_server() {
         .expect("add_task on A");
     a.sync().await.expect("sync A pushes task to local server");
 
-    let mut b = TaskChampionIntegration::new(Some(dir_b.clone())).await.unwrap();
+    let mut b = TaskChampionIntegration::new(Some(dir_b.clone()))
+        .await
+        .unwrap();
     b.configure_sync(SyncSettings {
         local_server_dir: Some(server_dir.clone()),
         ..Default::default()
@@ -50,8 +54,12 @@ async fn bidirectional_sync_round_trip() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let server_dir = tmp.path().join("server");
 
-    let mut a = TaskChampionIntegration::new(Some(tmp.path().join("a"))).await.unwrap();
-    let mut b = TaskChampionIntegration::new(Some(tmp.path().join("b"))).await.unwrap();
+    let mut a = TaskChampionIntegration::new(Some(tmp.path().join("a")))
+        .await
+        .unwrap();
+    let mut b = TaskChampionIntegration::new(Some(tmp.path().join("b")))
+        .await
+        .unwrap();
 
     let settings = SyncSettings {
         local_server_dir: Some(server_dir.clone()),
@@ -79,7 +87,10 @@ async fn bidirectional_sync_round_trip() {
     a_uuids.sort();
     let mut want = vec![t1.clone(), t2.clone()];
     want.sort();
-    assert_eq!(a_uuids, want, "A should see both tasks after bidirectional sync");
+    assert_eq!(
+        a_uuids, want,
+        "A should see both tasks after bidirectional sync"
+    );
 
     let mut b_uuids: Vec<String> = b
         .list_tasks()
@@ -96,8 +107,12 @@ async fn bidirectional_sync_round_trip() {
 async fn sync_propagates_done_status() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let server_dir = tmp.path().join("server");
-    let mut a = TaskChampionIntegration::new(Some(tmp.path().join("a"))).await.unwrap();
-    let mut b = TaskChampionIntegration::new(Some(tmp.path().join("b"))).await.unwrap();
+    let mut a = TaskChampionIntegration::new(Some(tmp.path().join("a")))
+        .await
+        .unwrap();
+    let mut b = TaskChampionIntegration::new(Some(tmp.path().join("b")))
+        .await
+        .unwrap();
 
     let settings = SyncSettings {
         local_server_dir: Some(server_dir.clone()),

@@ -82,11 +82,17 @@ impl SyncHandler {
             .unwrap_or(false)
     }
 
-    pub async fn start_sync(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<String> {
+    pub async fn start_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+    ) -> Result<String> {
         self.run_sync(taskchampion, "Starting sync...").await
     }
 
-    pub async fn force_sync(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<String> {
+    pub async fn force_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+    ) -> Result<String> {
         self.run_sync(taskchampion, "Starting force sync...").await
     }
 

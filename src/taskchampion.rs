@@ -6,9 +6,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::PathBuf;
 use taskchampion::storage::AccessMode;
-use taskchampion::{
-    Operations, Replica, ServerConfig, SqliteStorage, Status as TcStatus, Tag,
-};
+use taskchampion::{Operations, Replica, ServerConfig, SqliteStorage, Status as TcStatus, Tag};
 use uuid::Uuid;
 
 use crate::data::models::{Priority, Task, TaskStatus};
@@ -106,11 +104,7 @@ impl TaskChampionIntegration {
         Ok(uuid.to_string())
     }
 
-    pub async fn modify_task(
-        &mut self,
-        uuid: &str,
-        attributes: &[(&str, &str)],
-    ) -> Result<()> {
+    pub async fn modify_task(&mut self, uuid: &str, attributes: &[(&str, &str)]) -> Result<()> {
         let task_uuid = uuid.parse::<Uuid>().context("Invalid task UUID")?;
         let mut ops = Operations::new();
         let mut task = self
@@ -275,10 +269,7 @@ fn apply_attributes(
             }
             "tags" if value.is_empty() => {
                 // Clear all user tags.
-                let existing: Vec<Tag> = task
-                    .get_tags()
-                    .filter(|t| !t.is_synthetic())
-                    .collect();
+                let existing: Vec<Tag> = task.get_tags().filter(|t| !t.is_synthetic()).collect();
                 for tag in existing {
                     task.remove_tag(&tag, ops).context("Failed to remove tag")?;
                 }
@@ -354,9 +345,7 @@ fn map_task(uuid: Uuid, tc: &taskchampion::Task) -> Task {
     let due = tc.get_due();
     let wait = tc.get_wait();
 
-    let start = tc
-        .get_value("start")
-        .and_then(|s| parse_unix_or_rfc3339(s));
+    let start = tc.get_value("start").and_then(|s| parse_unix_or_rfc3339(s));
 
     let end = tc.get_value("end").and_then(|s| parse_unix_or_rfc3339(s));
 

@@ -1,7 +1,7 @@
 // Configurable key mapping
 
-use std::collections::HashMap;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::collections::HashMap;
 
 pub struct KeyBindings {
     bindings: HashMap<String, KeyBinding>,
@@ -16,17 +16,23 @@ pub struct KeyBinding {
 impl KeyBindings {
     pub fn new() -> Self {
         let mut bindings = HashMap::new();
-        
+
         // Default key bindings
-        bindings.insert("quit".to_string(), KeyBinding {
-            key_code: KeyCode::Char('q'),
-            modifiers: KeyModifiers::NONE,
-        });
-        
-        bindings.insert("help".to_string(), KeyBinding {
-            key_code: KeyCode::F(1),
-            modifiers: KeyModifiers::NONE,
-        });
+        bindings.insert(
+            "quit".to_string(),
+            KeyBinding {
+                key_code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::NONE,
+            },
+        );
+
+        bindings.insert(
+            "help".to_string(),
+            KeyBinding {
+                key_code: KeyCode::F(1),
+                modifiers: KeyModifiers::NONE,
+            },
+        );
 
         KeyBindings { bindings }
     }
@@ -43,4 +49,3 @@ impl KeyBindings {
         }
     }
 }
-

@@ -234,13 +234,10 @@ impl AppUI {
                             .map(|(k, v)| (k.as_str(), v.as_str()))
                             .collect();
 
-                        if !task.uuid.is_empty()
-                            && self.tasks.iter().any(|t| t.uuid == task.uuid)
-                        {
+                        if !task.uuid.is_empty() && self.tasks.iter().any(|t| t.uuid == task.uuid) {
                             self.preserve_selection_uuid = Some(task.uuid.clone());
-                            if let Err(e) = taskchampion
-                                .modify_task(&task.uuid, &attribute_refs)
-                                .await
+                            if let Err(e) =
+                                taskchampion.modify_task(&task.uuid, &attribute_refs).await
                             {
                                 self.set_status_message(format!("❌ Edit failed: {}", e));
                             }
@@ -319,11 +316,9 @@ impl AppUI {
                 } else if matches!(self.current_view, AppView::Reports)
                     && self.reports_view.is_calendar_mode()
                 {
-                    self.reports_view.navigate_date(
-                        crate::ui::views::reports_view::DateNavigation::PrevWeek,
-                    );
-                } else if self.task_form.is_none()
-                    && matches!(self.current_view, AppView::TaskList)
+                    self.reports_view
+                        .navigate_date(crate::ui::views::reports_view::DateNavigation::PrevWeek);
+                } else if self.task_form.is_none() && matches!(self.current_view, AppView::TaskList)
                 {
                     self.main_view.previous_task();
                 }
@@ -336,11 +331,9 @@ impl AppUI {
                 } else if matches!(self.current_view, AppView::Reports)
                     && self.reports_view.is_calendar_mode()
                 {
-                    self.reports_view.navigate_date(
-                        crate::ui::views::reports_view::DateNavigation::NextWeek,
-                    );
-                } else if self.task_form.is_none()
-                    && matches!(self.current_view, AppView::TaskList)
+                    self.reports_view
+                        .navigate_date(crate::ui::views::reports_view::DateNavigation::NextWeek);
+                } else if self.task_form.is_none() && matches!(self.current_view, AppView::TaskList)
                 {
                     self.main_view.next_task();
                 }
@@ -349,18 +342,16 @@ impl AppUI {
                 if matches!(self.current_view, AppView::Reports)
                     && self.reports_view.is_calendar_mode()
                 {
-                    self.reports_view.navigate_date(
-                        crate::ui::views::reports_view::DateNavigation::PrevDay,
-                    );
+                    self.reports_view
+                        .navigate_date(crate::ui::views::reports_view::DateNavigation::PrevDay);
                 }
             }
             Action::MoveRight => {
                 if matches!(self.current_view, AppView::Reports)
                     && self.reports_view.is_calendar_mode()
                 {
-                    self.reports_view.navigate_date(
-                        crate::ui::views::reports_view::DateNavigation::NextDay,
-                    );
+                    self.reports_view
+                        .navigate_date(crate::ui::views::reports_view::DateNavigation::NextDay);
                 }
             }
             Action::Refresh => {
@@ -597,53 +588,58 @@ impl AppUI {
             ])
         };
         let blank = || Line::from("");
-        let note = |s: &str| Line::from(Span::styled(s.to_string(), Style::default().fg(Color::Gray)));
+        let note = |s: &str| {
+            Line::from(Span::styled(
+                s.to_string(),
+                Style::default().fg(Color::Gray),
+            ))
+        };
 
         let left = vec![
             header("Global"),
-            row("q",       "Quit"),
-            row("Ctrl+C",  "Quit"),
-            row("F1",      "Toggle this help"),
-            row("F5",      "Reload tasks from replica"),
-            row("Esc",     "Cancel / back / close modal"),
-            row("Enter",   "Confirm / save"),
+            row("q", "Quit"),
+            row("Ctrl+C", "Quit"),
+            row("F1", "Toggle this help"),
+            row("F5", "Reload tasks from replica"),
+            row("Esc", "Cancel / back / close modal"),
+            row("Enter", "Confirm / save"),
             blank(),
             header("Task list"),
-            row("↑ ↓",      "Move selection"),
-            row("a",       "Add new task"),
-            row("e",       "Edit selected task"),
-            row("d",       "Mark task done"),
-            row("Delete",  "Soft-delete task"),
-            row("/",       "Toggle filter mode"),
-            row("r",       "Open Reports view"),
-            row("s",       "Sync (needs sync config)"),
+            row("↑ ↓", "Move selection"),
+            row("a", "Add new task"),
+            row("e", "Edit selected task"),
+            row("d", "Mark task done"),
+            row("Delete", "Soft-delete task"),
+            row("/", "Toggle filter mode"),
+            row("r", "Open Reports view"),
+            row("s", "Sync (needs sync config)"),
             row("Shift+S", "Open Sync Config modal"),
             blank(),
             header("Filter mode"),
-            row("Tab",       "Cycle Status→Project→Tags→Search"),
-            row("↑ ↓",        "Navigate items"),
-            row("Space",     "Toggle item (multi-select)"),
-            row("type",      "Search (Search section only)"),
+            row("Tab", "Cycle Status→Project→Tags→Search"),
+            row("↑ ↓", "Navigate items"),
+            row("Space", "Toggle item (multi-select)"),
+            row("type", "Search (Search section only)"),
             row("Backspace", "Erase a character"),
-            row("Esc",       "Exit (selections stay applied)"),
+            row("Esc", "Exit (selections stay applied)"),
         ];
 
         let right = vec![
             header("Reports → Calendar"),
-            row("c",      "Toggle Calendar / Dashboard"),
-            row("← →",     "Move by one day"),
-            row("↑ ↓",      "Move by one week"),
-            row("< >",     "Previous / next month"),
-            row("t",      "Jump to today"),
+            row("c", "Toggle Calendar / Dashboard"),
+            row("← →", "Move by one day"),
+            row("↑ ↓", "Move by one week"),
+            row("< >", "Previous / next month"),
+            row("t", "Jump to today"),
             blank(),
             header("Form (add / edit task)"),
-            row("Tab / ↓",      "Next field"),
-            row("Shift+Tab/↑",  "Previous field"),
-            row("← →",          "Move cursor in text field"),
-            row("type",         "Edit active field"),
-            row("Backspace",    "Erase a character"),
-            row("Enter",        "Commit field, then save"),
-            row("Esc",          "Cancel without saving"),
+            row("Tab / ↓", "Next field"),
+            row("Shift+Tab/↑", "Previous field"),
+            row("← →", "Move cursor in text field"),
+            row("type", "Edit active field"),
+            row("Backspace", "Erase a character"),
+            row("Enter", "Commit field, then save"),
+            row("Esc", "Cancel without saving"),
             blank(),
             header("Sync setup"),
             note(" 1. Run a taskchampion-sync-server"),
@@ -722,9 +718,7 @@ impl AppUI {
                 Span::raw(" Save  "),
                 Span::styled(
                     "Esc",
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Cancel"),
             ])
@@ -760,9 +754,7 @@ impl AppUI {
                 Span::raw(" Search  "),
                 Span::styled(
                     "Esc",
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Exit"),
             ])
@@ -820,9 +812,7 @@ impl AppUI {
                     Span::raw("ync  "),
                     Span::styled(
                         "[q]",
-                        Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                     ),
                     Span::raw("uit"),
                 ]),
@@ -866,9 +856,7 @@ impl AppUI {
                             Span::raw(" dashboard  "),
                             Span::styled(
                                 "[ESC]",
-                                Style::default()
-                                    .fg(Color::Red)
-                                    .add_modifier(Modifier::BOLD),
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                             ),
                             Span::raw(" back"),
                         ])
@@ -883,16 +871,12 @@ impl AppUI {
                             Span::raw("alendar  "),
                             Span::styled(
                                 "[ESC]",
-                                Style::default()
-                                    .fg(Color::Red)
-                                    .add_modifier(Modifier::BOLD),
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                             ),
                             Span::raw(" back  "),
                             Span::styled(
                                 "[q]",
-                                Style::default()
-                                    .fg(Color::Red)
-                                    .add_modifier(Modifier::BOLD),
+                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                             ),
                             Span::raw("uit"),
                         ])
@@ -901,25 +885,19 @@ impl AppUI {
                 AppView::Help => Line::from(vec![
                     Span::styled(
                         "[ESC]",
-                        Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" back"),
                 ]),
                 _ => Line::from(vec![
                     Span::styled(
                         "[ESC]",
-                        Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(" back  "),
                     Span::styled(
                         "[q]",
-                        Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::BOLD),
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                     ),
                     Span::raw("uit"),
                 ]),

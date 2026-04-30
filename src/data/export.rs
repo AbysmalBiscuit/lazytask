@@ -48,10 +48,13 @@ impl TaskExporter {
     fn export_csv(tasks: &[Task], path: &Path) -> Result<()> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
-        
+
         // Write CSV header
-        writeln!(writer, "ID,UUID,Status,Description,Project,Priority,Due,Tags")?;
-        
+        writeln!(
+            writer,
+            "ID,UUID,Status,Description,Project,Priority,Due,Tags"
+        )?;
+
         // Write task data
         for task in tasks {
             writeln!(
@@ -63,11 +66,13 @@ impl TaskExporter {
                 task.description,
                 task.project.as_deref().unwrap_or(""),
                 task.priority.as_ref().map(|p| p.as_str()).unwrap_or(""),
-                task.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default(),
+                task.due
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
                 task.tags.join(";")
             )?;
         }
-        
+
         writer.flush()?;
         Ok(())
     }
@@ -75,8 +80,8 @@ impl TaskExporter {
     fn import_csv(path: &Path) -> Result<Vec<Task>> {
         use std::io::BufRead;
 
-        let file = File::open(path)
-            .with_context(|| format!("Failed to open CSV file: {:?}", path))?;
+        let file =
+            File::open(path).with_context(|| format!("Failed to open CSV file: {:?}", path))?;
 
         let reader = BufReader::new(file);
         let mut tasks = Vec::new();
@@ -115,4 +120,3 @@ impl TaskExporter {
         Ok(tasks)
     }
 }
-

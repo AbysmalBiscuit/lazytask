@@ -57,9 +57,9 @@ impl InputHandler {
                 KeyCode::Enter => Action::Select,
                 KeyCode::Up => Action::MoveUp,
                 KeyCode::Down => Action::MoveDown,
-                KeyCode::Left => Action::MoveLeft,   // Enable cursor movement in forms
+                KeyCode::Left => Action::MoveLeft, // Enable cursor movement in forms
                 KeyCode::Right => Action::MoveRight, // Enable cursor movement in forms
-                KeyCode::Tab => Action::Tab, // Tab for section navigation in filters
+                KeyCode::Tab => Action::Tab,       // Tab for section navigation in filters
                 KeyCode::BackTab => Action::MoveUp, // Shift+Tab moves to previous field (same as up arrow)
                 KeyCode::Backspace => Action::Backspace,
                 KeyCode::Char(' ') => Action::Space, // Space for toggling filters
@@ -82,7 +82,9 @@ impl InputHandler {
                 KeyCode::Enter => Action::Select,
                 KeyCode::Esc => Action::Back,
                 KeyCode::Char('/') => Action::Filter,
-                KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::SHIFT) => Action::ForceSync,
+                KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                    Action::ForceSync
+                }
                 KeyCode::Char('s') => Action::Sync,
                 KeyCode::Char('S') => Action::SyncConfig,
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,

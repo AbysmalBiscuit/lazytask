@@ -151,7 +151,11 @@ impl SyncConfigWidget {
 
         let block = Block::default()
             .title("Configure Sync")
-            .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
         f.render_widget(block, popup);

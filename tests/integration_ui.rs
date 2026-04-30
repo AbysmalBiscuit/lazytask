@@ -21,7 +21,12 @@ fn buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
     joined.contains(needle)
 }
 
-async fn make_ui() -> (AppUI, SyncHandler, TaskChampionIntegration, tempfile::TempDir) {
+async fn make_ui() -> (
+    AppUI,
+    SyncHandler,
+    TaskChampionIntegration,
+    tempfile::TempDir,
+) {
     let tmp = tempfile::tempdir().expect("tempdir");
     let cfg = Config::default();
     let ui = AppUI::new(&cfg).expect("AppUI::new");
@@ -92,7 +97,8 @@ async fn renders_task_with_unicode_safely() {
 
     let long_emoji_desc = "🚀".repeat(30) + " send rocket to Mars";
     engine.add_task(&long_emoji_desc, &[]).await.unwrap();
-    let long_chinese = "中文测试任务描述非常长应该被截断处理而不是崩溃应用程序的渲染过程".to_string();
+    let long_chinese =
+        "中文测试任务描述非常长应该被截断处理而不是崩溃应用程序的渲染过程".to_string();
     engine.add_task(&long_chinese, &[]).await.unwrap();
 
     ui.load_tasks(&mut engine).await.unwrap();

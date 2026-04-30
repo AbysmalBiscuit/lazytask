@@ -89,84 +89,99 @@ impl Task {
     }
 
     pub fn from_json(json: &Value) -> Result<Self> {
-        let id = json.get("id")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as u32);
+        let id = json.get("id").and_then(|v| v.as_u64()).map(|v| v as u32);
 
-        let uuid = json.get("uuid")
+        let uuid = json
+            .get("uuid")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Task UUID is required"))?
             .to_string();
 
-        let status = json.get("status")
+        let status = json
+            .get("status")
             .and_then(|v| v.as_str())
             .map(TaskStatus::from_str)
             .unwrap_or(TaskStatus::Pending);
 
-        let description = json.get("description")
+        let description = json
+            .get("description")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Task description is required"))?
             .to_string();
 
-        let project = json.get("project")
+        let project = json
+            .get("project")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let priority = json.get("priority")
+        let priority = json
+            .get("priority")
             .and_then(|v| v.as_str())
             .and_then(Priority::from_str);
 
-        let entry = json.get("entry")
+        let entry = json
+            .get("entry")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s))
             .unwrap_or_else(Utc::now);
 
-        let due = json.get("due")
+        let due = json
+            .get("due")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let modified = json.get("modified")
+        let modified = json
+            .get("modified")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let start = json.get("start")
+        let start = json
+            .get("start")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let end = json.get("end")
+        let end = json
+            .get("end")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let wait = json.get("wait")
+        let wait = json
+            .get("wait")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let scheduled = json.get("scheduled")
+        let scheduled = json
+            .get("scheduled")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let until = json.get("until")
+        let until = json
+            .get("until")
             .and_then(|v| v.as_str())
             .and_then(|s| Self::parse_taskwarrior_date(s));
 
-        let tags = json.get("tags")
+        let tags = json
+            .get("tags")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_string())
-                .collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
             .unwrap_or_else(Vec::new);
 
-        let annotations = json.get("annotations")
+        let annotations = json
+            .get("annotations")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter()
-                .filter_map(|v| Annotation::from_json(v).ok())
-                .collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| Annotation::from_json(v).ok())
+                    .collect()
+            })
             .unwrap_or_else(Vec::new);
 
-        let urgency = json.get("urgency")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
+        let urgency = json.get("urgency").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
         Ok(Task {
             id,
@@ -221,10 +236,7 @@ fn parse_taskwarrior_datetime(date_str: &str) -> Option<DateTime<Utc>> {
     }
 
     // Then Taskwarrior compact form: YYYYMMDDTHHMMSSZ (16 chars)
-    if trimmed.len() == 16
-        && trimmed.ends_with('Z')
-        && trimmed.as_bytes().get(8) == Some(&b'T')
-    {
+    if trimmed.len() == 16 && trimmed.ends_with('Z') && trimmed.as_bytes().get(8) == Some(&b'T') {
         let formatted = format!(
             "{}-{}-{}T{}:{}:{}Z",
             &trimmed[0..4],
@@ -301,12 +313,14 @@ impl Priority {
 
 impl Annotation {
     pub fn from_json(json: &Value) -> Result<Self> {
-        let entry = json.get("entry")
+        let entry = json
+            .get("entry")
             .and_then(|v| v.as_str())
             .and_then(|s| parse_taskwarrior_datetime(s))
             .ok_or_else(|| anyhow::anyhow!("Annotation entry time is required"))?;
 
-        let description = json.get("description")
+        let description = json
+            .get("description")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Annotation description is required"))?
             .to_string();

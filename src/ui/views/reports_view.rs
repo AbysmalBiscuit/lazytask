@@ -1,9 +1,9 @@
 // Reports view - coordinates between dashboard and calendar modes
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
-use std::collections::HashMap;
 use chrono::{DateTime, Datelike, Duration, Utc};
+use ratatui::layout::Rect;
+use ratatui::Frame;
+use std::collections::HashMap;
 
 use crate::data::models::{Priority, Task, TaskStatus};
 use crate::ui::components::calendar_view::CalendarWidget;
@@ -11,8 +11,8 @@ use crate::ui::components::report_panel::{DashboardWidget, ProjectStats, TaskSum
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReportMode {
-    Dashboard,  // Statistics dashboard
-    Calendar,   // Calendar view
+    Dashboard, // Statistics dashboard
+    Calendar,  // Calendar view
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,7 +25,6 @@ pub enum DateNavigation {
     PrevMonth,
     Today,
 }
-
 
 pub struct ReportsView {
     tasks: Vec<Task>,
@@ -59,16 +58,22 @@ impl ReportsView {
     fn recalculate_stats(&mut self) {
         // Recalculate project statistics
         self.project_stats.clear();
-        
+
         for task in &self.tasks {
-            let project_name = task.project.clone().unwrap_or_else(|| "(no project)".to_string());
-            let stats = self.project_stats.entry(project_name).or_insert(ProjectStats {
-                pending: 0,
-                completed: 0,
-                deleted: 0,
-                total: 0,
-            });
-            
+            let project_name = task
+                .project
+                .clone()
+                .unwrap_or_else(|| "(no project)".to_string());
+            let stats = self
+                .project_stats
+                .entry(project_name)
+                .or_insert(ProjectStats {
+                    pending: 0,
+                    completed: 0,
+                    deleted: 0,
+                    total: 0,
+                });
+
             match task.status {
                 TaskStatus::Pending => stats.pending += 1,
                 TaskStatus::Completed => stats.completed += 1,
@@ -85,18 +90,46 @@ impl ReportsView {
 
     fn calculate_summary_cache(&mut self) {
         let total = self.tasks.len();
-        let pending = self.tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
-        let completed = self.tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
-        let deleted = self.tasks.iter().filter(|t| t.status == TaskStatus::Deleted).count();
-        let waiting = self.tasks.iter().filter(|t| t.status == TaskStatus::Waiting).count();
+        let pending = self
+            .tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Pending)
+            .count();
+        let completed = self
+            .tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count();
+        let deleted = self
+            .tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Deleted)
+            .count();
+        let waiting = self
+            .tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Waiting)
+            .count();
         let active = self.tasks.iter().filter(|t| t.is_active()).count();
         let overdue = self.tasks.iter().filter(|t| t.is_overdue()).count();
 
-        let high_priority = self.tasks.iter().filter(|t| t.priority == Some(Priority::High)).count();
-        let medium_priority = self.tasks.iter().filter(|t| t.priority == Some(Priority::Medium)).count();
-        let low_priority = self.tasks.iter().filter(|t| t.priority == Some(Priority::Low)).count();
+        let high_priority = self
+            .tasks
+            .iter()
+            .filter(|t| t.priority == Some(Priority::High))
+            .count();
+        let medium_priority = self
+            .tasks
+            .iter()
+            .filter(|t| t.priority == Some(Priority::Medium))
+            .count();
+        let low_priority = self
+            .tasks
+            .iter()
+            .filter(|t| t.priority == Some(Priority::Low))
+            .count();
         let no_priority = self.tasks.iter().filter(|t| t.priority.is_none()).count();
-        
+
         let avg_urgency = if !self.tasks.is_empty() {
             self.tasks.iter().map(|t| t.urgency).sum::<f64>() / self.tasks.len() as f64
         } else {
@@ -107,14 +140,15 @@ impl ReportsView {
         use chrono::{Duration, Utc};
         let now = Utc::now();
         let week_ago = now - Duration::days(7);
-        
-        let recent_tasks = self.tasks.iter()
-            .filter(|t| t.entry > week_ago)
-            .count();
-        
-        let completed_this_week = self.tasks.iter()
-            .filter(|t| t.status == TaskStatus::Completed && 
-                        t.end.map_or(false, |end| end > week_ago))
+
+        let recent_tasks = self.tasks.iter().filter(|t| t.entry > week_ago).count();
+
+        let completed_this_week = self
+            .tasks
+            .iter()
+            .filter(|t| {
+                t.status == TaskStatus::Completed && t.end.map_or(false, |end| end > week_ago)
+            })
             .count();
 
         self.task_summary_cache = Some(TaskSummaryCache {
@@ -168,9 +202,13 @@ impl ReportsView {
                 let next_month = if current.month() == 12 {
                     chrono::NaiveDate::from_ymd_opt(current.year() + 1, 1, current.day().min(31))
                 } else {
-                    chrono::NaiveDate::from_ymd_opt(current.year(), current.month() + 1, current.day().min(31))
+                    chrono::NaiveDate::from_ymd_opt(
+                        current.year(),
+                        current.month() + 1,
+                        current.day().min(31),
+                    )
                 };
-                
+
                 if let Some(date) = next_month {
                     self.selected_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
                 } else {
@@ -184,9 +222,13 @@ impl ReportsView {
                 let prev_month = if current.month() == 1 {
                     chrono::NaiveDate::from_ymd_opt(current.year() - 1, 12, current.day().min(31))
                 } else {
-                    chrono::NaiveDate::from_ymd_opt(current.year(), current.month() - 1, current.day().min(31))
+                    chrono::NaiveDate::from_ymd_opt(
+                        current.year(),
+                        current.month() - 1,
+                        current.day().min(31),
+                    )
                 };
-                
+
                 if let Some(date) = prev_month {
                     self.selected_date = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
                 } else {
@@ -200,7 +242,6 @@ impl ReportsView {
         }
     }
 
-
     pub fn render(&self, f: &mut Frame, area: Rect) {
         match self.mode {
             ReportMode::Dashboard => {
@@ -208,14 +249,13 @@ impl ReportsView {
                 let dashboard = DashboardWidget::new(
                     self.tasks.clone(),
                     self.project_stats.clone(),
-                    self.task_summary_cache.clone()
+                    self.task_summary_cache.clone(),
                 );
                 dashboard.render(f, area);
             }
             ReportMode::Calendar => self.render_calendar(f, area),
         }
     }
-
 
     fn render_calendar(&self, f: &mut Frame, area: Rect) {
         // Use CalendarWidget component for clean separation
