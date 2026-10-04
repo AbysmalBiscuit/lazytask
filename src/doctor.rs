@@ -341,9 +341,15 @@ fn check_sync_settings(taskrc: &Taskrc, data_dir: &Path) -> (Check, Option<SyncT
             return (check, None);
         }
     };
-    let description = describe(&settings, data_dir);
+    let config = settings.server_config(data_dir);
+    let description = match &config {
+        Ok(ServerConfig::Local { server_dir }) => {
+            format!("local directory {}", server_dir.display())
+        }
+        _ => describe_remote(&settings),
+    };
     let mut check = Check::new(NAME, &description, "taskrc");
-    match settings.server_config(data_dir) {
+    match config {
         Ok(config) => (
             check,
             Some(SyncTarget {
@@ -358,15 +364,11 @@ fn check_sync_settings(taskrc: &Taskrc, data_dir: &Path) -> (Check, Option<SyncT
     }
 }
 
-/// Names the sync target without its secrets.
-fn describe(settings: &SyncSettings, data_dir: &Path) -> String {
+/// Names a remote sync target without its secrets. A local one is named by
+/// the directory its server config resolves to.
+fn describe_remote(settings: &SyncSettings) -> String {
     match settings {
-        SyncSettings::Local { server_dir } => {
-            let dir = server_dir
-                .clone()
-                .unwrap_or_else(|| data_dir.join("sync-server"));
-            format!("local directory {}", dir.display())
-        }
+        SyncSettings::Local { .. } => "local directory".to_string(),
         SyncSettings::Server(server) => format!("{} as client {}", server.url, server.client_id),
         SyncSettings::Gcp { bucket, .. } => format!("GCP bucket {bucket}"),
         SyncSettings::Aws { region, bucket, .. } => format!("AWS bucket {bucket} in {region}"),
