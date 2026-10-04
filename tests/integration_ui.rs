@@ -9,7 +9,7 @@ use lazytask::handlers::input::Action;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
-use ratatui::{backend::TestBackend, Terminal};
+use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
 use std::time::{Duration, Instant};
 
 fn buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
@@ -288,18 +288,17 @@ async fn config_warnings_and_unknown_keys_show_together() {
     );
 }
 
+fn buffer_line(buf: &Buffer, y: u16) -> String {
+    (0..buf.area.width).map(|x| buf[(x, y)].symbol()).collect()
+}
+
 /// The task list's column headers, left to right.
 fn task_list_headers(terminal: &Terminal<TestBackend>) -> Vec<String> {
     let buf = terminal.backend().buffer();
-    let line = |y: u16| -> String {
-        (0..buf.area.width)
-            .map(|x| buf[(x, y)].symbol())
-            .collect::<String>()
-    };
     let title_row = (0..buf.area.height)
-        .find(|&y| line(y).contains(" Tasks ("))
+        .find(|&y| buffer_line(buf, y).contains(" Tasks ("))
         .expect("task list title missing");
-    let header_row = line(title_row + 1);
+    let header_row = buffer_line(buf, title_row + 1);
     let table_cells = header_row.split('│').nth(1).expect("table border missing");
     table_cells.split_whitespace().map(String::from).collect()
 }
@@ -366,11 +365,7 @@ impl RefreshFixture {
     fn selected_description(&self) -> String {
         let buf = self.terminal.backend().buffer();
         (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf[(x, y)].symbol())
-                    .collect::<String>()
-            })
+            .map(|y| buffer_line(buf, y))
             .find_map(|line| {
                 let (_, rest) = line.split_once("│Description   ")?;
                 Some(rest.split('│').next()?.trim().to_string())
