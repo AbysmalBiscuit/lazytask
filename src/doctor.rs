@@ -240,7 +240,7 @@ fn check_taskrc(config: &Config, env: &LaunchEnv) -> (Check, Taskrc) {
     match Taskrc::load(&path, env) {
         Ok(taskrc) => (check, taskrc),
         Err(err) => {
-            check.fail(format!("{err:#}"));
+            check.fail(format!("{err:#}; the later checks read no taskrc"));
             (check, Taskrc::default())
         }
     }
