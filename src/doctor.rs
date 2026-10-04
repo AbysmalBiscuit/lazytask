@@ -302,6 +302,7 @@ async fn check_data_dir(
         ));
     } else {
         match count_tasks(&path).await {
+            Ok(1) => check.note("replica opens, 1 task"),
             Ok(count) => check.note(format!("replica opens, {count} tasks")),
             Err(err) => check.fail(format!("replica does not open: {err:#}")),
         }

@@ -280,7 +280,6 @@ async fn existing_replica_opens_and_reports_its_tasks() {
         .await
         .unwrap();
     replica.add_task("one", &[]).await.unwrap();
-    replica.add_task("two", &[]).await.unwrap();
     drop(replica);
     let doctor = doctor.env("TASKDATA", &data);
 
@@ -288,7 +287,7 @@ async fn existing_replica_opens_and_reports_its_tasks() {
 
     let check = run.check("Data directory");
     assert!(check.starts_with("[pass]"), "{check}");
-    assert!(check.contains("note:   replica opens, 2 tasks"), "{check}");
+    assert!(check.ends_with("note:   replica opens, 1 task"), "{check}");
 }
 
 #[test]
