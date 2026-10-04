@@ -209,10 +209,20 @@ impl TaskChampionIntegration {
     }
 
     pub fn configure_sync(&mut self, settings: SyncSettings) -> Result<()> {
-        // Validate the server settings by trying to build a ServerConfig.
-        let _ = build_server_config(&settings, &self.data_dir)?;
+        self.prepare_server_config(&settings)?;
         self.sync_settings = Some(settings);
         Ok(())
+    }
+
+    /// The server config for `settings`, with a local server's directory
+    /// created, since TaskChampion opens its database there.
+    fn prepare_server_config(&self, settings: &SyncSettings) -> Result<ServerConfig> {
+        let config = settings.server_config(&self.data_dir)?;
+        if let ServerConfig::Local { server_dir } = &config {
+            std::fs::create_dir_all(server_dir)
+                .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
+        }
+        Ok(config)
     }
 
     pub fn is_sync_configured(&self) -> bool {
@@ -232,7 +242,8 @@ impl TaskChampionIntegration {
 
         let pending_before = self.replica.num_local_operations().await.unwrap_or(0);
 
-        let mut server = build_server_config(&settings, &self.data_dir)?
+        let mut server = self
+            .prepare_server_config(&settings)?
             .into_server()
             .await
             .context("Failed to construct sync server")?;
@@ -252,58 +263,62 @@ impl TaskChampionIntegration {
     }
 }
 
-fn build_server_config(settings: &SyncSettings, data_dir: &Path) -> Result<ServerConfig> {
-    Ok(match settings.clone() {
-        SyncSettings::Local { server_dir } => {
-            let server_dir = server_dir.unwrap_or_else(|| data_dir.join("sync-server"));
-            std::fs::create_dir_all(&server_dir)
-                .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
-            ServerConfig::Local { server_dir }
-        }
-        SyncSettings::Server(ServerSettings {
-            url,
-            client_id,
-            encryption_secret,
-        }) => ServerConfig::Remote {
-            url,
-            client_id: client_id
-                .parse::<Uuid>()
-                .context("Sync client_id must be a UUID")?,
-            encryption_secret: encryption_secret.into_bytes(),
-        },
-        SyncSettings::Gcp {
-            bucket,
-            credential_path,
-            encryption_secret,
-        } => ServerConfig::Gcp {
-            bucket,
-            credential_path,
-            encryption_secret: encryption_secret.into_bytes(),
-        },
-        SyncSettings::Aws {
-            region,
-            bucket,
-            credentials,
-            encryption_secret,
-        } => ServerConfig::Aws {
-            region: Some(region),
-            bucket,
-            endpoint_url: None,
-            force_path_style: false,
-            credentials: match credentials {
-                AwsCredentials::AccessKey {
-                    access_key_id,
-                    secret_access_key,
-                } => TcAwsCredentials::AccessKey {
-                    access_key_id,
-                    secret_access_key,
-                },
-                AwsCredentials::Profile(profile_name) => TcAwsCredentials::Profile { profile_name },
-                AwsCredentials::Default => TcAwsCredentials::Default,
+impl SyncSettings {
+    /// The TaskChampion server these settings name, for the replica in
+    /// `data_dir`. Fails when a setting is malformed; touches nothing on disk
+    /// or the network.
+    pub fn server_config(&self, data_dir: &Path) -> Result<ServerConfig> {
+        Ok(match self.clone() {
+            SyncSettings::Local { server_dir } => ServerConfig::Local {
+                server_dir: server_dir.unwrap_or_else(|| data_dir.join("sync-server")),
             },
-            encryption_secret: encryption_secret.into_bytes(),
-        },
-    })
+            SyncSettings::Server(ServerSettings {
+                url,
+                client_id,
+                encryption_secret,
+            }) => ServerConfig::Remote {
+                url,
+                client_id: client_id
+                    .parse::<Uuid>()
+                    .context("Sync client_id must be a UUID")?,
+                encryption_secret: encryption_secret.into_bytes(),
+            },
+            SyncSettings::Gcp {
+                bucket,
+                credential_path,
+                encryption_secret,
+            } => ServerConfig::Gcp {
+                bucket,
+                credential_path,
+                encryption_secret: encryption_secret.into_bytes(),
+            },
+            SyncSettings::Aws {
+                region,
+                bucket,
+                credentials,
+                encryption_secret,
+            } => ServerConfig::Aws {
+                region: Some(region),
+                bucket,
+                endpoint_url: None,
+                force_path_style: false,
+                credentials: match credentials {
+                    AwsCredentials::AccessKey {
+                        access_key_id,
+                        secret_access_key,
+                    } => TcAwsCredentials::AccessKey {
+                        access_key_id,
+                        secret_access_key,
+                    },
+                    AwsCredentials::Profile(profile_name) => {
+                        TcAwsCredentials::Profile { profile_name }
+                    }
+                    AwsCredentials::Default => TcAwsCredentials::Default,
+                },
+                encryption_secret: encryption_secret.into_bytes(),
+            },
+        })
+    }
 }
 
 fn apply_attributes(
