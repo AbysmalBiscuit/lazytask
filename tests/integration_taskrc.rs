@@ -353,11 +353,19 @@ async fn without_a_home_taskrc_the_xdg_taskrc_names_the_replica() -> Result<()> 
     let fx = Fixture::new()?;
     fx.write_taskrc_with_data("home/.config/task/taskrc", "dot-config")?;
     fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
+    fx.write_taskrc_with_data("home/xdg/task/taskrc", "home-xdg")?;
     std::fs::create_dir(fx.path("empty-xdg"))?;
 
     for (env, expected) in [
         (fx.home_env(), fx.path("data/dot-config")),
         (fx.xdg_env("xdg"), fx.path("data/xdg")),
+        (
+            LaunchEnv {
+                xdg_config_home_var: Some("~/xdg".into()),
+                ..fx.home_env()
+            },
+            fx.path("data/home-xdg"),
+        ),
         // As in Taskwarrior, a set XDG_CONFIG_HOME is the only place looked.
         (fx.xdg_env("empty-xdg"), fx.path("home/.task")),
         // An empty variable is unset, as the XDG spec says.

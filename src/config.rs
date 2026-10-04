@@ -166,10 +166,11 @@ impl TaskwarriorConfig {
         if home_taskrc.as_ref().is_some_and(|path| path.exists()) {
             return Ok(home_taskrc);
         }
-        let xdg_taskrc = xdg_config_home_var
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| home.map(|home| home.join(".config")))
+        let config_home = match xdg_config_home_var.filter(|v| !v.is_empty()) {
+            Some(var) => Some(expand_tilde(Path::new(&var), home)?),
+            None => home.map(|home| home.join(".config")),
+        };
+        let xdg_taskrc = config_home
             .map(|config_home| config_home.join("task").join("taskrc"))
             .filter(|path| path.exists());
         Ok(xdg_taskrc.or(home_taskrc))
