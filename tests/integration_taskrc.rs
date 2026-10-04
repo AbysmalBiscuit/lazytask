@@ -334,10 +334,7 @@ async fn sync_target(lines: &str) -> Result<std::result::Result<SyncSettings, Ve
 
 #[tokio::test]
 async fn sync_backend_precedence_is_local_then_aws_then_gcp_then_server() -> Result<()> {
-    let server = format!(
-        "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-         sync.encryption_secret=s3cret\n"
-    );
+    let server = server_block(CLIENT_ID, "s3cret");
     let gcp = "sync.gcp.bucket=gcp-bucket\nsync.gcp.credential_path=/keys/gcp.json\n";
     let aws = "sync.aws.bucket=aws-bucket\nsync.aws.region=eu-west-1\nsync.aws.profile=tw\n";
     let local_dir = tempfile::tempdir()?;
@@ -525,6 +522,15 @@ fn set_mode(path: &Path, mode: u32) -> Result<()> {
     Ok(())
 }
 
+/// A taskrc's sync server block for https://tw.example.com, one key per
+/// line in the order a save appends them.
+fn server_block(client_id: &str, secret: &str) -> String {
+    format!(
+        "sync.server.url=https://tw.example.com\nsync.server.client_id={client_id}\n\
+         sync.encryption_secret={secret}\n"
+    )
+}
+
 const OTHER_CLIENT_ID: &str = "11111111-2222-4333-8444-555555555555";
 
 #[tokio::test]
@@ -626,13 +632,7 @@ async fn saving_appends_with_the_taskrc_line_ending() -> Result<()> {
 #[tokio::test]
 async fn sync_modal_opens_prefilled_with_the_taskrc_sync_server() -> Result<()> {
     let fx = Fixture::new()?;
-    let taskrc = fx.write(
-        "taskrc",
-        &format!(
-            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-             sync.encryption_secret=s3cret\n"
-        ),
-    )?;
+    let taskrc = fx.write("taskrc", &server_block(CLIENT_ID, "s3cret"))?;
 
     let mut app = fx.launch(&taskrc).await?;
     app.open_sync_modal();
@@ -674,13 +674,7 @@ async fn sync_modal_prefills_server_keys_that_are_incomplete_or_outranked() -> R
 #[tokio::test]
 async fn saving_updates_a_key_in_the_included_file_that_defines_it() -> Result<()> {
     let fx = Fixture::new()?;
-    let included = fx.write(
-        "sync.rc",
-        &format!(
-            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-             sync.encryption_secret=s3cret\n"
-        ),
-    )?;
+    let included = fx.write("sync.rc", &server_block(CLIENT_ID, "s3cret"))?;
     #[cfg(unix)]
     set_mode(&included, 0o600)?;
     let main = "# main taskrc\ninclude sync.rc\ncolor=on\n";
@@ -698,10 +692,7 @@ async fn saving_updates_a_key_in_the_included_file_that_defines_it() -> Result<(
     assert_eq!(std::fs::read_to_string(&taskrc)?, main);
     assert_eq!(
         std::fs::read_to_string(&included)?,
-        format!(
-            "sync.server.url=https://tw.example.com\nsync.server.client_id={OTHER_CLIENT_ID}\n\
-             sync.encryption_secret=n3w-secret\n"
-        )
+        server_block(OTHER_CLIENT_ID, "n3w-secret")
     );
     Ok(())
 }
@@ -749,10 +740,7 @@ async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Res
 
     assert_eq!(
         std::fs::read_to_string(&taskrc)?,
-        format!(
-            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-             sync.encryption_secret=s3cret\n"
-        )
+        server_block(CLIENT_ID, "s3cret")
     );
     #[cfg(unix)]
     {
@@ -787,10 +775,7 @@ async fn an_empty_server_url_is_refused_and_the_modal_keeps_its_fields() -> Resu
 
     assert_eq!(
         std::fs::read_to_string(&taskrc)?,
-        format!(
-            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-             sync.encryption_secret=s3cret\n"
-        )
+        server_block(CLIENT_ID, "s3cret")
     );
     Ok(())
 }
@@ -824,10 +809,7 @@ async fn saving_over_a_local_target_notes_that_taskwarrior_still_prefers_it() ->
 
     assert_eq!(
         std::fs::read_to_string(&taskrc)?,
-        format!(
-            "{local}sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
-             sync.encryption_secret=s3cret\n"
-        )
+        format!("{local}{}", server_block(CLIENT_ID, "s3cret"))
     );
     Ok(())
 }
