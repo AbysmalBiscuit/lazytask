@@ -199,3 +199,34 @@ fn lazytask_refuses_to_start_when_quit_has_no_key() {
         "error should name quit and why it has no key: {stderr}"
     );
 }
+
+async fn render_with_config(cfg: Config, tasks: &[&str]) -> Terminal<TestBackend> {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
+        .await
+        .expect("engine");
+    for description in tasks {
+        engine.add_task(description, &[]).await.expect("add_task");
+    }
+    let mut ui = AppUI::new(&cfg).expect("AppUI::new");
+    ui.load_tasks(&mut engine).await.expect("load_tasks");
+    let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
+    terminal
+        .draw(|f| ui.render_with_sync(f, &SyncHandler::new()))
+        .expect("draw");
+    terminal
+}
+
+#[tokio::test]
+async fn show_help_bar_false_hides_keybinding_hints() {
+    let shown = render_with_config(Config::default(), &[]).await;
+    assert!(
+        buffer_contains(&shown, "[a] add"),
+        "help bar missing by default"
+    );
+
+    let mut cfg = Config::default();
+    cfg.ui.show_help_bar = false;
+    let hidden = render_with_config(cfg, &[]).await;
+    assert!(!buffer_contains(&hidden, "[a] add"), "help bar still shown");
+}

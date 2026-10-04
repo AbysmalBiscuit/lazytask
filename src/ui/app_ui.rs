@@ -47,6 +47,7 @@ pub struct AppUI {
     preserve_selection_uuid: Option<String>,
     keymap: Keymap,
     keymap_warnings: Vec<String>,
+    show_help_bar: bool,
 }
 
 impl AppUI {
@@ -68,6 +69,7 @@ impl AppUI {
             preserve_selection_uuid: None,
             keymap,
             keymap_warnings,
+            show_help_bar: config.ui.show_help_bar,
         })
     }
 
@@ -202,6 +204,11 @@ impl AppUI {
             (3, 3)
         };
 
+        // The footer also carries status messages, so it stays up for them
+        // even when the help bar is off.
+        let show_footer = self.show_help_bar || self.status_message.is_some();
+        let footer_size = if show_footer { footer_size } else { 0 };
+
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -223,7 +230,9 @@ impl AppUI {
             AppView::Help => self.draw_help(f, main_chunks[1]),
         }
 
-        self.draw_footer_panel(f, main_chunks[2]);
+        if show_footer {
+            self.draw_footer_panel(f, main_chunks[2]);
+        }
 
         if let Some(ref form) = self.task_form {
             form.render(f, size);
