@@ -14,7 +14,7 @@ This guide covers the development workflow, architecture, and contribution guide
 
 ```bash
 # Clone the repository
-git clone https://github.com/osamamahmood/lazytask
+git clone https://github.com/AbysmalBiscuit/lazytask
 cd lazytask
 
 # Install dependencies and build
@@ -477,24 +477,7 @@ When reporting issues, include:
 
 ## Release Process
 
-### Version Numbers
-
-LazyTask follows semantic versioning:
-
-- `MAJOR.MINOR.PATCH`
-- Breaking changes increment MAJOR
-- New features increment MINOR
-- Bug fixes increment PATCH
-
-### Release Steps
-
-1. Update version in `Cargo.toml`
-2. Update `CHANGELOG.md`
-3. Run full test suite
-4. Create release tag
-5. Build release binaries
-6. Publish to crates.io
-7. Update documentation
+Releases come from a release PR that release-please keeps open on `master`. See [releasing.md](releasing.md) for the flow, versioning rules and artifacts.
 
 ## Resources
 
@@ -515,6 +498,6 @@ LazyTask follows semantic versioning:
 
 ### Community
 
-- [GitHub Issues](https://github.com/osamamahmood/lazytask/issues)
-- [Discussions](https://github.com/osamamahmood/lazytask/discussions)
+- [GitHub Issues](https://github.com/AbysmalBiscuit/lazytask/issues)
+- [Discussions](https://github.com/AbysmalBiscuit/lazytask/discussions)
 - [Contributing Guide](../CONTRIBUTING.md)

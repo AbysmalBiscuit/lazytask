@@ -176,7 +176,7 @@ LazyTask can be used **TODAY** for basic Taskwarrior task management:
 ### **Installation Ready:**
 
 ```bash
-git clone https://github.com/osamamahmood/lazytask
+git clone https://github.com/AbysmalBiscuit/lazytask
 cd lazytask
 cargo build --release
 ./target/release/lazytask

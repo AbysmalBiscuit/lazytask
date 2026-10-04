@@ -1,0 +1,28 @@
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+installers = ["shell", "powershell"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "x86_64-pc-windows-gnu",
+  "x86_64-pc-windows-msvc",
+  "i686-pc-windows-msvc",
+]
+install-path = "CARGO_HOME"
+install-updater = false
+# release-please creates the tag and GitHub Release; dist uploads its
+# artifacts to that existing release instead of creating a second one.
+create-release = false
+# Build every target on pull requests too, as the cross-compile check.
+pr-run-mode = "upload"
+
+# dist cross-compiles i686 MSVC from Linux with cargo-xwin by default; build it
+# natively instead, since the bundled SQLite and ring C builds target MSVC.
+[dist.github-custom-runners]
+i686-pc-windows-msvc = "windows-2022"

@@ -1,0 +1,43 @@
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Maintains the release PR and, on merge, creates the tag + GitHub Release.
+  # The `Release` workflow (cargo-dist) builds the binaries and installers and
+  # uploads them to that Release when the tag is pushed.
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # A PAT, not GITHUB_TOKEN: events caused by GITHUB_TOKEN start no
+      # workflows, so its tag push would never run the Release workflow
+      # and its release PR would get no CI.
+      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # github-release first: on the merge of a release PR it tags and
+      # releases, and release-pr then opens the next release PR.
+      - name: Create GitHub Release
+        run: >-
+          npx --yes release-please@17 github-release
+          --token "$RELEASE_PLEASE_TOKEN"
+          --repo-url "$GITHUB_REPOSITORY"
+          --config-file .github/release-please-config.json
+          --manifest-file .github/.release-please-manifest.json
+      - name: Update release PR
+        run: >-
+          npx --yes release-please@17 release-pr
+          --token "$RELEASE_PLEASE_TOKEN"
+          --repo-url "$GITHUB_REPOSITORY"
+          --config-file .github/release-please-config.json
+          --manifest-file .github/.release-please-manifest.json

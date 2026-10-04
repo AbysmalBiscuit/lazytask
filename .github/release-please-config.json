@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "70d6a8c1d14684de1ca707fd7bbc98ee3e01cac3",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "package-name": "lazytask",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true
+    }
+  }
+}
