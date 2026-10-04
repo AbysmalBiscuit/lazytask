@@ -27,23 +27,22 @@ pub struct App {
 
 impl App {
     pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
-
         let LoadedConfig {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
+        let mut ui = AppUI::new(&config)?;
+        ui.show_config_warnings(&unknown_keys);
         let data_dir = config
             .taskwarrior
             .resolve_data_location(std::env::var_os("TASKDATA"), dirs::home_dir().as_deref())?;
         let taskchampion = TaskChampionIntegration::new(data_dir).await?;
         let sync_handler = SyncHandler::new();
-        let mut ui = AppUI::new(&config)?;
-        ui.show_config_warnings(&unknown_keys);
+
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
         Ok(App {
             config,

@@ -328,6 +328,14 @@ impl Section {
     }
 }
 
+/// Actions that must keep a key, or the user can get stuck: quitting,
+/// leaving a view, and leaving a form or modal.
+pub const REQUIRED: [Binding; 3] = [
+    Binding::Global(GlobalAction::Quit),
+    Binding::Global(GlobalAction::Back),
+    Binding::Form(FormAction::Cancel),
+];
+
 /// Where keyboard input is going, which decides the sections searched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 pub enum InputContext {
@@ -491,9 +499,11 @@ pub struct Keymap {
 impl Keymap {
     /// Builds the keymap from the config, with a warning for each config
     /// entry it could not use. An entry that cannot be used leaves its
-    /// action on its default.
-    pub fn from_config(config: &KeyBindingsConfig) -> (Self, Vec<String>) {
+    /// action on its default. Fails when a [`REQUIRED`] action ends up with
+    /// no key.
+    pub fn from_config(config: &KeyBindingsConfig) -> anyhow::Result<(Self, Vec<String>)> {
         let mut warnings = Vec::new();
+        let mut rejected: HashMap<Binding, String> = HashMap::new();
         let mut configured: Vec<(Binding, Key)> = Vec::new();
 
         for section in Section::iter() {
@@ -506,17 +516,18 @@ impl Keymap {
                     continue;
                 };
                 let Ok(key) = value.parse::<Key>() else {
-                    warnings.push(format!("{path}: cannot parse key {value:?}"));
+                    let reason = format!("cannot parse key {value:?}");
+                    warnings.push(format!("{path}: {reason}"));
+                    rejected.insert(binding, reason);
                     continue;
                 };
                 if let Some((taken_by, _)) = configured
                     .iter()
                     .find(|(other, k)| other.section() == section && *k == key)
                 {
-                    warnings.push(format!(
-                        "{path}: {value:?} is already bound to {}",
-                        taken_by.name()
-                    ));
+                    let reason = format!("{value:?} is already bound to {}", taken_by.path());
+                    warnings.push(format!("{path}: {reason}"));
+                    rejected.insert(binding, reason);
                     continue;
                 }
                 configured.push((binding, key));
@@ -540,7 +551,34 @@ impl Keymap {
             )
             .collect();
 
-        (Keymap { bound }, warnings)
+        let keymap = Keymap { bound };
+        let errors: Vec<String> = REQUIRED
+            .iter()
+            .filter(|&&binding| keymap.key(binding).is_none())
+            .map(|&binding| {
+                let mut reasons: Vec<String> = rejected.remove(&binding).into_iter().collect();
+                reasons.extend(keymap.default_taken_by(binding));
+                format!("{} has no key: {}", binding.path(), reasons.join(", and "))
+            })
+            .collect();
+        if !errors.is_empty() {
+            anyhow::bail!("{}", errors.join("; "));
+        }
+        Ok((keymap, warnings))
+    }
+
+    /// Why `binding` lost its default key: the binding that key resolves to
+    /// instead.
+    fn default_taken_by(&self, binding: Binding) -> Option<String> {
+        let key: Key = binding.default_key()?.parse().ok()?;
+        let taken_by = InputContext::iter()
+            .filter(|context| context.sections().contains(&binding.section()))
+            .find_map(|context| self.resolve(context, key))?;
+        Some(format!(
+            "its default {:?} is bound to {}",
+            key.to_string(),
+            taken_by.binding.path()
+        ))
     }
 
     /// The binding `key` resolves to in `context`: configured keys first,

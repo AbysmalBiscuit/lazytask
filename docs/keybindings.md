@@ -85,6 +85,16 @@ The day, week, month and today actions move the calendar, so they only act in ca
 | `confirm`    | `Enter`     | Commit the field, then save                   |
 | `cancel`     | `Esc`       | Cancel and close the form                     |
 
+## Required actions
+
+Some actions must keep a key, or you could get stuck with no way out:
+
+- `quit` in `[keybindings.global]`
+- `back` in `[keybindings.global]`, to leave the help and reports views
+- `cancel` in `[keybindings.form]`, to leave a form or the filter panel
+
+If your config leaves one of these with no key, LazyTask does not start. It exits with an error that names the action and why it has no key, such as `keybindings.global.quit has no key: cannot parse key "Ctrl+Nope", and its default "q" is bound to keybindings.global.help`.
+
 ## Conflicts and mistakes
 
 LazyTask warns at startup, naming the entry by its dotted path such as `keybindings.global.quit`, when an entry names an action it does not have, when a key string does not parse, or when two entries in one section bind the same key. The action in a rejected entry keeps its default key.

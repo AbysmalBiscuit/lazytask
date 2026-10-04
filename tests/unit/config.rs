@@ -94,7 +94,7 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
     let loaded = load_toml(include_str!("../../config/default.toml"))?;
 
     assert_eq!(loaded.unknown_keys, Vec::<String>::new());
-    let (_, keymap_warnings) = Keymap::from_config(&loaded.config.keybindings);
+    let (_, keymap_warnings) = Keymap::from_config(&loaded.config.keybindings)?;
     assert_eq!(keymap_warnings, Vec::<String>::new());
     assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
     assert_eq!(loaded.config.taskwarrior.data_location, None);

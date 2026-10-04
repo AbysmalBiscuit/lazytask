@@ -50,7 +50,7 @@ pub struct AppUI {
 
 impl AppUI {
     pub fn new(config: &crate::config::Config) -> Result<Self> {
-        let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings);
+        let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
         Ok(AppUI {
             current_view: AppView::TaskList,
             main_view: MainView::new(),

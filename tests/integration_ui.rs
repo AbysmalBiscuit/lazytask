@@ -162,3 +162,30 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
         "taskwarrior.sync_enabled not shown"
     );
 }
+
+#[test]
+fn lazytask_refuses_to_start_when_quit_has_no_key() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config_path = tmp.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[keybindings.global]\nquit = \"Ctrl+Nope\"\nhelp = \"q\"\n",
+    )
+    .expect("write config");
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_lazytask"))
+        .arg("--config")
+        .arg(&config_path)
+        .env("TASKDATA", tmp.path().join("data"))
+        .output()
+        .expect("run lazytask");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "lazytask started: {stderr}");
+    assert!(
+        stderr.contains("keybindings.global.quit")
+            && stderr.contains("Ctrl+Nope")
+            && stderr.contains("keybindings.global.help"),
+        "error should name quit and why it has no key: {stderr}"
+    );
+}
