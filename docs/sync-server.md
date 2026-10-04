@@ -109,8 +109,8 @@ For cross-device sync, every device's LazyTask instance must agree on:
 
 Put those three identical values in each device's taskrc as
 `sync.server.url`, `sync.server.client_id` and `sync.encryption_secret`, or
-enter them in the LazyTask sync config modal (`Shift+S`), which keeps them
-for the session only. Then press `s` to sync.
+enter them in the LazyTask sync config modal (`Shift+S`), which saves them
+to the taskrc. Then press `s` to sync.
 
 ## Versions
 

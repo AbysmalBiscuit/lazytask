@@ -112,7 +112,7 @@ data_location = "~/path/to/data"     # Empty string or absent means unset: TASKD
 
 ### Taskrc
 
-lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It never writes to the taskrc. A missing taskrc is not an error.
+lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It writes to the taskrc only when you save the sync config modal. A missing taskrc is not an error.
 
 The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
 
@@ -137,6 +137,23 @@ As in Taskwarrior's `task sync`, the first target whose key is set wins:
 4. `sync.server.url`, or its deprecated synonym `sync.server.origin` (`sync.server.url` wins): a TaskChampion sync server. Needs `sync.server.client_id` (a UUID) and `sync.encryption_secret`
 
 When a target is set, sync works from launch without the sync config modal. If the target is missing a key it needs, sync stays unconfigured and lazytask shows a warning at startup. The sync config modal only sets up a sync server; cloud buckets are configured through the taskrc.
+
+#### Saving the sync config modal
+
+The sync config modal (`Shift+S`) opens filled in with the sync server in effect, or empty when sync is unconfigured or goes to a local directory or cloud bucket. Saving it writes `sync.server.url`, `sync.server.client_id` and `sync.encryption_secret` to the taskrc lazytask read at startup, so `task sync` and the next launch use them:
+
+- A key already assigned is changed on the line of the assignment in effect, in whichever file holds it, included files too. A comment after the value stays.
+- A key assigned nowhere is appended to the main taskrc. With no taskrc at that path, one is created holding only the sync keys, readable only by you (mode 0600).
+- A key whose value did not change is left as written, so a value given as `$NAME` or `~/...` keeps that form.
+- Every other line, comment and include stays as it was.
+
+lazytask then syncs to the target the saved taskrc selects. While the taskrc also sets `sync.local.server_dir`, `sync.aws.bucket` or `sync.gcp.bucket`, that target still wins, as it does for `task sync`, and the footer says so until you remove it.
+
+A save is refused, and nothing is written, when:
+
+- A field is empty, or the client ID is not a UUID
+- A value would not read back as typed: a taskrc value cannot contain `#` or start or end with a space, and a leading `~` or a `$NAME` in it expands
+- `sync.encryption_secret` would go into a file other users can read. Run `chmod 600` on the file the message names, then save again
 
 ### Keybindings
 
