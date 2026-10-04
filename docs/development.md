@@ -333,26 +333,24 @@ pub enum AppView {
 
 ### 3. Commands
 
-To add a new command:
+To add a new command, give it an `Action` variant, bind it in the keymap, and handle it:
 
 ```rust
-// Update Action enum in src/handlers/input.rs
-#[derive(Debug, Clone)]
+// src/handlers/input.rs
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     // ... existing actions
     NewAction,
 }
 
-// Update key handler
-fn handle_key_event(&self, key: KeyEvent) -> Action {
-    match key.code {
-        // ... existing mappings
-        KeyCode::Char('n') => Action::NewAction,
-        _ => Action::None,
-    }
-}
+// src/utils/keybindings.rs: the action's section, config name, default key
+// and help-overlay description
+pub static ACTIONS: &[ActionSpec] = &[
+    // ... existing actions
+    spec(TaskList, "new_action", Action::NewAction, Some("n"), "Do the new thing"),
+];
 
-// Update command handler in src/ui/app_ui.rs
+// src/ui/app_ui.rs
 pub async fn handle_action(&mut self, action: Action) -> Result<()> {
     match action {
         // ... existing actions
@@ -364,6 +362,8 @@ pub async fn handle_action(&mut self, action: Action) -> Result<()> {
     Ok(())
 }
 ```
+
+The `ACTIONS` entry makes the action rebindable as `[keybindings.task_list] new_action` and lists it in the help overlay. Add it to `docs/keybindings.md` and the `[keybindings]` tables in `config/default.toml` as well.
 
 ### 4. Configuration Options
 
