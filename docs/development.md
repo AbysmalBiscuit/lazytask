@@ -333,7 +333,7 @@ pub enum AppView {
 
 ### 3. Commands
 
-To add a new command, give it an `Action` variant, bind it in the keymap, and handle it:
+To add a new command, give it an `Action` variant, add a bindable action for it in the section enum where its key applies, and handle it:
 
 ```rust
 // src/handlers/input.rs
@@ -343,12 +343,17 @@ pub enum Action {
     NewAction,
 }
 
-// src/utils/keybindings.rs: the action's section, config name, default key
-// and help-overlay description
-pub static ACTIONS: &[ActionSpec] = &[
+// src/utils/keybindings.rs: the variant's snake_case name is its config
+// name, `new_action`
+pub enum TaskListAction {
     // ... existing actions
-    spec(TaskList, "new_action", Action::NewAction, Some("n"), "Do the new thing"),
-];
+    NewAction,
+}
+
+impl Bindable for TaskListAction {
+    // Add an arm to each match: `action` returns `Action::NewAction`,
+    // `default_key` its default key string, `description` its help text.
+}
 
 // src/ui/app_ui.rs
 pub async fn handle_action(&mut self, action: Action) -> Result<()> {
@@ -363,7 +368,7 @@ pub async fn handle_action(&mut self, action: Action) -> Result<()> {
 }
 ```
 
-The `ACTIONS` entry makes the action rebindable as `[keybindings.task_list] new_action` and lists it in the help overlay. Add it to `docs/keybindings.md` and the `[keybindings]` tables in `config/default.toml` as well.
+The new variant makes the action rebindable as `[keybindings.task_list] new_action` and lists it in the help overlay, in declaration order. Add it to `docs/keybindings.md` and the `[keybindings]` tables in `config/default.toml` as well.
 
 ### 4. Configuration Options
 

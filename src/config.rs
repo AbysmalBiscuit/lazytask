@@ -23,7 +23,7 @@ pub struct ThemeConfig {
 }
 
 /// Key overrides per section, action name to key string. Actions left out
-/// keep their default keys; see [`crate::utils::keybindings::ACTIONS`].
+/// keep their default keys; see [`crate::utils::keybindings::Binding`].
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct KeyBindingsConfig {

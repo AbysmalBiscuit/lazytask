@@ -18,7 +18,9 @@ use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::{DateNavigation, ReportsView};
 use crossterm::event::KeyEvent;
 
-use crate::utils::keybindings::{InputContext, Keymap, Section};
+use crate::utils::keybindings::{
+    Bindable, Binding, FormAction, GlobalAction, InputContext, Keymap, Section,
+};
 
 pub enum AppView {
     TaskList,
@@ -116,10 +118,10 @@ impl AppUI {
         }
     }
 
-    /// The key bound to `action` in `section`, for hints such as "Press S".
-    fn key_label(&self, section: Section, action: &str) -> String {
+    /// The key bound to `binding`, for hints such as "Press S".
+    fn key_label(&self, binding: impl Into<Binding>) -> String {
         self.keymap
-            .key(section, action)
+            .key(binding)
             .map_or_else(|| "(unbound)".to_string(), |key| key.to_string())
     }
 
@@ -417,7 +419,7 @@ impl AppUI {
                 if !sync_handler.is_sync_configured(taskchampion) {
                     self.set_status_message(format!(
                         "ℹ️ Sync not configured. Press {} to configure.",
-                        self.key_label(Section::Global, "sync_config")
+                        self.key_label(GlobalAction::SyncConfig)
                     ));
                 } else {
                     self.show_sync_overlay = true;
@@ -431,7 +433,7 @@ impl AppUI {
                 if !sync_handler.is_sync_configured(taskchampion) {
                     self.set_status_message(format!(
                         "ℹ️ Sync not configured. Press {} to configure.",
-                        self.key_label(Section::Global, "sync_config")
+                        self.key_label(GlobalAction::SyncConfig)
                     ));
                 } else {
                     self.show_sync_overlay = true;
@@ -445,7 +447,7 @@ impl AppUI {
                 if sync_handler.is_sync_configured(taskchampion) {
                     self.set_status_message(format!(
                         "ℹ️ Sync already configured. Press {} to sync.",
-                        self.key_label(Section::Global, "sync")
+                        self.key_label(GlobalAction::Sync)
                     ));
                 } else {
                     self.sync_config_widget.activate();
@@ -595,7 +597,7 @@ impl AppUI {
         let block = Block::default()
             .title(format!(
                 "Help — Keyboard Shortcuts ({} to close)",
-                self.key_label(Section::Global, "back")
+                self.key_label(GlobalAction::Back)
             ))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
@@ -636,7 +638,7 @@ impl AppUI {
         let rows = |section: Section| {
             self.keymap
                 .bindings(section)
-                .map(|(spec, key)| row(&key.to_string(), spec.description))
+                .map(|(binding, key)| row(&key.to_string(), binding.description()))
                 .collect::<Vec<_>>()
         };
 
@@ -648,9 +650,9 @@ impl AppUI {
         left.extend(rows(Section::Form));
         left.push(row("type", "Edit active field / search"));
 
-        let sync_config = self.key_label(Section::Global, "sync_config");
-        let confirm = self.key_label(Section::Form, "confirm");
-        let sync = self.key_label(Section::Global, "sync");
+        let sync_config = self.key_label(GlobalAction::SyncConfig);
+        let confirm = self.key_label(FormAction::Confirm);
+        let sync = self.key_label(GlobalAction::Sync);
         let mut right = vec![header("Reports")];
         right.extend(rows(Section::Reports));
         right.extend([
