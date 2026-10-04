@@ -101,7 +101,7 @@ fn missing_config_file_runs_on_defaults_and_writes_nothing() -> anyhow::Result<(
     let config_dir = temp_dir.path().join("lazytask");
     let config_path = config_dir.join("config.toml");
 
-    let config = Config::load(Some(config_path.to_str().unwrap()))?;
+    let config = Config::load(Some(config_path.to_str().unwrap()))?.config;
 
     assert_eq!(config, Config::default());
     assert!(!config_dir.exists());
@@ -150,7 +150,7 @@ fn load_toml(contents: &str) -> anyhow::Result<Config> {
     let dir = tempdir()?;
     let path = dir.path().join("config.toml");
     std::fs::write(&path, contents)?;
-    Config::load(Some(path.to_str().unwrap()))
+    Ok(Config::load(Some(path.to_str().unwrap()))?.config)
 }
 
 #[test]

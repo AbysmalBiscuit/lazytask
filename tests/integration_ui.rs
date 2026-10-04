@@ -126,3 +126,32 @@ async fn small_terminal_does_not_panic() {
             .unwrap_or_else(|e| panic!("draw panicked at {w}x{h}: {e}"));
     }
 }
+
+#[tokio::test]
+async fn unknown_config_keys_are_named_in_tui_warning() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config_path = tmp.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[ui]\nshow_help_bar = false\ncolour = \"red\"\n",
+    )
+    .expect("write config");
+
+    let loaded = Config::load(Some(config_path.to_str().unwrap())).expect("config loads");
+    assert!(!loaded.config.ui.show_help_bar);
+
+    let mut ui = AppUI::new(&loaded.config).expect("AppUI::new");
+    ui.warn_unknown_config_keys(&loaded.unknown_keys);
+    let sync_handler = SyncHandler::new();
+    let mut engine = TaskChampionIntegration::new(Some(tmp.path().join("data")))
+        .await
+        .expect("engine");
+    ui.load_tasks(&mut engine).await.expect("load_tasks");
+
+    let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+    terminal
+        .draw(|f| ui.render_with_sync(f, &sync_handler))
+        .expect("draw");
+
+    assert!(buffer_contains(&terminal, "ui.colour"), "ui.colour not shown");
+}

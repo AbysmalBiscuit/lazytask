@@ -96,6 +96,12 @@ impl AppUI {
         self.status_message_at = Some(std::time::Instant::now());
     }
 
+    pub fn warn_unknown_config_keys(&mut self, keys: &[String]) {
+        if !keys.is_empty() {
+            self.set_status_message(format!("⚠ Unknown config keys: {}", keys.join(", ")));
+        }
+    }
+
     pub fn clear_status_message(&mut self) {
         self.status_message = None;
         self.status_message_at = None;

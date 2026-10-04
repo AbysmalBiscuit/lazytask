@@ -103,8 +103,16 @@ impl Default for UIConfig {
     }
 }
 
+/// A parsed config plus the keys the file set that lazytask does not know.
+#[derive(Debug)]
+pub struct LoadedConfig {
+    pub config: Config,
+    /// Dotted paths such as `ui.colour`.
+    pub unknown_keys: Vec<String>,
+}
+
 impl Config {
-    pub fn load(config_path: Option<&str>) -> Result<Self> {
+    pub fn load(config_path: Option<&str>) -> Result<LoadedConfig> {
         let config_file_path = if let Some(path) = config_path {
             PathBuf::from(path)
         } else {
@@ -112,13 +120,25 @@ impl Config {
         };
 
         if !config_file_path.exists() {
-            return Ok(Config::default());
+            return Ok(LoadedConfig {
+                config: Config::default(),
+                unknown_keys: Vec::new(),
+            });
         }
 
         let config_contents = fs::read_to_string(&config_file_path)
             .with_context(|| format!("Failed to read config file: {:?}", config_file_path))?;
 
-        toml::from_str(&config_contents).with_context(|| "Failed to parse config file")
+        let mut unknown_keys = Vec::new();
+        let config = toml::de::Deserializer::parse(&config_contents)
+            .and_then(|document| {
+                serde_ignored::deserialize(document, |path| unknown_keys.push(path.to_string()))
+            })
+            .with_context(|| "Failed to parse config file")?;
+        Ok(LoadedConfig {
+            config,
+            unknown_keys,
+        })
     }
 
     fn default_config_path() -> Result<PathBuf> {
