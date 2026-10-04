@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Config {
     pub theme: ThemeConfig,
     pub keybindings: KeyBindingsConfig,
@@ -12,27 +13,31 @@ pub struct Config {
     pub ui: UIConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct ThemeConfig {
     pub name: String,
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct KeyBindingsConfig {
     pub global: HashMap<String, String>,
     pub task_list: HashMap<String, String>,
     pub task_detail: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct TaskwarriorConfig {
     pub taskrc_path: Option<PathBuf>,
     pub data_location: Option<PathBuf>,
     pub sync_enabled: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(default)]
 pub struct UIConfig {
     pub default_view: String,
     pub show_help_bar: bool,
@@ -40,52 +45,51 @@ pub struct UIConfig {
     pub refresh_interval: u64,
 }
 
-impl Default for Config {
+fn string_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+    pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+impl Default for ThemeConfig {
     fn default() -> Self {
-        let mut global_keys = HashMap::new();
-        global_keys.insert("quit".to_string(), "q".to_string());
-        global_keys.insert("help".to_string(), "F1".to_string());
-        global_keys.insert("refresh".to_string(), "F5".to_string());
+        ThemeConfig {
+            name: "catppuccin-mocha".to_string(),
+            colors: string_map(&[
+                ("background", "#1e1e2e"),
+                ("foreground", "#cdd6f4"),
+                ("primary", "#89b4fa"),
+                ("secondary", "#f38ba8"),
+            ]),
+        }
+    }
+}
 
-        let mut task_list_keys = HashMap::new();
-        task_list_keys.insert("add_task".to_string(), "a".to_string());
-        task_list_keys.insert("edit_task".to_string(), "e".to_string());
-        task_list_keys.insert("done_task".to_string(), "d".to_string());
-        task_list_keys.insert("delete_task".to_string(), "Delete".to_string());
+impl Default for KeyBindingsConfig {
+    fn default() -> Self {
+        KeyBindingsConfig {
+            global: string_map(&[("quit", "q"), ("help", "F1"), ("refresh", "F5")]),
+            task_list: string_map(&[
+                ("add_task", "a"),
+                ("edit_task", "e"),
+                ("done_task", "d"),
+                ("delete_task", "Delete"),
+            ]),
+            task_detail: HashMap::new(),
+        }
+    }
+}
 
-        let mut colors = HashMap::new();
-        colors.insert("background".to_string(), "#1e1e2e".to_string());
-        colors.insert("foreground".to_string(), "#cdd6f4".to_string());
-        colors.insert("primary".to_string(), "#89b4fa".to_string());
-        colors.insert("secondary".to_string(), "#f38ba8".to_string());
-
-        Config {
-            theme: ThemeConfig {
-                name: "catppuccin-mocha".to_string(),
-                colors,
-            },
-            keybindings: KeyBindingsConfig {
-                global: global_keys,
-                task_list: task_list_keys,
-                task_detail: HashMap::new(),
-            },
-            taskwarrior: TaskwarriorConfig {
-                taskrc_path: None,
-                data_location: None,
-                sync_enabled: false,
-            },
-            ui: UIConfig {
-                default_view: "task_list".to_string(),
-                show_help_bar: true,
-                task_list_columns: vec![
-                    "id".to_string(),
-                    "project".to_string(),
-                    "priority".to_string(),
-                    "due".to_string(),
-                    "description".to_string(),
-                ],
-                refresh_interval: 1000,
-            },
+impl Default for UIConfig {
+    fn default() -> Self {
+        UIConfig {
+            default_view: "task_list".to_string(),
+            show_help_bar: true,
+            task_list_columns: ["id", "project", "priority", "due", "description"]
+                .map(String::from)
+                .to_vec(),
+            refresh_interval: 1000,
         }
     }
 }

@@ -156,3 +156,20 @@ fn test_invalid_config_handling() {
 //
 //     Ok(())
 // }
+
+fn load_toml(contents: &str) -> anyhow::Result<Config> {
+    let dir = tempdir()?;
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, contents)?;
+    Config::load(Some(path.to_str().unwrap()))
+}
+
+#[test]
+fn partial_config_takes_defaults_for_absent_keys() -> anyhow::Result<()> {
+    let config = load_toml("[ui]\nshow_help_bar = false\n")?;
+
+    let mut expected = Config::default();
+    expected.ui.show_help_bar = false;
+    assert_eq!(config, expected);
+    Ok(())
+}
