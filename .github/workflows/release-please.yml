@@ -16,12 +16,28 @@ jobs:
     name: release-please
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # A PAT, not GITHUB_TOKEN: events caused by GITHUB_TOKEN start no
+      # workflows, so its tag push would never run the Release workflow
+      # and its release PR would get no CI.
+      RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - uses: actions/setup-node@v7
         with:
-          # A PAT, not GITHUB_TOKEN: events caused by GITHUB_TOKEN start no
-          # workflows, so its tag push would never run the Release workflow
-          # and its release PR would get no CI.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+          node-version: 24
+      # github-release first: on the merge of a release PR it tags and
+      # releases, and release-pr then opens the next release PR.
+      - name: Create GitHub Release
+        run: >-
+          npx --yes release-please@17 github-release
+          --token "$RELEASE_PLEASE_TOKEN"
+          --repo-url "$GITHUB_REPOSITORY"
+          --config-file release-please-config.json
+          --manifest-file .release-please-manifest.json
+      - name: Update release PR
+        run: >-
+          npx --yes release-please@17 release-pr
+          --token "$RELEASE_PLEASE_TOKEN"
+          --repo-url "$GITHUB_REPOSITORY"
+          --config-file release-please-config.json
+          --manifest-file .release-please-manifest.json
