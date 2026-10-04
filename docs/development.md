@@ -14,7 +14,7 @@ This guide covers the development workflow, architecture, and contribution guide
 
 ```bash
 # Clone the repository
-git clone https://github.com/osamamahmood/lazytask
+git clone https://github.com/AbysmalBiscuit/lazytask
 cd lazytask
 
 # Install dependencies and build
@@ -515,6 +515,6 @@ LazyTask follows semantic versioning:
 
 ### Community
 
-- [GitHub Issues](https://github.com/osamamahmood/lazytask/issues)
-- [Discussions](https://github.com/osamamahmood/lazytask/discussions)
+- [GitHub Issues](https://github.com/AbysmalBiscuit/lazytask/issues)
+- [Discussions](https://github.com/AbysmalBiscuit/lazytask/discussions)
 - [Contributing Guide](../CONTRIBUTING.md)
