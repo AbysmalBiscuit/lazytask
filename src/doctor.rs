@@ -76,7 +76,7 @@ impl Check {
             .unwrap_or(Status::Pass)
     }
 
-    fn find(&mut self, status: Status, message: impl Into<String>) {
+    fn record(&mut self, status: Status, message: impl Into<String>) {
         self.findings.push(Finding {
             status,
             message: message.into(),
@@ -84,15 +84,15 @@ impl Check {
     }
 
     fn note(&mut self, message: impl Into<String>) {
-        self.find(Status::Pass, message);
+        self.record(Status::Pass, message);
     }
 
     fn warn(&mut self, message: impl Into<String>) {
-        self.find(Status::Warn, message);
+        self.record(Status::Warn, message);
     }
 
     fn fail(&mut self, message: impl Into<String>) {
-        self.find(Status::Fail, message);
+        self.record(Status::Fail, message);
     }
 }
 
@@ -360,16 +360,16 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
     const NAME: &str = "Sync server";
     let Some(target) = target else {
         let mut check = Check::new(NAME, "none", "taskrc");
-        check.find(Status::Skip, "no valid sync target to contact");
+        check.record(Status::Skip, "no valid sync target to contact");
         return check;
     };
     let mut check = Check::new(NAME, &target.description, "taskrc");
     if let SyncSettings::Local { .. } = target.settings {
-        check.find(Status::Skip, "a local directory has no server to contact");
+        check.record(Status::Skip, "a local directory has no server to contact");
         return check;
     }
     if !contact {
-        check.find(
+        check.record(
             Status::Skip,
             "not contacted; `lazytask doctor --sync` contacts it",
         );
