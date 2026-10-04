@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use lazytask::config::{Config, KeyBindingsConfig, LoadedConfig};
 use lazytask::taskrc::Taskrc;
+use lazytask::ui::theme::Theme;
 use lazytask::utils::keybindings::{Keymap, Section};
 use strum::IntoEnumIterator;
 use tempfile::tempdir;
@@ -107,6 +108,11 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
             section.name()
         );
     }
+    assert_eq!(
+        Theme::from_config(&loaded.config.theme),
+        (Theme::CATPPUCCIN_MOCHA, Vec::new()),
+        "[theme] in config/default.toml differs from the built-in palette"
+    );
     assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
     assert_eq!(loaded.config.taskwarrior.data_location, None);
     Ok(())
