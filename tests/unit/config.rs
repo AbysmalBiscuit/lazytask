@@ -173,3 +173,23 @@ fn partial_config_takes_defaults_for_absent_keys() -> anyhow::Result<()> {
     assert_eq!(config, expected);
     Ok(())
 }
+
+#[test]
+fn empty_path_strings_resolve_to_unset() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ntaskrc_path = \"\"\ndata_location = \"\"\n")?;
+
+    assert_eq!(config.taskwarrior.taskrc_path, None);
+    assert_eq!(config.taskwarrior.data_location, None);
+    Ok(())
+}
+
+#[test]
+fn non_empty_path_strings_load_as_paths() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ntaskrc_path = \"/home/me/.taskrc\"\n")?;
+
+    assert_eq!(
+        config.taskwarrior.taskrc_path,
+        Some(std::path::PathBuf::from("/home/me/.taskrc"))
+    );
+    Ok(())
+}

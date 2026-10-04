@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,7 +31,9 @@ pub struct KeyBindingsConfig {
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
 pub struct TaskwarriorConfig {
+    #[serde(deserialize_with = "empty_path_as_none")]
     pub taskrc_path: Option<PathBuf>,
+    #[serde(deserialize_with = "empty_path_as_none")]
     pub data_location: Option<PathBuf>,
     pub sync_enabled: bool,
 }
@@ -43,6 +45,13 @@ pub struct UIConfig {
     pub show_help_bar: bool,
     pub task_list_columns: Vec<String>,
     pub refresh_interval: u64,
+}
+
+fn empty_path_as_none<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<PathBuf>, D::Error> {
+    let path = Option::<PathBuf>::deserialize(deserializer)?;
+    Ok(path.filter(|p| !p.as_os_str().is_empty()))
 }
 
 fn string_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
