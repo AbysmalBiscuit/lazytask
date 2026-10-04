@@ -1,21 +1,32 @@
 use anyhow::{Context, Result};
+use schemars::{json_schema, JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Deserializer};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use strum::IntoEnumIterator;
 
 use crate::taskrc::Taskrc;
 use crate::utils::helpers::expand_tilde;
+use crate::utils::keybindings::{Bindable, Binding, Section};
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+/// lazytask's `config.toml`. Every table and key is optional; a key left
+/// out keeps its default.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct Config {
+    /// Color theme.
     pub theme: ThemeConfig,
+    /// Keys for each action, by the section the action belongs to.
     pub keybindings: KeyBindingsConfig,
+    /// Where the Taskwarrior taskrc and task data live.
     pub taskwarrior: TaskwarriorConfig,
+    /// Layout and startup view.
     pub ui: UIConfig,
+    /// Automatic sync with the sync target the taskrc configures.
     pub sync: SyncConfig,
 }
 
@@ -23,9 +34,10 @@ pub struct Config {
 /// to.
 pub const DEFAULT_THEME_NAME: &str = "catppuccin-mocha";
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct ThemeConfig {
+    /// Theme name.
     pub name: String,
     /// Role name to color, overriding the named theme's palette.
     pub colors: HashMap<String, String>,
@@ -46,24 +58,74 @@ pub struct KeyBindingsConfig {
     pub form: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+/// Lists every bindable action with its help text and default key, built
+/// from the actions themselves so a new action reaches the schema on its own.
+impl JsonSchema for KeyBindingsConfig {
+    fn schema_name() -> Cow<'static, str> {
+        "KeyBindingsConfig".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        let sections: serde_json::Map<String, serde_json::Value> = Section::iter()
+            .map(|section| (section.name().to_string(), section_schema(section)))
+            .collect();
+        json_schema!({
+            "description": "Key overrides, action name to key such as `q`, `Ctrl+s`, `Shift+Tab` or `F1`. Actions left out keep their default keys.",
+            "type": "object",
+            "properties": sections,
+        })
+    }
+}
+
+fn section_schema(section: Section) -> serde_json::Value {
+    let actions: serde_json::Map<String, serde_json::Value> = Binding::all()
+        .filter(|binding| binding.section() == section)
+        .map(|binding| {
+            let mut action = serde_json::json!({
+                "type": "string",
+                "description": binding.description(),
+            });
+            if let Some(key) = binding.default_key() {
+                action["default"] = key.into();
+            }
+            (binding.name().to_string(), action)
+        })
+        .collect();
+    serde_json::json!({
+        "description": format!("Keys for the `[keybindings.{}]` actions.", section.name()),
+        "type": "object",
+        "properties": actions,
+        "additionalProperties": { "type": "string" },
+    })
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct TaskwarriorConfig {
+    /// The taskrc to read. Empty or absent means the `TASKRC` variable, then
+    /// `~/.taskrc`.
     #[serde(deserialize_with = "empty_path_as_none")]
     pub taskrc_path: Option<PathBuf>,
+    /// The task data directory. Empty or absent means the `TASKDATA`
+    /// variable, then the taskrc's `data.location`, then `~/.task`.
     #[serde(deserialize_with = "empty_path_as_none")]
     pub data_location: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct UIConfig {
+    /// The view lazytask opens on: `task_list`, `reports` or `calendar`.
     pub default_view: String,
+    /// Show keybinding hints in the footer.
     pub show_help_bar: bool,
+    /// Task list columns, in order: `id`, `uuid`, `project`, `priority`,
+    /// `due`, `description`, `tags`, `urgency`, `entry`, `modified`,
+    /// `status`.
     pub task_list_columns: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct SyncConfig {
     /// Seconds between automatic syncs with the sync server; 0 turns it off.
@@ -190,7 +252,9 @@ impl Config {
         })
     }
 
-    fn default_config_path() -> Result<PathBuf> {
+    /// `config.toml` under the platform config directory, such as
+    /// `~/.config/lazytask/config.toml` on Linux.
+    pub fn default_config_path() -> Result<PathBuf> {
         let config_dir =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
 

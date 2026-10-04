@@ -1,0 +1,314 @@
+{
+  "$defs": {
+    "KeyBindingsConfig": {
+      "description": "Key overrides, action name to key such as `q`, `Ctrl+s`, `Shift+Tab` or `F1`. Actions left out keep their default keys.",
+      "properties": {
+        "form": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Keys for the `[keybindings.form]` actions.",
+          "properties": {
+            "cancel": {
+              "default": "Esc",
+              "description": "Cancel / close",
+              "type": "string"
+            },
+            "confirm": {
+              "default": "Enter",
+              "description": "Commit field, then save",
+              "type": "string"
+            },
+            "erase": {
+              "default": "Backspace",
+              "description": "Erase a character",
+              "type": "string"
+            },
+            "move_down": {
+              "default": "Down",
+              "description": "Next field / filter item",
+              "type": "string"
+            },
+            "move_left": {
+              "default": "Left",
+              "description": "Move cursor left",
+              "type": "string"
+            },
+            "move_right": {
+              "default": "Right",
+              "description": "Move cursor right",
+              "type": "string"
+            },
+            "move_up": {
+              "default": "Up",
+              "description": "Previous field / filter item",
+              "type": "string"
+            },
+            "next_field": {
+              "default": "Tab",
+              "description": "Next field / filter section",
+              "type": "string"
+            },
+            "prev_field": {
+              "default": "Shift+Tab",
+              "description": "Previous field",
+              "type": "string"
+            },
+            "toggle": {
+              "default": "Space",
+              "description": "Toggle filter item",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "global": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Keys for the `[keybindings.global]` actions.",
+          "properties": {
+            "back": {
+              "default": "Esc",
+              "description": "Back to the task list",
+              "type": "string"
+            },
+            "force_quit": {
+              "default": "Ctrl+c",
+              "description": "Quit",
+              "type": "string"
+            },
+            "force_sync": {
+              "description": "Force a full sync",
+              "type": "string"
+            },
+            "help": {
+              "default": "F1",
+              "description": "Show this help",
+              "type": "string"
+            },
+            "quit": {
+              "default": "q",
+              "description": "Quit",
+              "type": "string"
+            },
+            "refresh": {
+              "default": "F5",
+              "description": "Reload tasks from replica",
+              "type": "string"
+            },
+            "reports": {
+              "default": "r",
+              "description": "Open Reports view",
+              "type": "string"
+            },
+            "sync": {
+              "default": "s",
+              "description": "Sync (needs sync config)",
+              "type": "string"
+            },
+            "sync_config": {
+              "default": "S",
+              "description": "Open Sync Config modal",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "reports": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Keys for the `[keybindings.reports]` actions.",
+          "properties": {
+            "next_day": {
+              "default": "Right",
+              "description": "Calendar: next day",
+              "type": "string"
+            },
+            "next_month": {
+              "default": ">",
+              "description": "Calendar: next month",
+              "type": "string"
+            },
+            "next_week": {
+              "default": "Down",
+              "description": "Calendar: next week",
+              "type": "string"
+            },
+            "prev_day": {
+              "default": "Left",
+              "description": "Calendar: previous day",
+              "type": "string"
+            },
+            "prev_month": {
+              "default": "<",
+              "description": "Calendar: previous month",
+              "type": "string"
+            },
+            "prev_week": {
+              "default": "Up",
+              "description": "Calendar: previous week",
+              "type": "string"
+            },
+            "today": {
+              "default": "t",
+              "description": "Calendar: jump to today",
+              "type": "string"
+            },
+            "toggle_calendar": {
+              "default": "c",
+              "description": "Toggle Calendar / Dashboard",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "task_list": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Keys for the `[keybindings.task_list]` actions.",
+          "properties": {
+            "add_task": {
+              "default": "a",
+              "description": "Add new task",
+              "type": "string"
+            },
+            "delete_task": {
+              "default": "Delete",
+              "description": "Soft-delete task",
+              "type": "string"
+            },
+            "done_task": {
+              "default": "d",
+              "description": "Mark task done",
+              "type": "string"
+            },
+            "edit_task": {
+              "default": "e",
+              "description": "Edit selected task",
+              "type": "string"
+            },
+            "filter": {
+              "default": "/",
+              "description": "Open filter panel",
+              "type": "string"
+            },
+            "move_down": {
+              "default": "Down",
+              "description": "Select next task",
+              "type": "string"
+            },
+            "move_up": {
+              "default": "Up",
+              "description": "Select previous task",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "SyncConfig": {
+      "properties": {
+        "auto_sync_interval": {
+          "default": 5,
+          "description": "Seconds between automatic syncs with the sync server; 0 turns it off.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "TaskwarriorConfig": {
+      "properties": {
+        "data_location": {
+          "description": "The task data directory. Empty or absent means the `TASKDATA`\nvariable, then the taskrc's `data.location`, then `~/.task`.",
+          "type": "string"
+        },
+        "taskrc_path": {
+          "description": "The taskrc to read. Empty or absent means the `TASKRC` variable, then\n`~/.taskrc`.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ThemeConfig": {
+      "properties": {
+        "colors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Role name to color, overriding the named theme's palette.",
+          "type": "object"
+        },
+        "name": {
+          "default": "catppuccin-mocha",
+          "description": "Theme name.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "UIConfig": {
+      "properties": {
+        "default_view": {
+          "default": "task_list",
+          "description": "The view lazytask opens on: `task_list`, `reports` or `calendar`.",
+          "type": "string"
+        },
+        "show_help_bar": {
+          "default": true,
+          "description": "Show keybinding hints in the footer.",
+          "type": "boolean"
+        },
+        "task_list_columns": {
+          "default": [
+            "id",
+            "project",
+            "priority",
+            "due",
+            "description"
+          ],
+          "description": "Task list columns, in order: `id`, `uuid`, `project`, `priority`,\n`due`, `description`, `tags`, `urgency`, `entry`, `modified`,\n`status`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/AbysmalBiscuit/lazytask/releases/latest/download/lazytask-config.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "lazytask's `config.toml`. Every table and key is optional; a key left\nout keeps its default.",
+  "properties": {
+    "keybindings": {
+      "$ref": "#/$defs/KeyBindingsConfig",
+      "description": "Keys for each action, by the section the action belongs to."
+    },
+    "sync": {
+      "$ref": "#/$defs/SyncConfig",
+      "description": "Automatic sync with the sync target the taskrc configures."
+    },
+    "taskwarrior": {
+      "$ref": "#/$defs/TaskwarriorConfig",
+      "description": "Where the Taskwarrior taskrc and task data live."
+    },
+    "theme": {
+      "$ref": "#/$defs/ThemeConfig",
+      "description": "Color theme."
+    },
+    "ui": {
+      "$ref": "#/$defs/UIConfig",
+      "description": "Layout and startup view."
+    }
+  },
+  "title": "lazytask config.toml",
+  "type": "object"
+}
