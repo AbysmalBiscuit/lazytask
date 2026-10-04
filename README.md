@@ -283,7 +283,7 @@ refresh = "F5"
 
 ## Data location
 
-lazytask shares Taskwarrior's TaskChampion database, so tasks added in either tool show up in the other. The data directory resolves in this order, first match wins:
+lazytask shares Taskwarrior's TaskChampion database. The data directory resolves in this order, first match wins:
 
 1. `[taskwarrior] data_location` in the lazytask config
 2. The `TASKDATA` environment variable
