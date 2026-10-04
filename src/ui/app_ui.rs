@@ -143,6 +143,7 @@ impl AppUI {
         self.preserve_selection_uuid = self.main_view.selected_task_uuid();
         if let Err(e) = self.load_tasks(taskchampion).await {
             self.last_refresh = now;
+            self.preserve_selection_uuid = None;
             self.set_status_message(format!("❌ Refresh failed: {e}"));
         }
         true
