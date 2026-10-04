@@ -10,9 +10,13 @@ use ratatui::{
 
 use crate::data::models::Task;
 use crate::ui::theme::Theme;
+use schemars::JsonSchema;
+use strum::EnumString;
 
 /// A task list column, named in config by its `ui.task_list_columns` key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, JsonSchema)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
+#[schemars(rename_all = "snake_case")]
 pub enum Column {
     Id,
     Uuid,
@@ -35,30 +39,13 @@ impl Column {
         let mut columns = Vec::new();
         let mut unknown = Vec::new();
         for name in names {
-            match Column::from_name(name) {
-                Some(column) if !columns.contains(&column) => columns.push(column),
-                Some(_) => {}
-                None => unknown.push(name.as_str()),
+            match name.parse::<Column>() {
+                Ok(column) if !columns.contains(&column) => columns.push(column),
+                Ok(_) => {}
+                Err(_) => unknown.push(name.as_str()),
             }
         }
         (columns, unknown)
-    }
-
-    fn from_name(name: &str) -> Option<Self> {
-        Some(match name.to_ascii_lowercase().as_str() {
-            "id" => Column::Id,
-            "uuid" => Column::Uuid,
-            "project" => Column::Project,
-            "priority" => Column::Priority,
-            "due" => Column::Due,
-            "description" => Column::Description,
-            "tags" => Column::Tags,
-            "urgency" => Column::Urgency,
-            "entry" => Column::Entry,
-            "modified" => Column::Modified,
-            "status" => Column::Status,
-            _ => return None,
-        })
     }
 
     fn header(self) -> &'static str {

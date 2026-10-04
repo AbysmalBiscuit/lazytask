@@ -1,5 +1,31 @@
 {
   "$defs": {
+    "Column": {
+      "description": "A task list column, named in config by its `ui.task_list_columns` key.",
+      "enum": [
+        "id",
+        "uuid",
+        "project",
+        "priority",
+        "due",
+        "description",
+        "tags",
+        "urgency",
+        "entry",
+        "modified",
+        "status"
+      ],
+      "type": "string"
+    },
+    "DefaultView": {
+      "description": "A view lazytask can open on, named in config by `ui.default_view`.",
+      "enum": [
+        "task_list",
+        "reports",
+        "calendar"
+      ],
+      "type": "string"
+    },
     "KeyBindingsConfig": {
       "description": "Key overrides, action name to a key such as `q`, `Ctrl+s`,\n`Shift+Tab` or `F1`. Actions left out keep their default keys.",
       "properties": {
@@ -261,9 +287,9 @@
     "UIConfig": {
       "properties": {
         "default_view": {
+          "$ref": "#/$defs/DefaultView",
           "default": "task_list",
-          "description": "The view lazytask opens on: `task_list`, `reports` or `calendar`.",
-          "type": "string"
+          "description": "The view lazytask opens on."
         },
         "show_help_bar": {
           "default": true,
@@ -278,9 +304,9 @@
             "due",
             "description"
           ],
-          "description": "Task list columns, in order: `id`, `uuid`, `project`, `priority`,\n`due`, `description`, `tags`, `urgency`, `entry`, `modified`,\n`status`.",
+          "description": "Task list columns, in order.",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/Column"
           },
           "type": "array"
         }

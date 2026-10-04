@@ -6,9 +6,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use strum::IntoEnumIterator;
+use strum::{EnumString, IntoEnumIterator};
 
 use crate::taskrc::Taskrc;
+use crate::ui::components::task_list::Column;
 use crate::utils::helpers::expand_tilde;
 use crate::utils::keybindings::{
     Bindable, FormAction, GlobalAction, ReportsAction, TaskListAction,
@@ -105,14 +106,24 @@ pub struct TaskwarriorConfig {
 #[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct UIConfig {
-    /// The view lazytask opens on: `task_list`, `reports` or `calendar`.
+    /// The view lazytask opens on.
+    #[schemars(with = "DefaultView")]
     pub default_view: String,
     /// Show keybinding hints in the footer.
     pub show_help_bar: bool,
-    /// Task list columns, in order: `id`, `uuid`, `project`, `priority`,
-    /// `due`, `description`, `tags`, `urgency`, `entry`, `modified`,
-    /// `status`.
+    /// Task list columns, in order.
+    #[schemars(with = "Vec<Column>")]
     pub task_list_columns: Vec<String>,
+}
+
+/// A view lazytask can open on, named in config by `ui.default_view`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, JsonSchema)]
+#[strum(serialize_all = "snake_case")]
+#[schemars(rename_all = "snake_case")]
+pub enum DefaultView {
+    TaskList,
+    Reports,
+    Calendar,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
