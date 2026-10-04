@@ -65,7 +65,7 @@ Available columns:
 ```toml
 [taskwarrior]
 taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset (auto-detect)
-data_location = "/path/to/data"      # Empty string or absent means unset (auto-detect)
+data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then ~/.task
 ```
 
 ### Keybindings

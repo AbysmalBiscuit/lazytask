@@ -58,7 +58,7 @@ cargo build --release
 ./target/release/lazytask
 ```
 
-The binary is `target/release/lazytask`. On first launch it creates a SQLite database under the platform's standard data directory (see [Data location](#data-location)).
+The binary is `target/release/lazytask`. It opens the same TaskChampion database as Taskwarrior, creating it if absent (see [Data location](#data-location)).
 
 ## Usage
 
@@ -283,15 +283,11 @@ refresh = "F5"
 
 ## Data location
 
-The TaskChampion SQLite database is stored in the OS-conventional data directory under a `lazytask/` subdirectory (resolved via the [`dirs` crate](https://docs.rs/dirs)):
+lazytask shares Taskwarrior's TaskChampion database, so tasks added in either tool show up in the other. The data directory resolves in this order, first match wins:
 
-| OS | Path |
-|---|---|
-| macOS | `~/Library/Application Support/lazytask/` |
-| Linux | `~/.local/share/lazytask/` |
-| Windows | `%APPDATA%\lazytask\` |
-
-Override the data dir is currently only possible at the API level (`TaskChampionIntegration::new(Some(path))`) — a CLI flag for this is on the roadmap.
+1. `[taskwarrior] data_location` in the lazytask config, with a leading `~` expanded to the home directory
+2. The `TASKDATA` environment variable
+3. `~/.task`, Taskwarrior's default
 
 ## Development
 
