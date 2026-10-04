@@ -693,7 +693,7 @@ async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Res
 }
 
 #[tokio::test]
-async fn saving_refuses_an_empty_server_url() -> Result<()> {
+async fn an_empty_server_url_is_refused_and_the_modal_keeps_its_fields() -> Result<()> {
     let fx = Fixture::new()?;
     let taskrc = fx.path("taskrc");
     let mut app = fx.launch(&taskrc).await?;
@@ -705,8 +705,20 @@ async fn saving_refuses_an_empty_server_url() -> Result<()> {
     app.type_text("s3cret");
     app.press(KeyCode::Enter);
     app.wait_for("Server URL is required").await?;
-
     assert!(!taskrc.exists(), "a refused save wrote the taskrc");
+
+    app.press(KeyCode::Tab);
+    app.type_text("https://tw.example.com");
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        )
+    );
     Ok(())
 }
 

@@ -400,12 +400,12 @@ impl AppUI {
                         match sync_handler.configure_sync(taskchampion, &config).await {
                             Ok(msg) => {
                                 self.set_status_message(format!("✅ {}", msg));
+                                self.sync_config_widget.deactivate();
                             }
                             Err(e) => {
                                 self.set_status_message(format!("❌ Sync config failed: {e:#}"));
                             }
                         }
-                        self.sync_config_widget.deactivate();
                     }
                     SyncConfigResult::Cancel => {
                         self.sync_config_widget.deactivate();
