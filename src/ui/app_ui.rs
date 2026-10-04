@@ -14,6 +14,7 @@ use crate::taskchampion::TaskChampionIntegration;
 use crate::ui::components::sync_config::{SyncConfigResult, SyncConfigWidget};
 use crate::ui::components::sync_status::SyncStatusWidget;
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
+use crate::ui::components::task_list::Column;
 use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::{DateNavigation, ReportsView};
 use crossterm::event::KeyEvent;
@@ -54,9 +55,18 @@ pub struct AppUI {
 impl AppUI {
     pub fn new(config: &crate::config::Config) -> Result<Self> {
         let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
+        let mut columns = Vec::new();
+        let mut unknown_columns = Vec::new();
+        for name in &config.ui.task_list_columns {
+            match Column::from_name(name) {
+                Some(column) => columns.push(column),
+                None => unknown_columns.push(name.as_str()),
+            }
+        }
+
         let mut ui = AppUI {
             current_view: AppView::TaskList,
-            main_view: MainView::new(),
+            main_view: MainView::new(columns),
             reports_view: ReportsView::new(),
             sync_status_widget: SyncStatusWidget::new(),
             sync_config_widget: SyncConfigWidget::new(),
@@ -84,6 +94,13 @@ impl AppUI {
             unknown => ui.config_warnings.push(format!(
                 "Unknown default_view \"{unknown}\", opening task_list"
             )),
+        }
+
+        if !unknown_columns.is_empty() {
+            ui.config_warnings.push(format!(
+                "Unknown task_list_columns skipped: {}",
+                unknown_columns.join(", ")
+            ));
         }
 
         Ok(ui)

@@ -8,18 +8,86 @@ use ratatui::{
     Frame,
 };
 
-use crate::data::models::Task;
+use crate::data::models::{Task, TaskStatus};
+
+/// A task list column, named in config by its `ui.task_list_columns` key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Column {
+    Id,
+    Uuid,
+    Project,
+    Priority,
+    Due,
+    Description,
+    Tags,
+    Urgency,
+    Entry,
+    Modified,
+    Status,
+}
+
+impl Column {
+    pub fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "id" => Column::Id,
+            "uuid" => Column::Uuid,
+            "project" => Column::Project,
+            "priority" => Column::Priority,
+            "due" => Column::Due,
+            "description" => Column::Description,
+            "tags" => Column::Tags,
+            "urgency" => Column::Urgency,
+            "entry" => Column::Entry,
+            "modified" => Column::Modified,
+            "status" => Column::Status,
+            _ => return None,
+        })
+    }
+
+    fn header(self) -> &'static str {
+        match self {
+            Column::Id => "ID",
+            Column::Uuid => "UUID",
+            Column::Project => "Project",
+            Column::Priority => "Priority",
+            Column::Due => "Due",
+            Column::Description => "Description",
+            Column::Tags => "Tags",
+            Column::Urgency => "Urgency",
+            Column::Entry => "Entry",
+            Column::Modified => "Modified",
+            Column::Status => "Status",
+        }
+    }
+
+    fn width(self) -> Constraint {
+        match self {
+            Column::Id => Constraint::Length(4),
+            Column::Uuid => Constraint::Length(8),
+            Column::Project => Constraint::Length(14),
+            Column::Priority => Constraint::Length(8),
+            Column::Due => Constraint::Length(6),
+            Column::Description => Constraint::Min(20),
+            Column::Tags => Constraint::Length(16),
+            Column::Urgency => Constraint::Length(7),
+            Column::Entry | Column::Modified => Constraint::Length(10),
+            Column::Status => Constraint::Length(9),
+        }
+    }
+}
 
 pub struct TaskListWidget {
     pub state: TableState,
     tasks: Vec<Task>,
+    columns: Vec<Column>,
 }
 
 impl TaskListWidget {
-    pub fn new() -> Self {
+    pub fn new(columns: Vec<Column>) -> Self {
         TaskListWidget {
             state: TableState::default(),
             tasks: Vec::new(),
+            columns,
         }
     }
 
@@ -99,12 +167,11 @@ impl TaskListWidget {
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         let formatter = TaskTableFormatter::new();
 
-        // Create clean, minimal headers
-        let header_cells = formatter
-            .headers()
+        let header_cells = self
+            .columns
             .iter()
-            .map(|h| {
-                Cell::from(*h).style(
+            .map(|column| {
+                Cell::from(column.header()).style(
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -120,11 +187,10 @@ impl TaskListWidget {
         let rows: Vec<Row> = self
             .tasks
             .iter()
-            .map(|task| formatter.format_task_row(task))
+            .map(|task| formatter.format_task_row(task, &self.columns))
             .collect();
 
-        // Use responsive column widths based on terminal size
-        let column_widths = formatter.responsive_column_widths(area.width);
+        let column_widths: Vec<Constraint> = self.columns.iter().map(|c| c.width()).collect();
         let task_count = self.tasks.len();
         let title = format!(" Tasks ({}) ", task_count);
 
@@ -158,65 +224,41 @@ impl TaskTableFormatter {
         TaskTableFormatter
     }
 
-    // Define column headers - simplified, clean layout
-    fn headers(&self) -> [&'static str; 5] {
-        ["ID", "Project", "Priority", "Due", "Description"]
-    }
-
-    // Define responsive column widths that adapt to terminal size
-    fn responsive_column_widths(&self, terminal_width: u16) -> Vec<Constraint> {
-        if terminal_width < 80 {
-            // Very narrow terminal - minimize columns, focus on description
-            vec![
-                Constraint::Length(3), // ID - minimal
-                Constraint::Length(8), // Project - abbreviated
-                Constraint::Length(4), // Priority - single char (H/M/L)
-                Constraint::Length(8), // Due - short date
-                Constraint::Min(20),   // Description - rest of space
-            ]
-        } else if terminal_width < 120 {
-            // Narrow terminal - compact but readable
-            vec![
-                Constraint::Length(4),  // ID
-                Constraint::Length(12), // Project
-                Constraint::Length(8),  // Priority
-                Constraint::Length(10), // Due
-                Constraint::Min(30),    // Description - grows with available space
-            ]
-        } else if terminal_width < 160 {
-            // Medium terminal - balanced layout
-            vec![
-                Constraint::Length(4),  // ID
-                Constraint::Length(15), // Project
-                Constraint::Length(10), // Priority
-                Constraint::Length(12), // Due
-                Constraint::Min(40),    // Description
-            ]
-        } else {
-            // Wide terminal - generous spacing
-            vec![
-                Constraint::Length(5),  // ID
-                Constraint::Length(20), // Project - more space
-                Constraint::Length(10), // Priority
-                Constraint::Length(14), // Due - full datetime if needed
-                Constraint::Min(50),    // Description - maximum space
-            ]
-        }
-    }
-
     // Format a complete task row with intelligent row-level color coding
-    fn format_task_row(&self, task: &Task) -> Row<'static> {
+    fn format_task_row(&self, task: &Task, columns: &[Column]) -> Row<'static> {
         // Determine the most important styling factor for the entire row
         let row_style = self.get_row_style(task);
 
-        let cells = vec![
-            Cell::from(self.format_id(task.id)),
-            Cell::from(self.format_project(&task.project)),
-            Cell::from(self.format_priority_full(&task.priority)),
-            Cell::from(self.format_due(task.due)),
-            Cell::from(self.format_description(&task.description)),
-        ];
+        let cells = columns
+            .iter()
+            .map(|&column| Cell::from(self.format_cell(task, column)));
         Row::new(cells).height(1).style(row_style)
+    }
+
+    fn format_cell(&self, task: &Task, column: Column) -> String {
+        match column {
+            Column::Id => self.format_id(task.id),
+            Column::Uuid => task.uuid.chars().take(8).collect(),
+            Column::Project => self.format_project(&task.project),
+            Column::Priority => self.format_priority_full(&task.priority),
+            Column::Due => self.format_due(task.due),
+            Column::Description => self.format_description(&task.description),
+            Column::Tags => crate::utils::formatting::truncate_chars(&task.tags.join(" "), 16),
+            Column::Urgency => format!("{:.1}", task.urgency),
+            Column::Entry => task.entry.format("%Y-%m-%d").to_string(),
+            Column::Modified => task
+                .modified
+                .map(|m| m.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+            Column::Status => match task.status {
+                TaskStatus::Pending => "Pending",
+                TaskStatus::Completed => "Completed",
+                TaskStatus::Deleted => "Deleted",
+                TaskStatus::Waiting => "Waiting",
+                TaskStatus::Recurring => "Recurring",
+            }
+            .to_string(),
+        }
     }
 
     // ===== INTELLIGENT ROW-LEVEL COLOR CODING SYSTEM =====

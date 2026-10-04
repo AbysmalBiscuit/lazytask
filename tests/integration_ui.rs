@@ -288,3 +288,41 @@ async fn config_warnings_and_unknown_keys_show_together() {
         "key warning missing"
     );
 }
+
+/// The task list's column headers, left to right.
+fn task_list_headers(terminal: &Terminal<TestBackend>) -> Vec<String> {
+    let buf = terminal.backend().buffer();
+    let line = |y: u16| -> String {
+        (0..buf.area.width)
+            .map(|x| buf[(x, y)].symbol())
+            .collect::<String>()
+    };
+    let title_row = (0..buf.area.height)
+        .find(|&y| line(y).contains(" Tasks ("))
+        .expect("task list title missing");
+    let header_row = line(title_row + 1);
+    let table_cells = header_row.split('│').nth(1).expect("table border missing");
+    table_cells.split_whitespace().map(String::from).collect()
+}
+
+#[tokio::test]
+async fn task_list_columns_choose_and_order_the_columns() {
+    let mut cfg = Config::default();
+    cfg.ui.task_list_columns = ["urgency", "description", "tags"]
+        .map(String::from)
+        .to_vec();
+    let terminal = render_with_config(cfg, &[]).await;
+    assert_eq!(
+        task_list_headers(&terminal),
+        ["Urgency", "Description", "Tags"]
+    );
+}
+
+#[tokio::test]
+async fn unknown_task_list_column_warns_and_is_skipped() {
+    let mut cfg = Config::default();
+    cfg.ui.task_list_columns = ["id", "bogus", "description"].map(String::from).to_vec();
+    let terminal = render_with_config(cfg, &[]).await;
+    assert_eq!(task_list_headers(&terminal), ["ID", "Description"]);
+    assert!(buffer_contains(&terminal, "bogus"), "warning missing");
+}
