@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub theme: ThemeConfig,
@@ -13,14 +13,14 @@ pub struct Config {
     pub ui: UIConfig,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct ThemeConfig {
     pub name: String,
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct KeyBindingsConfig {
     pub global: HashMap<String, String>,
@@ -28,7 +28,7 @@ pub struct KeyBindingsConfig {
     pub task_detail: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct TaskwarriorConfig {
     #[serde(deserialize_with = "empty_path_as_none")]
@@ -37,7 +37,7 @@ pub struct TaskwarriorConfig {
     pub data_location: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct UIConfig {
     pub default_view: String,
