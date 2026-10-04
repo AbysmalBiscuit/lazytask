@@ -1,12 +1,12 @@
 // Drives the real App event loop on a TestBackend: keys through the input
-// channel, replica changes through the file watcher.
+// channel, replica changes through the file watcher, remote ones via auto-sync.
 
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use lazytask::app::{App, Session};
 use lazytask::config::Config;
-use lazytask::taskchampion::TaskChampionIntegration;
+use lazytask::taskchampion::{SyncSettings, TaskChampionIntegration};
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -90,6 +90,12 @@ impl Harness {
     }
 }
 
+fn local_sync(server_dir: &std::path::Path) -> SyncSettings {
+    SyncSettings::Local {
+        server_dir: Some(server_dir.to_path_buf()),
+    }
+}
+
 #[tokio::test]
 async fn task_added_outside_lazytask_appears_without_restart() {
     let mut h = Harness::new(Config::default()).await;
@@ -130,4 +136,66 @@ async fn reload_from_outside_change_keeps_the_selected_task() {
             .await
     );
     assert_eq!(h.selected_description(), selected);
+}
+
+#[tokio::test]
+async fn auto_sync_pulls_remote_tasks() {
+    let mut config = Config::default();
+    config.sync.auto_sync_interval = 1;
+    let mut h = Harness::new(config).await;
+    let server_dir = h.tmp.path().join("server");
+    h.app
+        .taskchampion
+        .configure_sync(local_sync(&server_dir))
+        .expect("configure app sync");
+
+    let mut peer = TaskChampionIntegration::new(h.tmp.path().join("peer"))
+        .await
+        .expect("peer");
+    peer.configure_sync(local_sync(&server_dir))
+        .expect("configure peer sync");
+    peer.add_task("from the server", &[]).await.expect("add");
+    peer.sync().await.expect("peer sync");
+
+    assert!(
+        h.step_until(Duration::from_secs(5), |s| s.contains("from the server"))
+            .await,
+        "auto-sync never pulled the remote task:\n{}",
+        h.screen()
+    );
+}
+
+#[tokio::test]
+async fn zero_auto_sync_interval_never_syncs() {
+    let mut config = Config::default();
+    config.sync.auto_sync_interval = 0;
+    let mut h = Harness::new(config).await;
+    let server_dir = h.tmp.path().join("server");
+    h.app
+        .taskchampion
+        .configure_sync(local_sync(&server_dir))
+        .expect("configure app sync");
+
+    let mut peer = TaskChampionIntegration::new(h.tmp.path().join("peer"))
+        .await
+        .expect("peer");
+    peer.configure_sync(local_sync(&server_dir))
+        .expect("configure peer sync");
+    peer.add_task("from the server", &[]).await.expect("add");
+    peer.sync().await.expect("peer sync");
+
+    assert!(
+        !h.step_until(Duration::from_secs(2), |s| s.contains("from the server"))
+            .await
+    );
+}
+
+#[tokio::test]
+async fn q_ends_the_event_loop() {
+    let mut h = Harness::new(Config::default()).await;
+    h.press(KeyCode::Char('q'));
+    tokio::time::timeout(Duration::from_secs(5), h.app.run())
+        .await
+        .expect("run kept going after q")
+        .expect("run");
 }
