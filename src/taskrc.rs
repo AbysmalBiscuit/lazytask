@@ -108,7 +108,7 @@ impl Taskrc {
     fn parse(&mut self, path: &Path, contents: &str, env: &LaunchEnv, depth: usize) -> Result<()> {
         for (index, raw) in contents.lines().enumerate() {
             let location = || format!("{}:{}", path.display(), index + 1);
-            let line = raw.split('#').next().unwrap_or_default().trim();
+            let line = code_part(raw).trim();
             if line.is_empty() {
                 continue;
             }
@@ -272,7 +272,7 @@ fn replace_lines(file: &Path, lines: &[(usize, String)]) -> Result<()> {
         };
         let body = raw.trim_end_matches(['\n', '\r']);
         let indent = &body[..body.len() - body.trim_start().len()];
-        let code = body.split('#').next().unwrap_or_default();
+        let code = code_part(body);
         let comment = if code.len() == body.len() {
             ""
         } else {
@@ -318,6 +318,11 @@ fn append(file: &Path, lines: &[String]) -> Result<()> {
     handle
         .write_all(text.as_bytes())
         .with_context(|| format!("Failed to write {}", file.display()))
+}
+
+/// `line` up to its comment, which runs from the first `#` to the end.
+fn code_part(line: &str) -> &str {
+    line.split('#').next().unwrap_or_default()
 }
 
 fn include_target(line: &str) -> Option<&str> {
