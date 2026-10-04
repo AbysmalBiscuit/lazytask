@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use lazytask::config::{Config, KeyBindingsConfig, LoadedConfig};
+use lazytask::taskrc::Taskrc;
 use lazytask::utils::keybindings::{Keymap, Section};
 use strum::IntoEnumIterator;
 use tempfile::tempdir;
@@ -115,9 +116,11 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
 fn data_location_defaults_to_dot_task_in_home() -> anyhow::Result<()> {
     let config = load_toml("")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(None, Some(Path::new("/home/me")))?;
+    let location = config.taskwarrior.resolve_data_location(
+        None,
+        &Taskrc::default(),
+        Some(Path::new("/home/me")),
+    )?;
 
     assert_eq!(location, PathBuf::from("/home/me/.task"));
     Ok(())
@@ -127,9 +130,11 @@ fn data_location_defaults_to_dot_task_in_home() -> anyhow::Result<()> {
 fn taskdata_wins_over_the_home_default() -> anyhow::Result<()> {
     let config = load_toml("")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(Some("/srv/tasks".into()), Some(Path::new("/home/me")))?;
+    let location = config.taskwarrior.resolve_data_location(
+        Some("/srv/tasks".into()),
+        &Taskrc::default(),
+        Some(Path::new("/home/me")),
+    )?;
 
     assert_eq!(location, PathBuf::from("/srv/tasks"));
     Ok(())
@@ -139,9 +144,11 @@ fn taskdata_wins_over_the_home_default() -> anyhow::Result<()> {
 fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Result<()> {
     let config = load_toml("[taskwarrior]\ndata_location = \"/opt/tasks\"\n")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(Some("/srv/tasks".into()), Some(Path::new("/home/me")))?;
+    let location = config.taskwarrior.resolve_data_location(
+        Some("/srv/tasks".into()),
+        &Taskrc::default(),
+        Some(Path::new("/home/me")),
+    )?;
 
     assert_eq!(location, PathBuf::from("/opt/tasks"));
     Ok(())
@@ -151,9 +158,11 @@ fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Res
 fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
     let config = load_toml("[taskwarrior]\ndata_location = \"~/tasks/db\"\n")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(None, Some(Path::new("/home/me")))?;
+    let location = config.taskwarrior.resolve_data_location(
+        None,
+        &Taskrc::default(),
+        Some(Path::new("/home/me")),
+    )?;
 
     assert_eq!(location, PathBuf::from("/home/me/tasks/db"));
     Ok(())
@@ -163,9 +172,11 @@ fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
 fn leading_tilde_in_taskdata_expands_to_home() -> anyhow::Result<()> {
     let config = load_toml("")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(Some("~/tilde".into()), Some(Path::new("/home/me")))?;
+    let location = config.taskwarrior.resolve_data_location(
+        Some("~/tilde".into()),
+        &Taskrc::default(),
+        Some(Path::new("/home/me")),
+    )?;
 
     assert_eq!(location, PathBuf::from("/home/me/tilde"));
     Ok(())
@@ -175,9 +186,11 @@ fn leading_tilde_in_taskdata_expands_to_home() -> anyhow::Result<()> {
 fn absolute_taskdata_resolves_without_a_home_directory() -> anyhow::Result<()> {
     let config = load_toml("")?.config;
 
-    let location = config
-        .taskwarrior
-        .resolve_data_location(Some("/srv/tasks".into()), None)?;
+    let location = config.taskwarrior.resolve_data_location(
+        Some("/srv/tasks".into()),
+        &Taskrc::default(),
+        None,
+    )?;
 
     assert_eq!(location, PathBuf::from("/srv/tasks"));
     Ok(())
@@ -187,7 +200,9 @@ fn absolute_taskdata_resolves_without_a_home_directory() -> anyhow::Result<()> {
 fn home_default_without_a_home_directory_is_an_error() -> anyhow::Result<()> {
     let config = load_toml("")?.config;
 
-    let result = config.taskwarrior.resolve_data_location(None, None);
+    let result = config
+        .taskwarrior
+        .resolve_data_location(None, &Taskrc::default(), None);
 
     assert!(result.is_err(), "resolved {:?}", result);
     Ok(())

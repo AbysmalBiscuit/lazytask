@@ -66,6 +66,10 @@ path = "tests/integration_remote_sync.rs"
 name = "integration_tui_input"
 path = "tests/integration_tui_input.rs"
 
+[[test]]
+name = "integration_taskrc"
+path = "tests/integration_taskrc.rs"
+
 [profile.dist]
 inherits = "release"
 lto = "thin"

@@ -1,17 +1,20 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::ffi::OsString;
 use std::io::{self, Stdout};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::{Config, LoadedConfig};
 use crate::handlers::input::Action;
 use crate::handlers::sync::SyncHandler;
 use crate::taskchampion::TaskChampionIntegration;
+use crate::taskrc::Taskrc;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -25,18 +28,72 @@ pub struct App {
     pub should_quit: bool,
 }
 
-impl App {
-    pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
+/// The parts of the process environment startup reads.
+pub struct LaunchEnv {
+    /// `TASKRC`
+    pub taskrc: Option<OsString>,
+    /// `TASKDATA`
+    pub taskdata: Option<OsString>,
+    pub home: Option<PathBuf>,
+}
+
+impl LaunchEnv {
+    pub fn from_process() -> Self {
+        LaunchEnv {
+            taskrc: std::env::var_os("TASKRC"),
+            taskdata: std::env::var_os("TASKDATA"),
+            home: dirs::home_dir(),
+        }
+    }
+}
+
+/// Everything startup loads before the terminal is taken over: the config,
+/// the user's taskrc, and the replica they point at, with sync configured
+/// from the taskrc when it names a target.
+pub struct Session {
+    pub config: Config,
+    /// Keys the config file set that lazytask does not know.
+    pub unknown_keys: Vec<String>,
+    pub taskchampion: TaskChampionIntegration,
+}
+
+impl Session {
+    pub async fn open(config_path: Option<&str>, env: LaunchEnv) -> Result<Self> {
         let LoadedConfig {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
-        let mut ui = AppUI::new(&config)?;
-        ui.show_config_warnings(&unknown_keys);
+        let home = env.home.as_deref();
+        let taskrc = match config.taskwarrior.resolve_taskrc_path(env.taskrc, home)? {
+            Some(path) => Taskrc::load(&path, home)?,
+            None => Taskrc::default(),
+        };
         let data_dir = config
             .taskwarrior
-            .resolve_data_location(std::env::var_os("TASKDATA"), dirs::home_dir().as_deref())?;
-        let taskchampion = TaskChampionIntegration::new(data_dir).await?;
+            .resolve_data_location(env.taskdata, &taskrc, home)?;
+        let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
+        if let Some(settings) = taskrc.sync_settings() {
+            taskchampion
+                .configure_sync(settings)
+                .context("Invalid sync settings in taskrc")?;
+        }
+        Ok(Session {
+            config,
+            unknown_keys,
+            taskchampion,
+        })
+    }
+}
+
+impl App {
+    pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
+        let Session {
+            config,
+            unknown_keys,
+            taskchampion,
+        } = Session::open(config_path, LaunchEnv::from_process()).await?;
+        let mut ui = AppUI::new(&config)?;
+        ui.show_config_warnings(&unknown_keys);
         let sync_handler = SyncHandler::new();
 
         enable_raw_mode()?;
