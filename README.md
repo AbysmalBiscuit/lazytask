@@ -345,7 +345,7 @@ podman rm -f lazytask-sync-test
 ## Known limitations
 
 - **Sync settings aren't persisted.** They live in memory; re-enter them each session.
-- **`Action::ForceSync` is unreachable** in the current keymap. Crossterm reports Shift+s as `Char('S')` (not `Char('s')+SHIFT`), so the SHIFT-guarded branch never fires. `Char('S')` is bound to Sync Config. Either branch can be retargeted to a producible key (e.g. `Ctrl+S`) — open issue.
+- **Force sync has no default key.** Bind `force_sync` in `[keybindings.global]` to use it; see [docs/keybindings.md](docs/keybindings.md).
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
 - **The Catppuccin theme is configured but unused.** Live colors are bare named-color terminals defaults.
