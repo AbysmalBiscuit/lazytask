@@ -133,7 +133,7 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     let config_path = tmp.path().join("config.toml");
     std::fs::write(
         &config_path,
-        "[ui]\nshow_help_bar = false\ncolour = \"red\"\n",
+        "[ui]\nshow_help_bar = false\ncolour = \"red\"\n\n[taskwarrior]\nsync_enabled = true\n",
     )
     .expect("write config");
 
@@ -154,4 +154,8 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
         .expect("draw");
 
     assert!(buffer_contains(&terminal, "ui.colour"), "ui.colour not shown");
+    assert!(
+        buffer_contains(&terminal, "taskwarrior.sync_enabled"),
+        "taskwarrior.sync_enabled not shown"
+    );
 }

@@ -1,98 +1,44 @@
-// Unit tests for configuration system
+use std::path::PathBuf;
 
+use lazytask::config::{Config, LoadedConfig};
 use tempfile::tempdir;
 
-use lazytask::config::{Config, ThemeConfig, UIConfig};
-
-#[test]
-fn test_default_config() {
-    let config = Config::default();
-
-    assert_eq!(config.theme.name, "catppuccin-mocha");
-    assert!(!config.theme.colors.is_empty());
-    assert_eq!(config.ui.default_view, "task_list");
-    assert_eq!(config.ui.show_help_bar, true);
-    assert!(!config.ui.task_list_columns.is_empty());
-    assert_eq!(config.taskwarrior.sync_enabled, false);
+fn load_toml(contents: &str) -> anyhow::Result<LoadedConfig> {
+    let dir = tempdir()?;
+    let path = dir.path().join("config.toml");
+    std::fs::write(&path, contents)?;
+    Config::load(Some(path.to_str().unwrap()))
 }
 
 #[test]
-fn test_config_serialization() -> anyhow::Result<()> {
-    let config = Config::default();
+fn partial_config_takes_defaults_for_absent_keys() -> anyhow::Result<()> {
+    let loaded = load_toml("[ui]\nshow_help_bar = false\n")?;
 
-    // Test serialization to TOML
-    let toml_string = toml::to_string_pretty(&config)?;
-    assert!(!toml_string.is_empty());
-    assert!(toml_string.contains("catppuccin-mocha"));
-    assert!(toml_string.contains("task_list"));
-
-    // Test deserialization from TOML
-    let deserialized_config: Config = toml::from_str(&toml_string)?;
-    assert_eq!(config.theme.name, deserialized_config.theme.name);
-    assert_eq!(config.ui.default_view, deserialized_config.ui.default_view);
-
+    let mut expected = Config::default();
+    expected.ui.show_help_bar = false;
+    assert_eq!(loaded.config, expected);
+    assert!(loaded.unknown_keys.is_empty());
     Ok(())
 }
 
 #[test]
-fn test_config_file_operations() -> anyhow::Result<()> {
-    let loaded_config =
-        load_toml("[theme]\nname = \"custom-theme\"\n\n[ui]\nshow_help_bar = false\n")?;
-    assert_eq!(loaded_config.ui.show_help_bar, false);
-    assert_eq!(loaded_config.theme.name, "custom-theme");
+fn empty_path_strings_resolve_to_unset() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ntaskrc_path = \"\"\ndata_location = \"\"\n")?.config;
 
+    assert_eq!(config.taskwarrior.taskrc_path, None);
+    assert_eq!(config.taskwarrior.data_location, None);
     Ok(())
 }
 
 #[test]
-fn test_config_validation() {
-    let mut config = Config::default();
+fn non_empty_path_strings_load_as_paths() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ntaskrc_path = \"/home/me/.taskrc\"\n")?.config;
 
-    // Test valid configurations
-    assert!(config.ui.task_list_columns.contains(&"id".to_string()));
-    assert!(config
-        .ui
-        .task_list_columns
-        .contains(&"description".to_string()));
-
-    // Test modification
-    config.ui.refresh_interval = 500;
-    assert_eq!(config.ui.refresh_interval, 500);
-
-    config.taskwarrior.sync_enabled = true;
-    assert!(config.taskwarrior.sync_enabled);
-}
-
-#[test]
-fn test_theme_config() {
-    let theme = ThemeConfig {
-        name: "test-theme".to_string(),
-        colors: [
-            ("background".to_string(), "#000000".to_string()),
-            ("foreground".to_string(), "#ffffff".to_string()),
-        ]
-        .into_iter()
-        .collect(),
-    };
-
-    assert_eq!(theme.name, "test-theme");
-    assert_eq!(theme.colors.get("background"), Some(&"#000000".to_string()));
-    assert_eq!(theme.colors.get("foreground"), Some(&"#ffffff".to_string()));
-}
-
-#[test]
-fn test_ui_config() {
-    let ui_config = UIConfig {
-        default_view: "reports".to_string(),
-        show_help_bar: false,
-        task_list_columns: vec!["id".to_string(), "description".to_string()],
-        refresh_interval: 2000,
-    };
-
-    assert_eq!(ui_config.default_view, "reports");
-    assert_eq!(ui_config.show_help_bar, false);
-    assert_eq!(ui_config.task_list_columns.len(), 2);
-    assert_eq!(ui_config.refresh_interval, 2000);
+    assert_eq!(
+        config.taskwarrior.taskrc_path,
+        Some(PathBuf::from("/home/me/.taskrc"))
+    );
+    Ok(())
 }
 
 #[test]
@@ -108,77 +54,27 @@ fn missing_config_file_runs_on_defaults_and_writes_nothing() -> anyhow::Result<(
     Ok(())
 }
 
-// Temporarily commented out due to compilation issues
-// #[test]
-// fn test_config_toml_parsing() -> anyhow::Result<()> {
-//     let toml_content = r#"
-// [theme]
-// name = "custom-theme"
-//
-// [theme.colors]
-// background = "#123456"
-// primary = "#abcdef"
-//
-// [ui]
-// default_view = "reports"
-// show_help_bar = false
-// task_list_columns = ["id", "description"]
-// refresh_interval = 1500
-//
-// [taskwarrior]
-// sync_enabled = true
-//
-// [keybindings.global]
-// quit = "q"
-// help = "F1"
-// "#;
-//
-//     let config: Config = toml::from_str(toml_content)?;
-//
-//     assert_eq!(config.theme.name, "custom-theme");
-//     assert_eq!(config.theme.colors.get("background"), Some(&"#123456".to_string()));
-//     assert_eq!(config.ui.default_view, "reports");
-//     assert_eq!(config.ui.show_help_bar, false);
-//     assert_eq!(config.ui.refresh_interval, 1500);
-//     assert_eq!(config.taskwarrior.sync_enabled, true);
-//     assert_eq!(config.keybindings.global.get("quit"), Some(&"q".to_string()));
-//
-//     Ok(())
-// }
-
-fn load_toml(contents: &str) -> anyhow::Result<Config> {
-    let dir = tempdir()?;
-    let path = dir.path().join("config.toml");
-    std::fs::write(&path, contents)?;
-    Ok(Config::load(Some(path.to_str().unwrap()))?.config)
-}
-
 #[test]
-fn partial_config_takes_defaults_for_absent_keys() -> anyhow::Result<()> {
-    let config = load_toml("[ui]\nshow_help_bar = false\n")?;
+fn unknown_keys_load_and_are_reported_by_dotted_path() -> anyhow::Result<()> {
+    let loaded = load_toml(
+        "[ui]\nshow_help_bar = false\ncolour = \"red\"\n\n\
+         [taskwarrior]\nsync_enabled = true\n\n\
+         [sync]\nurl = \"https://example.com\"\n",
+    )?;
 
-    let mut expected = Config::default();
-    expected.ui.show_help_bar = false;
-    assert_eq!(config, expected);
+    assert!(!loaded.config.ui.show_help_bar);
+    let mut unknown = loaded.unknown_keys;
+    unknown.sort();
+    assert_eq!(unknown, ["sync", "taskwarrior.sync_enabled", "ui.colour"]);
     Ok(())
 }
 
 #[test]
-fn empty_path_strings_resolve_to_unset() -> anyhow::Result<()> {
-    let config = load_toml("[taskwarrior]\ntaskrc_path = \"\"\ndata_location = \"\"\n")?;
+fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
+    let loaded = load_toml(include_str!("../../config/default.toml"))?;
 
-    assert_eq!(config.taskwarrior.taskrc_path, None);
-    assert_eq!(config.taskwarrior.data_location, None);
-    Ok(())
-}
-
-#[test]
-fn non_empty_path_strings_load_as_paths() -> anyhow::Result<()> {
-    let config = load_toml("[taskwarrior]\ntaskrc_path = \"/home/me/.taskrc\"\n")?;
-
-    assert_eq!(
-        config.taskwarrior.taskrc_path,
-        Some(std::path::PathBuf::from("/home/me/.taskrc"))
-    );
+    assert_eq!(loaded.unknown_keys, Vec::<String>::new());
+    assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
+    assert_eq!(loaded.config.taskwarrior.data_location, None);
     Ok(())
 }

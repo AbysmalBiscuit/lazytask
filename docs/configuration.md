@@ -1,6 +1,6 @@
 # LazyTask Configuration
 
-LazyTask is highly configurable through TOML configuration files. The main configuration is stored at `~/.config/lazytask/config.toml` and will be created with sensible defaults on first run.
+LazyTask is highly configurable through TOML configuration files. The main configuration is read from `~/.config/lazytask/config.toml`. The file is optional and LazyTask never writes it: without one, LazyTask runs on built-in defaults. A config file may set any subset of keys; every key it leaves out keeps its default. [`config/default.toml`](../config/default.toml) lists the defaults.
 
 ## Configuration File Locations
 
@@ -64,10 +64,8 @@ Available columns:
 
 ```toml
 [taskwarrior]
-taskrc_path = "/path/to/.taskrc"     # Leave empty for auto-detection
-data_location = "/path/to/data"      # Leave empty for auto-detection
-sync_enabled = false                 # Enable automatic synchronization
-sync_interval = 300                  # Sync interval in seconds (when enabled)
+taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset (auto-detect)
+data_location = "/path/to/data"      # Empty string or absent means unset (auto-detect)
 ```
 
 ### Keybindings
@@ -245,10 +243,6 @@ default_view = "calendar"
 refresh_interval = 5000
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
 
-[taskwarrior]
-sync_enabled = true
-sync_interval = 600
-
 # Vim-style navigation
 [keybindings.task_list]
 move_up = "k"
@@ -278,22 +272,13 @@ filter = "end.after:30days"
 
 ## Validation and Errors
 
-LazyTask validates configuration on startup and will show helpful error messages for:
+LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type.
 
-- Invalid TOML syntax
-- Unknown configuration keys
-- Invalid color values
-- Invalid keybinding syntax
-- Missing required values
+Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
 
-## Configuration Migration
+## Upgrading
 
-When upgrading LazyTask, configuration files are automatically migrated:
-
-1. Backup of old config is created
-2. New fields are added with defaults
-3. Deprecated fields are marked but preserved
-4. Migration summary is shown
+LazyTask never rewrites your config file. Keys you leave out pick up the current built-in defaults, so new settings and changed defaults reach you without editing the file. Keys a newer version no longer reads show up in the unknown-key warning.
 
 ## Troubleshooting
 

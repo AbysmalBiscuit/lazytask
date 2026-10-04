@@ -35,7 +35,6 @@ pub struct TaskwarriorConfig {
     pub taskrc_path: Option<PathBuf>,
     #[serde(deserialize_with = "empty_path_as_none")]
     pub data_location: Option<PathBuf>,
-    pub sync_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]

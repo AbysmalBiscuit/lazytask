@@ -1,5 +1,6 @@
 # LazyTask Default Configuration
-# This file contains the default configuration values for LazyTask
+# This file contains the default configuration values for LazyTask.
+# A config file may set any subset of these keys; absent keys keep their defaults.
 
 [theme]
 name = "catppuccin-mocha"
@@ -29,7 +30,6 @@ task_list_columns = [
 # Leave empty to auto-detect from environment
 taskrc_path = ""
 data_location = ""
-sync_enabled = false
 
 [keybindings.global]
 quit = "q"
