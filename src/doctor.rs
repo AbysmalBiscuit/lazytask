@@ -401,9 +401,10 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
         Ok(Ok(GetVersionResult::Version { .. })) => {
             check.note("reachable, and the encryption secret decrypts its history")
         }
-        Ok(Ok(GetVersionResult::NoSuchVersion)) => {
-            check.note("reachable, with no history yet to check the encryption secret against")
-        }
+        Ok(Ok(GetVersionResult::NoSuchVersion)) => check.warn(
+            "answered, but with no history, so doctor cannot confirm it is a sync server \
+                 that knows this client or check the encryption secret",
+        ),
         Ok(Err(err)) => check.fail(format!("unreachable or refused: {err:#}")),
         Err(_) => check.fail(format!(
             "no answer within {} seconds",

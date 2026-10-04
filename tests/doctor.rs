@@ -415,7 +415,7 @@ fn taskrc_in_an_unsearchable_directory_fails() {
 }
 
 #[test]
-fn with_sync_flag_a_server_answering_not_found_is_contacted_and_does_not_fail() {
+fn with_sync_flag_a_server_answering_not_found_is_a_warning() {
     use std::io::{BufRead, BufReader, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -461,6 +461,7 @@ fn with_sync_flag_a_server_answering_not_found_is_contacted_and_does_not_fail() 
         "{request_line}"
     );
     let check = run.check("Sync server");
-    assert!(!check.starts_with("[fail]"), "{check}");
+    assert!(check.starts_with("[warn]"), "{check}");
+    assert!(check.contains("cannot confirm"), "{check}");
     assert!(run.success, "exited non-zero:\n{}", run.stdout);
 }
