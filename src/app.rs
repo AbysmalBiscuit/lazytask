@@ -5,6 +5,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, Stdout};
 use std::path::PathBuf;
@@ -28,13 +29,30 @@ pub struct App {
     pub should_quit: bool,
 }
 
+/// Where packaged Taskwarrior installs keep the rc files, such as themes,
+/// that a taskrc can include by bare name. Taskwarrior searches only the
+/// directory it was built with, so this covers the common builds.
+const PACKAGE_RC_DIRS: [&str; 4] = [
+    "/usr/share/taskwarrior",
+    "/usr/share/doc/task/rc",
+    "/usr/local/share/doc/task/rc",
+    "/opt/homebrew/share/doc/task/rc",
+];
+
 /// The parts of the process environment startup reads.
+#[derive(Debug, Clone, Default)]
 pub struct LaunchEnv {
     /// `TASKRC`
     pub taskrc_var: Option<OsString>,
     /// `TASKDATA`
     pub taskdata_var: Option<OsString>,
     pub home: Option<PathBuf>,
+    pub cwd: Option<PathBuf>,
+    /// Environment variables, which taskrc paths and values may reference
+    /// as `$NAME`.
+    pub vars: HashMap<String, String>,
+    /// Package directories searched last for a relative taskrc include.
+    pub rc_dirs: Vec<PathBuf>,
 }
 
 impl LaunchEnv {
@@ -43,6 +61,11 @@ impl LaunchEnv {
             taskrc_var: std::env::var_os("TASKRC"),
             taskdata_var: std::env::var_os("TASKDATA"),
             home: dirs::home_dir(),
+            cwd: std::env::current_dir().ok(),
+            vars: std::env::vars_os()
+                .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+                .collect(),
+            rc_dirs: PACKAGE_RC_DIRS.map(PathBuf::from).to_vec(),
         }
     }
 }
@@ -66,26 +89,25 @@ impl Session {
         let home = env.home.as_deref();
         let taskrc = match config
             .taskwarrior
-            .resolve_taskrc_path(env.taskrc_var, home)?
+            .resolve_taskrc_path(env.taskrc_var.clone(), home)?
         {
-            Some(path) => Taskrc::load(&path, home)?,
+            Some(path) => Taskrc::load(&path, &env)?,
             None => Taskrc::default(),
         };
-        let data_dir = config
-            .taskwarrior
-            .resolve_data_location(env.taskdata_var, &taskrc, home)?;
+        let data_dir =
+            config
+                .taskwarrior
+                .resolve_data_location(env.taskdata_var.clone(), &taskrc, home)?;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
 
         let mut warnings = Vec::new();
         if !unknown_keys.is_empty() {
             warnings.push(format!("Unknown config keys: {}", unknown_keys.join(", ")));
         }
-        let sync = taskrc
-            .sync_settings(home)
-            .and_then(|settings| match settings {
-                Some(settings) => taskchampion.configure_sync(settings),
-                None => Ok(()),
-            });
+        let sync = taskrc.sync_settings().and_then(|settings| match settings {
+            Some(settings) => taskchampion.configure_sync(settings),
+            None => Ok(()),
+        });
         if let Err(err) = sync {
             warnings.push(format!("Sync settings in taskrc ignored: {err:#}"));
         }

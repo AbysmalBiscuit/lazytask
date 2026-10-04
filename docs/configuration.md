@@ -72,7 +72,15 @@ data_location = "~/path/to/data"     # Empty string or absent means unset: TASKD
 
 lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It never writes to the taskrc. A missing taskrc is not an error.
 
-The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`, where a relative include path is taken from the directory of the file that includes it and a leading `~` is the home directory. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
+The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
+
+As in Taskwarrior, values and include paths expand a leading `~` to the home directory and `$NAME` to that environment variable, or to nothing when it is unset. A relative include is looked up in this order:
+
+1. The working directory lazytask was started from
+2. The directory of the including file, after following symlinks
+3. The package rc directories that hold Taskwarrior's themes and holiday files: `/usr/share/taskwarrior`, `/usr/share/doc/task/rc`, `/usr/local/share/doc/task/rc` and `/opt/homebrew/share/doc/task/rc`
+
+So `include dark-16.theme` finds the packaged theme.
 
 lazytask uses these keys:
 

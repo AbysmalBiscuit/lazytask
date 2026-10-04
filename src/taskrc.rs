@@ -6,14 +6,17 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use crate::app::LaunchEnv;
 use crate::taskchampion::SyncSettings;
 use crate::utils::helpers::expand_tilde;
 
-/// Taskwarrior refuses deeper nesting, which also stops include cycles.
+/// Taskwarrior refuses a chain of more files than this, which also stops
+/// include cycles.
 const MAX_INCLUDE_DEPTH: usize = 10;
 
 /// The settings of a taskrc and every file it includes, later assignments
-/// overriding earlier ones.
+/// overriding earlier ones. As in Taskwarrior, a leading `~` and any
+/// `$NAME` variable in a value or include path are expanded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Taskrc {
     values: HashMap<String, String>,
@@ -23,10 +26,10 @@ impl Taskrc {
     /// Parses the taskrc at `path`. A missing file yields an empty taskrc;
     /// a missing include or a malformed line is an error naming its file
     /// and line number.
-    pub fn load(path: &Path, home: Option<&Path>) -> Result<Self> {
+    pub fn load(path: &Path, env: &LaunchEnv) -> Result<Self> {
         let mut taskrc = Taskrc::default();
         match fs::read_to_string(path) {
-            Ok(contents) => taskrc.parse(path, &contents, home, 0)?,
+            Ok(contents) => taskrc.parse(path, &contents, env, 0)?,
             Err(err) if err.kind() == ErrorKind::NotFound => {}
             Err(err) => {
                 return Err(err)
@@ -36,13 +39,7 @@ impl Taskrc {
         Ok(taskrc)
     }
 
-    fn parse(
-        &mut self,
-        path: &Path,
-        contents: &str,
-        home: Option<&Path>,
-        depth: usize,
-    ) -> Result<()> {
+    fn parse(&mut self, path: &Path, contents: &str, env: &LaunchEnv, depth: usize) -> Result<()> {
         for (index, raw) in contents.lines().enumerate() {
             let location = || format!("{}:{}", path.display(), index + 1);
             let line = raw.split('#').next().unwrap_or_default().trim();
@@ -54,23 +51,22 @@ impl Taskrc {
                 if key.is_empty() {
                     bail!("{}: malformed entry '{}'", location(), line);
                 }
-                self.values
-                    .insert(key.to_string(), value.trim().to_string());
+                let value = expand(value.trim(), env).with_context(location)?;
+                self.values.insert(key.to_string(), value);
             } else if let Some(target) = include_target(line) {
-                if depth == MAX_INCLUDE_DEPTH {
+                if depth + 1 == MAX_INCLUDE_DEPTH {
                     bail!(
                         "{}: includes nested more than {} deep",
                         location(),
                         MAX_INCLUDE_DEPTH
                     );
                 }
-                let included = resolve_include(path, target, home).with_context(|| {
-                    format!("{}: cannot resolve include '{}'", location(), target)
-                })?;
+                let included = find_include(path, target, env)
+                    .with_context(|| format!("{}: cannot find include '{}'", location(), target))?;
                 let contents = fs::read_to_string(&included).with_context(|| {
                     format!("{}: cannot read include {}", location(), included.display())
                 })?;
-                self.parse(&included, &contents, home, depth + 1)?;
+                self.parse(&included, &contents, env, depth + 1)?;
             } else {
                 bail!("{}: malformed entry '{}'", location(), line);
             }
@@ -92,12 +88,11 @@ impl Taskrc {
 
     /// The sync target Taskwarrior would use: a local server directory
     /// first, then a sync server, whose URL may also be given by the
-    /// deprecated `sync.server.origin`. A leading `~` in the local server
-    /// directory expands to `home`.
-    pub fn sync_settings(&self, home: Option<&Path>) -> Result<Option<SyncSettings>> {
+    /// deprecated `sync.server.origin`.
+    pub fn sync_settings(&self) -> Result<Option<SyncSettings>> {
         if let Some(server_dir) = self.get("sync.local.server_dir") {
             return Ok(Some(SyncSettings {
-                local_server_dir: Some(expand_tilde(Path::new(server_dir), home)?),
+                local_server_dir: Some(PathBuf::from(server_dir)),
                 ..Default::default()
             }));
         }
@@ -122,12 +117,51 @@ fn include_target(line: &str) -> Option<&str> {
     rest.starts_with(char::is_whitespace).then(|| rest.trim())
 }
 
-/// Expands a leading `~` to `home`; a relative path is taken from the
-/// directory of the file that includes it.
-fn resolve_include(including: &Path, target: &str, home: Option<&Path>) -> Result<PathBuf> {
-    let target = expand_tilde(Path::new(target), home)?;
-    Ok(match including.parent() {
-        Some(dir) if target.is_relative() => dir.join(target),
-        _ => target,
-    })
+/// Finds an include the way Taskwarrior does: an absolute path as is, a
+/// relative one in the working directory, then next to the real path of
+/// the including file, then in the package rc directories.
+fn find_include(including: &Path, target: &str, env: &LaunchEnv) -> Result<PathBuf> {
+    let target = PathBuf::from(expand(target, env)?);
+    if target.is_absolute() {
+        return Ok(target);
+    }
+    let including_dir = fs::canonicalize(including)
+        .ok()
+        .and_then(|real| real.parent().map(Path::to_path_buf));
+    env.cwd
+        .iter()
+        .chain(&including_dir)
+        .chain(&env.rc_dirs)
+        .map(|dir| dir.join(&target))
+        .find(|candidate| candidate.exists())
+        .context("not in the working directory, the taskrc's directory or a package rc directory")
+}
+
+/// Expands a leading `~` to the home directory and each `$NAME` to that
+/// variable, or to nothing when it is unset.
+fn expand(text: &str, env: &LaunchEnv) -> Result<String> {
+    let text = if text == "~" || text.starts_with("~/") {
+        expand_tilde(Path::new(text), env.home.as_deref())?
+            .to_string_lossy()
+            .into_owned()
+    } else {
+        text.to_string()
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(dollar) = rest.find('$') {
+        out.push_str(&rest[..dollar]);
+        let after = &rest[dollar + 1..];
+        let name_len = after
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(after.len());
+        if name_len == 0 {
+            out.push('$');
+        } else if let Some(value) = env.vars.get(&after[..name_len]) {
+            out.push_str(value);
+        }
+        rest = &after[name_len..];
+    }
+    out.push_str(rest);
+    Ok(out)
 }

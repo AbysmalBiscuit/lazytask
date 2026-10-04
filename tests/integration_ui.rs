@@ -144,6 +144,7 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
             taskrc_var: Some(tmp.path().join("no-taskrc").into()),
             taskdata_var: Some(tmp.path().join("data").into()),
             home: None,
+            ..LaunchEnv::default()
         },
     )
     .await

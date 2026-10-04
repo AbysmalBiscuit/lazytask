@@ -41,6 +41,7 @@ impl Driver {
                 taskrc_var: Some(dir.path().join("no-taskrc").into()),
                 taskdata_var: Some(dir.path().join("data").into()),
                 home: None,
+                ..LaunchEnv::default()
             },
         )
         .await?;

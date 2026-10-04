@@ -41,16 +41,25 @@ impl Fixture {
         taskdata_var: Option<&Path>,
         config: Option<&Path>,
     ) -> Result<Session> {
+        self.open_with(self.env(taskrc_var, taskdata_var), config)
+            .await
+    }
+
+    /// A launch environment with a home directory, no working directory,
+    /// variables or package rc directories, and the given `TASKRC` and
+    /// `TASKDATA`.
+    fn env(&self, taskrc_var: &Path, taskdata_var: Option<&Path>) -> LaunchEnv {
+        LaunchEnv {
+            taskrc_var: Some(taskrc_var.into()),
+            taskdata_var: taskdata_var.map(Into::into),
+            home: Some(self.path("home")),
+            ..LaunchEnv::default()
+        }
+    }
+
+    async fn open_with(&self, env: LaunchEnv, config: Option<&Path>) -> Result<Session> {
         let config = config.map_or_else(|| self.path("no-config.toml"), Path::to_path_buf);
-        Session::open(
-            Some(config.to_str().unwrap()),
-            LaunchEnv {
-                taskrc_var: Some(taskrc_var.into()),
-                taskdata_var: taskdata_var.map(Into::into),
-                home: Some(self.path("home")),
-            },
-        )
-        .await
+        Session::open(Some(config.to_str().unwrap()), env).await
     }
 }
 
@@ -247,5 +256,60 @@ async fn incomplete_taskrc_sync_settings_warn_and_leave_sync_unconfigured() -> R
         screen.contains("taskrc") && screen.contains("client_id"),
         "warning missing from screen:\n{screen}"
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn relative_includes_search_cwd_then_taskrc_dir_then_package_dirs() -> Result<()> {
+    let fx = Fixture::new()?;
+    for dir in ["cwd", "rc", "pkg"] {
+        std::fs::create_dir(fx.path(dir))?;
+    }
+    let data_line = |dir: &str| format!("data.location={}\n", fx.path(dir).display());
+    fx.write("cwd/a.rc", &data_line("from-cwd"))?;
+    fx.write("rc/a.rc", &data_line("from-rc-dir"))?;
+    fx.write("rc/b.rc", "include theme.rc\n")?;
+    fx.write("pkg/b.rc", &data_line("from-pkg-b"))?;
+    fx.write(
+        "pkg/theme.rc",
+        &format!(
+            "sync.local.server_dir={}\n",
+            fx.path("pkg-server").display()
+        ),
+    )?;
+    let taskrc = fx.write("rc/taskrc", "include a.rc\ninclude b.rc\n")?;
+
+    let env = LaunchEnv {
+        cwd: Some(fx.path("cwd")),
+        rc_dirs: vec![fx.path("pkg")],
+        ..fx.env(&taskrc, None)
+    };
+    let session = fx.open_with(env, None).await?;
+
+    assert_eq!(session.taskchampion.data_dir(), &fx.path("from-cwd"));
+    assert!(session.taskchampion.is_sync_configured());
+    assert!(fx.path("pkg-server").is_dir(), "package theme.rc not read");
+    Ok(())
+}
+
+#[tokio::test]
+async fn variables_expand_in_include_paths_and_values() -> Result<()> {
+    let fx = Fixture::new()?;
+    std::fs::create_dir(fx.path("conf"))?;
+    fx.write("conf/extra.rc", "data.location=$DATA_ROOT/tasks\n")?;
+    let taskrc = fx.write("taskrc", "include $CONF_DIR/extra.rc\n")?;
+
+    let env = LaunchEnv {
+        vars: [
+            ("CONF_DIR", fx.path("conf")),
+            ("DATA_ROOT", fx.path("root")),
+        ]
+        .map(|(k, v)| (k.to_string(), v.display().to_string()))
+        .into(),
+        ..fx.env(&taskrc, None)
+    };
+    let session = fx.open_with(env, None).await?;
+
+    assert_eq!(session.taskchampion.data_dir(), &fx.path("root/tasks"));
     Ok(())
 }
