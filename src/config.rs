@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
 #[serde(default)]
@@ -111,35 +111,14 @@ impl Config {
             Self::default_config_path()?
         };
 
-        if config_file_path.exists() {
-            let config_contents = fs::read_to_string(&config_file_path)
-                .with_context(|| format!("Failed to read config file: {:?}", config_file_path))?;
-
-            let config: Config =
-                toml::from_str(&config_contents).with_context(|| "Failed to parse config file")?;
-
-            Ok(config)
-        } else {
-            // Create default config file
-            let default_config = Config::default();
-            default_config.save(&config_file_path)?;
-            Ok(default_config)
-        }
-    }
-
-    pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
+        if !config_file_path.exists() {
+            return Ok(Config::default());
         }
 
-        let config_string =
-            toml::to_string_pretty(self).with_context(|| "Failed to serialize config")?;
+        let config_contents = fs::read_to_string(&config_file_path)
+            .with_context(|| format!("Failed to read config file: {:?}", config_file_path))?;
 
-        fs::write(path, config_string)
-            .with_context(|| format!("Failed to write config file: {:?}", path))?;
-
-        Ok(())
+        toml::from_str(&config_contents).with_context(|| "Failed to parse config file")
     }
 
     fn default_config_path() -> Result<PathBuf> {

@@ -36,19 +36,8 @@ fn test_config_serialization() -> anyhow::Result<()> {
 
 #[test]
 fn test_config_file_operations() -> anyhow::Result<()> {
-    let temp_dir = tempdir()?;
-    let config_path = temp_dir.path().join("test_config.toml");
-
-    let mut config = Config::default();
-    config.ui.show_help_bar = false;
-    config.theme.name = "custom-theme".to_string();
-
-    // Test saving config
-    config.save(&config_path)?;
-    assert!(config_path.exists());
-
-    // Test loading config
-    let loaded_config = Config::load(Some(config_path.to_str().unwrap()))?;
+    let loaded_config =
+        load_toml("[theme]\nname = \"custom-theme\"\n\n[ui]\nshow_help_bar = false\n")?;
     assert_eq!(loaded_config.ui.show_help_bar, false);
     assert_eq!(loaded_config.theme.name, "custom-theme");
 
@@ -107,16 +96,16 @@ fn test_ui_config() {
 }
 
 #[test]
-fn test_invalid_config_handling() {
-    // Test loading non-existent config file (should create default)
-    let temp_dir = tempdir().unwrap();
-    let non_existent_path = temp_dir.path().join("does_not_exist.toml");
+fn missing_config_file_runs_on_defaults_and_writes_nothing() -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let config_dir = temp_dir.path().join("lazytask");
+    let config_path = config_dir.join("config.toml");
 
-    let config = Config::load(Some(non_existent_path.to_str().unwrap())).unwrap();
+    let config = Config::load(Some(config_path.to_str().unwrap()))?;
 
-    // Should have created default config
-    assert_eq!(config.theme.name, "catppuccin-mocha");
-    assert!(non_existent_path.exists()); // Should have been created
+    assert_eq!(config, Config::default());
+    assert!(!config_dir.exists());
+    Ok(())
 }
 
 // Temporarily commented out due to compilation issues
