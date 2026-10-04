@@ -106,13 +106,21 @@ Automatic sync runs only once sync is configured, from the taskrc or the sync co
 
 ```toml
 [taskwarrior]
-taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset: TASKRC, then ~/.taskrc
+taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset: found as Taskwarrior finds it, see Taskrc
 data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then the taskrc, then ~/.task
 ```
 
 ### Taskrc
 
 lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It writes to the taskrc only when you save the sync config modal. A missing taskrc is not an error.
+
+It reads the first of these:
+
+1. `[taskwarrior] taskrc_path` in the lazytask config
+2. The `TASKRC` environment variable
+3. `~/.taskrc`, if it exists
+4. `$XDG_CONFIG_HOME/task/taskrc`, or `~/.config/task/taskrc` when `XDG_CONFIG_HOME` is unset or empty, if it exists
+5. `~/.taskrc`, where saving the sync config modal creates it
 
 The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
 
@@ -193,7 +201,7 @@ LazyTask respects these environment variables:
 
 - `TASKRC` - Path to taskrc file
 - `TASKDATA` - Path to task data directory
-- `XDG_CONFIG_HOME` - Alternative config directory
+- `XDG_CONFIG_HOME` - Alternative config directory, also searched for `task/taskrc`
 - `NO_COLOR` - Disable colors when set to a non-empty value
 
 ## Configuration Examples

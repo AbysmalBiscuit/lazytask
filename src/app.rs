@@ -59,6 +59,8 @@ pub struct LaunchEnv {
     pub taskrc_var: Option<OsString>,
     /// `TASKDATA`
     pub taskdata_var: Option<OsString>,
+    /// `XDG_CONFIG_HOME`
+    pub xdg_config_home_var: Option<OsString>,
     /// `NO_COLOR`
     pub no_color_var: Option<OsString>,
     pub home: Option<PathBuf>,
@@ -75,6 +77,7 @@ impl LaunchEnv {
         LaunchEnv {
             taskrc_var: std::env::var_os("TASKRC"),
             taskdata_var: std::env::var_os("TASKDATA"),
+            xdg_config_home_var: std::env::var_os("XDG_CONFIG_HOME"),
             no_color_var: std::env::var_os("NO_COLOR"),
             home: dirs::home_dir(),
             cwd: std::env::current_dir().ok(),
@@ -94,8 +97,8 @@ pub struct Session {
     /// Problems that do not stop startup, for the UI to show.
     pub warnings: Vec<String>,
     pub taskchampion: TaskChampionIntegration,
-    /// Where the sync config modal saves; `None` when nothing names a
-    /// taskrc and there is no home directory.
+    /// Where the sync config modal saves; `None` when no taskrc is named or
+    /// found and there is no home directory.
     pub taskrc_file: Option<TaskrcFile>,
 }
 
@@ -109,7 +112,11 @@ impl Session {
         config.theme.no_color = env.no_color_var.as_ref().is_some_and(|v| !v.is_empty());
         let taskrc_file = config
             .taskwarrior
-            .resolve_taskrc_path(env.taskrc_var.clone(), env.home.as_deref())?
+            .resolve_taskrc_path(
+                env.taskrc_var.clone(),
+                env.xdg_config_home_var.clone(),
+                env.home.as_deref(),
+            )?
             .map(|path| TaskrcFile::new(path, env.clone()));
         let taskrc = taskrc_file
             .as_ref()

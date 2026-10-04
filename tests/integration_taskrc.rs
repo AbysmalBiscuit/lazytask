@@ -50,21 +50,51 @@ impl Fixture {
             .await
     }
 
-    /// A launch environment with a home directory, no working directory,
-    /// variables or package rc directories, and the given `TASKRC` and
-    /// `TASKDATA`.
+    /// `home_env` with the given `TASKRC` and `TASKDATA`.
     fn env(&self, taskrc_var: &Path, taskdata_var: Option<&Path>) -> LaunchEnv {
         LaunchEnv {
             taskrc_var: Some(taskrc_var.into()),
             taskdata_var: taskdata_var.map(Into::into),
-            home: Some(self.path("home")),
-            ..LaunchEnv::default()
+            ..self.home_env()
         }
     }
 
     async fn open_with(&self, env: LaunchEnv, config: Option<&Path>) -> Result<Session> {
         let config = config.map_or_else(|| self.path("no-config.toml"), Path::to_path_buf);
         Session::open(Some(config.to_str().unwrap()), env).await
+    }
+
+    /// A launch environment with a home directory and no working directory,
+    /// variables or package rc directories, so the taskrc is found the way
+    /// Taskwarrior finds it without `TASKRC`.
+    fn home_env(&self) -> LaunchEnv {
+        LaunchEnv {
+            home: Some(self.path("home")),
+            ..LaunchEnv::default()
+        }
+    }
+
+    /// `home_env` with `XDG_CONFIG_HOME` set to `rel`.
+    fn xdg_env(&self, rel: &str) -> LaunchEnv {
+        LaunchEnv {
+            xdg_config_home_var: Some(self.path(rel).into()),
+            ..self.home_env()
+        }
+    }
+
+    /// `data_subdir` is a directory under `data/`.
+    fn write_taskrc_with_data(&self, rel: &str, data_subdir: &str) -> Result<PathBuf> {
+        let path = self.path(rel);
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        std::fs::write(&path, self.data_location_line(data_subdir))?;
+        Ok(path)
+    }
+
+    fn data_location_line(&self, data_subdir: &str) -> String {
+        format!(
+            "data.location={}\n",
+            self.path("data").join(data_subdir).display()
+        )
     }
 }
 
@@ -318,6 +348,76 @@ async fn variables_expand_in_include_paths_and_values() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn without_a_home_taskrc_the_xdg_taskrc_names_the_replica() -> Result<()> {
+    let fx = Fixture::new()?;
+    fx.write_taskrc_with_data("home/.config/task/taskrc", "dot-config")?;
+    fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
+    fx.write_taskrc_with_data("home/xdg/task/taskrc", "home-xdg")?;
+    std::fs::create_dir(fx.path("empty-xdg"))?;
+
+    for (env, expected) in [
+        (fx.home_env(), fx.path("data/dot-config")),
+        (fx.xdg_env("xdg"), fx.path("data/xdg")),
+        (
+            LaunchEnv {
+                xdg_config_home_var: Some("~/xdg".into()),
+                ..fx.home_env()
+            },
+            fx.path("data/home-xdg"),
+        ),
+        // As in Taskwarrior, a set XDG_CONFIG_HOME is the only place looked.
+        (fx.xdg_env("empty-xdg"), fx.path("home/.task")),
+        // An empty variable is unset, as the XDG spec says.
+        (
+            LaunchEnv {
+                xdg_config_home_var: Some("".into()),
+                ..fx.home_env()
+            },
+            fx.path("data/dot-config"),
+        ),
+    ] {
+        let session = fx.open_with(env, None).await?;
+        assert_eq!(session.taskchampion.data_dir(), &expected);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn taskrc_precedence_is_config_then_taskrc_var_then_home_then_xdg() -> Result<()> {
+    let fx = Fixture::new()?;
+    fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
+    let home = fx.write_taskrc_with_data("home/.taskrc", "home")?;
+    let var = fx.write_taskrc_with_data("var.taskrc", "var")?;
+    let named = fx.write_taskrc_with_data("named.taskrc", "config")?;
+    let config = fx.write(
+        "config.toml",
+        &format!("[taskwarrior]\ntaskrc_path = \"{}\"\n", named.display()),
+    )?;
+    let with_var = LaunchEnv {
+        taskrc_var: Some(var.into()),
+        ..fx.xdg_env("xdg")
+    };
+
+    let cases = [
+        (with_var.clone(), Some(config.as_path()), "config"),
+        (with_var, None, "var"),
+        (fx.xdg_env("xdg"), None, "home"),
+    ];
+    for (env, config, expected) in cases {
+        let session = fx.open_with(env, config).await?;
+        assert_eq!(
+            session.taskchampion.data_dir(),
+            &fx.path("data").join(expected)
+        );
+    }
+
+    std::fs::remove_file(home)?;
+    let session = fx.open_with(fx.xdg_env("xdg"), None).await?;
+    assert_eq!(session.taskchampion.data_dir(), &fx.path("data/xdg"));
+    Ok(())
+}
+
 const CLIENT_ID: &str = "0f0e0d0c-0b0a-4908-8706-050403020100";
 
 /// Opens a session on a taskrc of `lines` and returns the sync target it
@@ -449,10 +549,14 @@ async fn cloud_and_server_sync_need_their_required_keys() -> Result<()> {
 impl Fixture {
     /// Launches the app on `taskrc`, with automatic sync off.
     async fn launch(&self, taskrc: &Path) -> Result<Driver> {
+        self.launch_with(self.env(taskrc, Some(&self.path("data"))))
+            .await
+    }
+
+    /// Launches the app in `env`, with automatic sync off.
+    async fn launch_with(&self, env: LaunchEnv) -> Result<Driver> {
         let config = self.write("config.toml", "[sync]\nauto_sync_interval = 0\n")?;
-        let session = self
-            .open(taskrc, Some(&self.path("data")), Some(&config))
-            .await?;
+        let session = self.open_with(env, Some(&config)).await?;
         Driver::new(session).await
     }
 }
@@ -743,6 +847,49 @@ async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Res
             0o600
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_with_only_an_xdg_taskrc_writes_into_it() -> Result<()> {
+    let fx = Fixture::new()?;
+    let xdg_taskrc = fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
+
+    let mut app = fx.launch_with(fx.xdg_env("xdg")).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&xdg_taskrc)?,
+        format!(
+            "{}{}",
+            fx.data_location_line("xdg"),
+            server_block(CLIENT_ID, "s3cret")
+        )
+    );
+    assert!(!fx.path("home/.taskrc").exists());
+    Ok(())
+}
+
+#[tokio::test]
+async fn without_a_home_or_xdg_taskrc_home_holds_the_replica_and_saved_taskrc() -> Result<()> {
+    let fx = Fixture::new()?;
+    std::fs::create_dir(fx.path("xdg"))?;
+
+    for env in [fx.home_env(), fx.xdg_env("xdg")] {
+        let session = fx.open_with(env, None).await?;
+        assert_eq!(session.taskchampion.data_dir(), &fx.path("home/.task"));
+    }
+
+    let mut app = fx.launch_with(fx.xdg_env("xdg")).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(fx.path("home/.taskrc"))?,
+        server_block(CLIENT_ID, "s3cret")
+    );
+    assert!(!fx.path("xdg/task/taskrc").exists());
     Ok(())
 }
 
