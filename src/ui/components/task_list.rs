@@ -285,37 +285,27 @@ impl TaskTableFormatter {
         let is_due_tomorrow = self.is_due_tomorrow(task.due);
 
         if is_overdue || is_due_today || (is_high_priority && is_due_within_2_days) {
-            // Bold error:
-            // - All overdue tasks (regardless of priority)
-            // - All tasks due today (regardless of priority)
-            // - High priority tasks due within 2 days
             Style::default()
                 .fg(theme.error)
                 .add_modifier(Modifier::BOLD)
         } else if is_due_tomorrow {
-            // Bold warning: due tomorrow
             Style::default()
                 .fg(theme.warning)
                 .add_modifier(Modifier::BOLD)
         } else if is_high_priority {
-            // HIGH PRIORITY - Important but not time-critical
             Style::default().fg(theme.priority_high)
         } else if task.priority == Some(crate::data::models::Priority::Medium) {
-            // MEDIUM PRIORITY - Moderate importance
             Style::default().fg(theme.priority_medium)
         } else if task.status == crate::data::models::TaskStatus::Completed {
-            // COMPLETED - Dimmed
             Style::default().fg(theme.muted)
         } else if task.priority == Some(crate::data::models::Priority::Low) {
-            // LOW PRIORITY - Less urgent
             Style::default().fg(theme.priority_low)
         } else if task.urgency >= 10.0 {
-            // HIGH URGENCY (calculated, without explicit priority)
+            // Only tasks with no priority get here, so computed urgency flags them
             Style::default()
                 .fg(theme.foreground)
                 .add_modifier(Modifier::BOLD)
         } else {
-            // DEFAULT - Normal tasks
             Style::default().fg(theme.foreground)
         }
     }
