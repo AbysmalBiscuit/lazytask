@@ -13,9 +13,8 @@ async fn two_replicas_sync_through_local_server() {
     let dir_b = tmp.path().join("replica_b");
 
     let mut a = TaskChampionIntegration::new(dir_a.clone()).await.unwrap();
-    a.configure_sync(SyncSettings {
-        local_server_dir: Some(server_dir.clone()),
-        ..Default::default()
+    a.configure_sync(SyncSettings::Local {
+        server_dir: Some(server_dir.clone()),
     })
     .expect("configure_sync A");
     assert!(a.is_sync_configured(), "replica A should be configured");
@@ -27,9 +26,8 @@ async fn two_replicas_sync_through_local_server() {
     a.sync().await.expect("sync A pushes task to local server");
 
     let mut b = TaskChampionIntegration::new(dir_b.clone()).await.unwrap();
-    b.configure_sync(SyncSettings {
-        local_server_dir: Some(server_dir.clone()),
-        ..Default::default()
+    b.configure_sync(SyncSettings::Local {
+        server_dir: Some(server_dir.clone()),
     })
     .expect("configure_sync B");
 
@@ -57,9 +55,8 @@ async fn bidirectional_sync_round_trip() {
         .await
         .unwrap();
 
-    let settings = SyncSettings {
-        local_server_dir: Some(server_dir.clone()),
-        ..Default::default()
+    let settings = SyncSettings::Local {
+        server_dir: Some(server_dir.clone()),
     };
     a.configure_sync(settings.clone()).unwrap();
     b.configure_sync(settings).unwrap();
@@ -110,9 +107,8 @@ async fn sync_propagates_done_status() {
         .await
         .unwrap();
 
-    let settings = SyncSettings {
-        local_server_dir: Some(server_dir.clone()),
-        ..Default::default()
+    let settings = SyncSettings::Local {
+        server_dir: Some(server_dir.clone()),
     };
     a.configure_sync(settings.clone()).unwrap();
     b.configure_sync(settings).unwrap();

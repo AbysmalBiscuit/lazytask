@@ -25,7 +25,7 @@ LazyTask is **standalone**: you do **not** need the `task` binary installed. It 
 - A **Unicode-capable terminal**.
 - *(Optional)* A running [`taskchampion-sync-server`](https://github.com/GothenburgBitFactory/taskchampion-sync-server) instance if you want cross-device sync over HTTP. Local-only use needs nothing extra.
 
-> **Note on cloud sync (S3 / GCS).** TaskChampion 3.0.1 ships optional `server-aws` and `server-gcp` features for syncing through Amazon S3 or Google Cloud Storage. We deliberately do **not** enable them — their AWS SDK transitive deps require Rust 1.91+. If you want cloud-bucket sync, bump to `rustc 1.91+` and add the features to the `taskchampion` line in `Cargo.toml`. The HTTP `taskchampion-sync-server` path covered above works on Rust 1.90.
+> **Cloud sync (S3 / GCS).** lazytask can also sync through an Amazon S3 or Google Cloud Storage bucket, configured with Taskwarrior's `sync.aws.*` or `sync.gcp.*` keys in your taskrc. See [Configuration](docs/configuration.md#taskrc).
 
 ## Installation
 

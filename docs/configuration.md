@@ -85,10 +85,16 @@ So `include dark-16.theme` finds the packaged theme.
 lazytask uses these keys:
 
 - `data.location`: the data directory, when neither `[taskwarrior] data_location` nor `TASKDATA` is set
-- `sync.local.server_dir`: sync to a local directory; takes precedence over a sync server, as in Taskwarrior
-- `sync.server.url` (or its deprecated synonym `sync.server.origin`; `sync.server.url` wins), `sync.server.client_id`, `sync.encryption_secret`: sync to a TaskChampion sync server
+- The sync keys from task-sync(5), which pick one sync target
 
-When either sync target is set, sync works from launch without the sync config modal. Sync settings lazytask cannot use, such as a server URL without a UUID `sync.server.client_id`, leave sync unconfigured and show a warning at startup. The GCP and AWS sync keys are not read, since lazytask does not support those backends.
+As in Taskwarrior's `task sync`, the first target whose key is set wins:
+
+1. `sync.local.server_dir`: a local directory
+2. `sync.aws.bucket`: an Amazon S3 bucket. Needs `sync.aws.region`, `sync.encryption_secret`, and exactly one way to get credentials: `sync.aws.profile`, the pair `sync.aws.access_key_id` and `sync.aws.secret_access_key`, or `sync.aws.default_credentials` (any value turns it on)
+3. `sync.gcp.bucket`: a Google Cloud Storage bucket. Needs `sync.encryption_secret`; `sync.gcp.credential_path` names a service-account key, otherwise Application Default Credentials are used
+4. `sync.server.url`, or its deprecated synonym `sync.server.origin` (`sync.server.url` wins): a TaskChampion sync server. Needs `sync.server.client_id` (a UUID) and `sync.encryption_secret`
+
+When a target is set, sync works from launch without the sync config modal. If the target is missing a key it needs, sync stays unconfigured and lazytask shows a warning at startup. The sync config modal only sets up a sync server; cloud buckets are configured through the taskrc.
 
 ### Keybindings
 

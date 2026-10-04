@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::app::LaunchEnv;
-use crate::taskchampion::SyncSettings;
+use crate::taskchampion::{AwsCredentials, SyncSettings};
 use crate::utils::helpers::expand_tilde;
 
 /// Taskwarrior refuses a chain of more files than this, which also stops
@@ -86,28 +86,65 @@ impl Taskrc {
         self.get("data.location").map(PathBuf::from)
     }
 
-    /// The sync target Taskwarrior would use: a local server directory
-    /// first, then a sync server, whose URL may also be given by the
+    /// The sync target Taskwarrior's `task sync` would use, checked the same
+    /// way: a local server directory first, then an AWS bucket, then a GCP
+    /// bucket, then a sync server, whose URL may also be given by the
     /// deprecated `sync.server.origin`.
     pub fn sync_settings(&self) -> Result<Option<SyncSettings>> {
+        let value = |key| self.get(key).map(str::to_string);
+        let value_or_empty = |key| value(key).unwrap_or_default();
+        let encryption_secret =
+            || value("sync.encryption_secret").context("sync.encryption_secret is required");
+
         if let Some(server_dir) = self.get("sync.local.server_dir") {
-            return Ok(Some(SyncSettings {
-                local_server_dir: Some(PathBuf::from(server_dir)),
-                ..Default::default()
+            return Ok(Some(SyncSettings::Local {
+                server_dir: Some(PathBuf::from(server_dir)),
             }));
         }
-        let Some(server_url) = self
-            .get("sync.server.url")
-            .or_else(|| self.get("sync.server.origin"))
-        else {
+        if let Some(bucket) = value("sync.aws.bucket") {
+            let region = value("sync.aws.region").context("sync.aws.region is required")?;
+            let encryption_secret = encryption_secret()?;
+            let profile = value("sync.aws.profile");
+            let access_key = ["sync.aws.access_key_id", "sync.aws.secret_access_key"]
+                .iter()
+                .any(|key| self.get(key).is_some());
+            let default = self.get("sync.aws.default_credentials").is_some();
+            let credentials = match (profile, access_key, default) {
+                (Some(profile), false, false) => AwsCredentials::Profile(profile),
+                (None, true, false) => AwsCredentials::AccessKey {
+                    access_key_id: value_or_empty("sync.aws.access_key_id"),
+                    secret_access_key: value_or_empty("sync.aws.secret_access_key"),
+                },
+                (None, false, true) => AwsCredentials::Default,
+                _ => bail!("exactly one method of specifying AWS credentials is required"),
+            };
+            return Ok(Some(SyncSettings::Aws {
+                region,
+                bucket,
+                credentials,
+                encryption_secret,
+            }));
+        }
+        if let Some(bucket) = value("sync.gcp.bucket") {
+            return Ok(Some(SyncSettings::Gcp {
+                bucket,
+                credential_path: value("sync.gcp.credential_path"),
+                encryption_secret: encryption_secret()?,
+            }));
+        }
+        let Some(url) = value("sync.server.url").or_else(|| value("sync.server.origin")) else {
             return Ok(None);
         };
-        let value_or_empty = |key| self.get(key).unwrap_or_default().to_string();
-        Ok(Some(SyncSettings {
-            server_url: server_url.to_string(),
-            client_id: value_or_empty("sync.server.client_id"),
-            encryption_secret: value_or_empty("sync.encryption_secret"),
-            local_server_dir: None,
+        let (Some(client_id), Some(encryption_secret)) = (
+            value("sync.server.client_id"),
+            value("sync.encryption_secret"),
+        ) else {
+            bail!("sync.server.client_id and sync.encryption_secret are required");
+        };
+        Ok(Some(SyncSettings::Server {
+            url,
+            client_id,
+            encryption_secret,
         }))
     }
 }

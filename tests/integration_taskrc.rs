@@ -7,7 +7,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use lazytask::app::{LaunchEnv, Session};
 use lazytask::handlers::sync::SyncHandler;
-use lazytask::taskchampion::{SyncSettings, TaskChampionIntegration};
+use lazytask::taskchampion::{AwsCredentials, SyncSettings, TaskChampionIntegration};
 use lazytask::ui::app_ui::AppUI;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
@@ -91,9 +91,8 @@ async fn sync_from_a_fresh_launch_pushes_to_the_taskrc_local_server() -> Result<
     assert!(!ui.has_active_form(), "sync opened a modal");
 
     let mut other = TaskChampionIntegration::new(fx.path("other")).await?;
-    other.configure_sync(SyncSettings {
-        local_server_dir: Some(server_dir),
-        ..Default::default()
+    other.configure_sync(SyncSettings::Local {
+        server_dir: Some(server_dir),
     })?;
     other.sync().await?;
     let pulled: Vec<String> = other
@@ -311,5 +310,136 @@ async fn variables_expand_in_include_paths_and_values() -> Result<()> {
     let session = fx.open_with(env, None).await?;
 
     assert_eq!(session.taskchampion.data_dir(), &fx.path("root/tasks"));
+    Ok(())
+}
+
+const CLIENT_ID: &str = "0f0e0d0c-0b0a-4908-8706-050403020100";
+
+/// Opens a session on a taskrc of `lines` and returns the sync target it
+/// configured, or the startup warnings when it configured none.
+async fn sync_target(lines: &str) -> Result<std::result::Result<SyncSettings, Vec<String>>> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!("data.location={}\n{lines}", fx.path("data").display()),
+    )?;
+    let session = fx.open(&taskrc, None, None).await?;
+    Ok(session
+        .taskchampion
+        .sync_settings()
+        .cloned()
+        .ok_or(session.warnings))
+}
+
+#[tokio::test]
+async fn sync_backend_precedence_is_local_then_aws_then_gcp_then_server() -> Result<()> {
+    let server = format!(
+        "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+         sync.encryption_secret=s3cret\n"
+    );
+    let gcp = "sync.gcp.bucket=gcp-bucket\nsync.gcp.credential_path=/keys/gcp.json\n";
+    let aws = "sync.aws.bucket=aws-bucket\nsync.aws.region=eu-west-1\nsync.aws.profile=tw\n";
+    let local_dir = tempfile::tempdir()?;
+    let local = format!("sync.local.server_dir={}\n", local_dir.path().display());
+
+    assert_eq!(
+        sync_target(&format!("{server}{gcp}{aws}{local}")).await?,
+        Ok(SyncSettings::Local {
+            server_dir: Some(local_dir.path().into())
+        })
+    );
+    assert_eq!(
+        sync_target(&format!("{server}{gcp}{aws}")).await?,
+        Ok(SyncSettings::Aws {
+            region: "eu-west-1".into(),
+            bucket: "aws-bucket".into(),
+            credentials: AwsCredentials::Profile("tw".into()),
+            encryption_secret: "s3cret".into(),
+        })
+    );
+    assert_eq!(
+        sync_target(&format!("{server}{gcp}")).await?,
+        Ok(SyncSettings::Gcp {
+            bucket: "gcp-bucket".into(),
+            credential_path: Some("/keys/gcp.json".into()),
+            encryption_secret: "s3cret".into(),
+        })
+    );
+    assert_eq!(
+        sync_target(&server).await?,
+        Ok(SyncSettings::Server {
+            url: "https://tw.example.com".into(),
+            client_id: CLIENT_ID.into(),
+            encryption_secret: "s3cret".into(),
+        })
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn aws_credentials_come_from_exactly_one_method() -> Result<()> {
+    let aws = "sync.aws.bucket=b\nsync.aws.region=r\nsync.encryption_secret=s\n";
+
+    assert_eq!(
+        sync_target(&format!(
+            "{aws}sync.aws.access_key_id=AKID\nsync.aws.secret_access_key=SAK\n"
+        ))
+        .await?,
+        Ok(SyncSettings::Aws {
+            region: "r".into(),
+            bucket: "b".into(),
+            credentials: AwsCredentials::AccessKey {
+                access_key_id: "AKID".into(),
+                secret_access_key: "SAK".into(),
+            },
+            encryption_secret: "s".into(),
+        })
+    );
+    assert_eq!(
+        sync_target(&format!("{aws}sync.aws.default_credentials=true\n")).await?,
+        Ok(SyncSettings::Aws {
+            region: "r".into(),
+            bucket: "b".into(),
+            credentials: AwsCredentials::Default,
+            encryption_secret: "s".into(),
+        })
+    );
+    for creds in [
+        "",
+        "sync.aws.profile=p\nsync.aws.default_credentials=true\n",
+    ] {
+        let warnings = sync_target(&format!("{aws}{creds}")).await?.unwrap_err();
+        assert!(
+            warnings.iter().any(|w| w.contains("exactly one")),
+            "{creds:?}: {warnings:?}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn cloud_and_server_sync_need_their_required_keys() -> Result<()> {
+    let cases = [
+        (
+            "sync.aws.bucket=b\nsync.aws.profile=p\nsync.encryption_secret=s\n",
+            "sync.aws.region",
+        ),
+        (
+            "sync.aws.bucket=b\nsync.aws.region=r\nsync.aws.profile=p\n",
+            "sync.encryption_secret",
+        ),
+        ("sync.gcp.bucket=b\n", "sync.encryption_secret"),
+        (
+            "sync.server.url=https://tw.example.com\nsync.encryption_secret=s\n",
+            "sync.server.client_id",
+        ),
+    ];
+    for (lines, missing) in cases {
+        let warnings = sync_target(lines).await?.unwrap_err();
+        assert!(
+            warnings.iter().any(|w| w.contains(missing)),
+            "{lines:?} should name {missing}: {warnings:?}"
+        );
+    }
     Ok(())
 }

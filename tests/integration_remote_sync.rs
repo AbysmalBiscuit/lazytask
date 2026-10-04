@@ -42,11 +42,10 @@ async fn remote_sync_round_trip() {
         .await
         .expect("replica B");
 
-    let settings = SyncSettings {
-        server_url: url.clone(),
+    let settings = SyncSettings::Server {
+        url: url.clone(),
         client_id: client_id.clone(),
         encryption_secret: secret.clone(),
-        local_server_dir: None,
     };
     a.configure_sync(settings.clone()).expect("configure A");
     b.configure_sync(settings).expect("configure B");
@@ -106,11 +105,10 @@ async fn remote_sync_rejects_unauthorized_client_id() {
         .expect("engine");
 
     engine
-        .configure_sync(SyncSettings {
-            server_url: url,
+        .configure_sync(SyncSettings::Server {
+            url,
             client_id: bogus_id,
             encryption_secret: secret,
-            local_server_dir: None,
         })
         .expect("configure");
 
