@@ -488,7 +488,8 @@ impl Running {
     }
 
     /// Runs the event loop until the screen contains `needle`, returning the
-    /// screen, or fails with the last screen after five seconds.
+    /// screen. Fails when a step fails, or with the last screen after five
+    /// seconds.
     async fn wait_for(&mut self, needle: &str) -> Result<String> {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
@@ -497,11 +498,9 @@ impl Running {
                 return Ok(screen);
             }
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if tokio::time::timeout(remaining, self.app.step())
-                .await
-                .is_err()
-            {
-                anyhow::bail!("{needle:?} never appeared:\n{screen}");
+            match tokio::time::timeout(remaining, self.app.step()).await {
+                Ok(stepped) => stepped?,
+                Err(_) => anyhow::bail!("{needle:?} never appeared:\n{screen}"),
             }
         }
     }
