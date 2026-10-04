@@ -29,35 +29,42 @@ LazyTask is **standalone**: you do **not** need the `task` binary installed. The
 
 ## Installation
 
-### Pre-built binaries (recommended)
+### Installer scripts (recommended)
 
-Grab the latest tarball for your platform from the [GitHub Releases page](https://github.com/osamamahmood/lazytask/releases). Each release ships static binaries for:
+Each [GitHub Release](https://github.com/AbysmalBiscuit/lazytask/releases) ships installers that download the right binary for your platform and put `lazytask` in `$CARGO_HOME/bin` (`~/.cargo/bin` by default).
 
-| Platform | Tarball |
-|---|---|
-| macOS Intel | `lazytask-x86_64-apple-darwin.tar.gz` |
-| macOS Apple Silicon (M1/M2/M3) | `lazytask-aarch64-apple-darwin.tar.gz` |
-| Linux x86_64 (glibc) | `lazytask-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux x86_64 (musl, static) | `lazytask-x86_64-unknown-linux-musl.tar.gz` |
-| Windows x86_64 (MSVC) | `lazytask-x86_64-pc-windows-msvc.tar.gz` |
-| Windows x86_64 (MinGW) | `lazytask-x86_64-pc-windows-gnu.tar.gz` |
-| Windows i686 | `lazytask-i686-pc-windows-msvc.tar.gz` |
+Linux and macOS:
 
-Each tarball has a matching `.sha256` file for integrity verification.
-
-```bash
-# Quick install on Linux/macOS:
-TAG=v0.1.0
-TARGET=x86_64-unknown-linux-gnu     # or whatever matches your platform
-curl -L "https://github.com/osamamahmood/lazytask/releases/download/$TAG/lazytask-$TARGET.tar.gz" | tar xz
-./lazytask --version
-sudo mv lazytask /usr/local/bin/    # optional
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/AbysmalBiscuit/lazytask/releases/latest/download/lazytask-installer.sh | sh
 ```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/AbysmalBiscuit/lazytask/releases/latest/download/lazytask-installer.ps1 | iex"
+```
+
+### Pre-built archives
+
+The same release carries an archive per platform, each holding the `lazytask` binary, `LICENSE` and `README.md`:
+
+| Platform | Archive |
+|---|---|
+| macOS Intel | `lazytask-x86_64-apple-darwin.tar.xz` |
+| macOS Apple Silicon | `lazytask-aarch64-apple-darwin.tar.xz` |
+| Linux x86_64 (glibc) | `lazytask-x86_64-unknown-linux-gnu.tar.xz` |
+| Linux x86_64 (musl, static) | `lazytask-x86_64-unknown-linux-musl.tar.xz` |
+| Windows x86_64 (MSVC) | `lazytask-x86_64-pc-windows-msvc.zip` |
+| Windows x86_64 (MinGW) | `lazytask-x86_64-pc-windows-gnu.zip` |
+| Windows i686 | `lazytask-i686-pc-windows-msvc.zip` |
+
+Each archive has a matching `.sha256` file, and `sha256.sum` lists the checksums of every file in the release.
 
 ### From source
 
 ```bash
-git clone https://github.com/osamamahmood/lazytask
+git clone https://github.com/AbysmalBiscuit/lazytask
 cd lazytask
 cargo build --release
 ./target/release/lazytask
@@ -358,7 +365,7 @@ podman rm -f lazytask-sync-test
 
 ## Releasing
 
-Maintainers: see [docs/releasing.md](docs/releasing.md) for the full release procedure. TL;DR — bump the version in `Cargo.toml`, push a `v*` tag, and the [`Build` workflow](.github/workflows/build.yml) cross-builds binaries for every supported platform and attaches them to a freshly-created GitHub Release.
+Maintainers: see [docs/releasing.md](docs/releasing.md). Releases come from a release PR that [release-please](https://github.com/googleapis/release-please) keeps open on `master`; merging it tags the version, and [cargo-dist](https://github.com/axodotdev/cargo-dist) attaches the archives and installers to the GitHub Release.
 
 ## Contributing
 
