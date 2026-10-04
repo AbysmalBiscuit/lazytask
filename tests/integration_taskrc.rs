@@ -4,13 +4,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use lazytask::app::{LaunchEnv, Session};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use lazytask::app::{App, LaunchEnv, Session};
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::{AwsCredentials, SyncSettings, TaskChampionIntegration};
 use lazytask::ui::app_ui::AppUI;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
+use tokio::sync::mpsc;
 
 struct Fixture {
     tmp: TempDir,
@@ -83,7 +84,7 @@ async fn sync_from_a_fresh_launch_pushes_to_the_taskrc_local_server() -> Result<
         .await?;
 
     let mut ui = AppUI::new(&session.config)?;
-    let mut sync_handler = SyncHandler::new();
+    let mut sync_handler = SyncHandler::new(None);
     sync_handler.initialize(&session.taskchampion)?;
     let action = ui.action(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     ui.handle_action(action, &mut session.taskchampion, &mut sync_handler)
@@ -240,7 +241,7 @@ async fn incomplete_taskrc_sync_settings_warn_and_leave_sync_unconfigured() -> R
 
     let mut ui = AppUI::new(&session.config)?;
     ui.show_config_warnings(&session.warnings);
-    let mut sync_handler = SyncHandler::new();
+    let mut sync_handler = SyncHandler::new(None);
     sync_handler.initialize(&session.taskchampion)?;
     let mut terminal = Terminal::new(TestBackend::new(200, 40))?;
     terminal.draw(|f| ui.render_with_sync(f, &sync_handler))?;
@@ -441,5 +442,298 @@ async fn cloud_and_server_sync_need_their_required_keys() -> Result<()> {
             "{lines:?} should name {missing}: {warnings:?}"
         );
     }
+    Ok(())
+}
+
+/// The app as the binary runs it on a session opened from a taskrc, fed key
+/// presses through its input channel.
+struct Running {
+    app: App<TestBackend>,
+    keys: mpsc::UnboundedSender<Event>,
+}
+
+impl Fixture {
+    /// Launches the app on `taskrc`, with automatic sync off.
+    async fn launch(&self, taskrc: &Path) -> Result<Running> {
+        let config = self.write("config.toml", "[sync]\nauto_sync_interval = 0\n")?;
+        let session = self
+            .open(taskrc, Some(&self.path("data")), Some(&config))
+            .await?;
+        let (keys, input) = mpsc::unbounded_channel();
+        let terminal = Terminal::new(TestBackend::new(220, 40))?;
+        let app = App::with_terminal(terminal, session, input).await?;
+        Ok(Running { app, keys })
+    }
+}
+
+impl Running {
+    fn press(&self, code: KeyCode) {
+        self.keys
+            .send(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)))
+            .expect("app input closed");
+    }
+
+    fn type_text(&self, text: &str) {
+        text.chars().for_each(|c| self.press(KeyCode::Char(c)));
+    }
+
+    /// Replaces the focused modal field's `old` text with `new`.
+    fn retype(&self, old: &str, new: &str) {
+        old.chars().for_each(|_| self.press(KeyCode::Backspace));
+        self.type_text(new);
+    }
+
+    fn open_sync_modal(&self) {
+        self.type_text("S");
+    }
+
+    /// Runs the event loop until the screen contains `needle`, returning the
+    /// screen, or fails with the last screen after five seconds.
+    async fn wait_for(&mut self, needle: &str) -> Result<String> {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let screen = self.screen();
+            if screen.contains(needle) {
+                return Ok(screen);
+            }
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if tokio::time::timeout(remaining, self.app.step())
+                .await
+                .is_err()
+            {
+                anyhow::bail!("{needle:?} never appeared:\n{screen}");
+            }
+        }
+    }
+
+    fn screen(&self) -> String {
+        let buf = self.app.terminal.backend().buffer();
+        (0..buf.area.height)
+            .map(|y| {
+                (0..buf.area.width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))?;
+    Ok(())
+}
+
+const OTHER_CLIENT_ID: &str = "11111111-2222-4333-8444-555555555555";
+
+#[tokio::test]
+async fn saving_the_sync_modal_changes_only_the_sync_lines() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "# Taskwarrior settings\n\
+             weekstart=monday\n\
+             \n\
+             # self-hosted sync\n\
+             sync.server.url=https://old.example.com  # home server\n\
+             color=on\n\
+             sync.server.client_id={CLIENT_ID}\n\
+             report.next.columns=id,description"
+        ),
+    )?;
+    #[cfg(unix)]
+    set_mode(&taskrc, 0o600)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.type_text("https://new.example.com");
+    app.press(KeyCode::Tab);
+    app.type_text(OTHER_CLIENT_ID);
+    app.press(KeyCode::Tab);
+    app.type_text("s3cret");
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "# Taskwarrior settings\n\
+             weekstart=monday\n\
+             \n\
+             # self-hosted sync\n\
+             sync.server.url=https://new.example.com  # home server\n\
+             color=on\n\
+             sync.server.client_id={OTHER_CLIENT_ID}\n\
+             report.next.columns=id,description\n\
+             sync.encryption_secret=s3cret\n"
+        )
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn sync_modal_opens_prefilled_with_the_taskrc_sync_server() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        ),
+    )?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    let screen = app.wait_for("Configure Sync").await?;
+
+    assert!(
+        screen.contains("https://tw.example.com")
+            && screen.contains(CLIENT_ID)
+            && screen.contains("│****** ")
+            && !screen.contains("s3cret"),
+        "modal not prefilled:\n{screen}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_updates_a_key_in_the_included_file_that_defines_it() -> Result<()> {
+    let fx = Fixture::new()?;
+    let included = fx.write(
+        "sync.rc",
+        &format!(
+            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        ),
+    )?;
+    #[cfg(unix)]
+    set_mode(&included, 0o600)?;
+    let main = "# main taskrc\ninclude sync.rc\ncolor=on\n";
+    let taskrc = fx.write("taskrc", main)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.press(KeyCode::Tab);
+    app.retype(CLIENT_ID, OTHER_CLIENT_ID);
+    app.press(KeyCode::Tab);
+    app.retype("s3cret", "n3w-secret");
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(std::fs::read_to_string(&taskrc)?, main);
+    assert_eq!(
+        std::fs::read_to_string(&included)?,
+        format!(
+            "sync.server.url=https://tw.example.com\nsync.server.client_id={OTHER_CLIENT_ID}\n\
+             sync.encryption_secret=n3w-secret\n"
+        )
+    );
+    Ok(())
+}
+
+/// Fills in the empty sync modal with a server, client and `secret`, and
+/// saves.
+fn save_new_server(app: &Running, secret: &str) {
+    app.open_sync_modal();
+    app.type_text("https://tw.example.com");
+    app.press(KeyCode::Tab);
+    app.type_text(CLIENT_ID);
+    app.press(KeyCode::Tab);
+    app.type_text(secret);
+    app.press(KeyCode::Enter);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn saving_refuses_to_put_the_secret_in_a_file_others_can_read() -> Result<()> {
+    let fx = Fixture::new()?;
+    let contents = "color=on\n";
+    let taskrc = fx.write("taskrc", contents)?;
+    set_mode(&taskrc, 0o644)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    save_new_server(&app, "s3cret");
+    let screen = app.wait_for("chmod 600").await?;
+
+    assert!(
+        screen.contains(&taskrc.display().to_string()),
+        "refusal does not name the file:\n{screen}"
+    );
+    assert_eq!(std::fs::read_to_string(&taskrc)?, contents);
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.path("taskrc");
+
+    let mut app = fx.launch(&taskrc).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        )
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&taskrc)?.permissions().mode() & 0o777,
+            0o600
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_refuses_an_empty_url_and_a_secret_the_taskrc_cannot_hold() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.path("taskrc");
+    let mut app = fx.launch(&taskrc).await?;
+
+    app.open_sync_modal();
+    app.press(KeyCode::Tab);
+    app.type_text(CLIENT_ID);
+    app.press(KeyCode::Tab);
+    app.type_text("s3cret");
+    app.press(KeyCode::Enter);
+    app.wait_for("Server URL is required").await?;
+
+    save_new_server(&app, "has#hash");
+    app.wait_for("sync.encryption_secret cannot be saved")
+        .await?;
+
+    assert!(!taskrc.exists(), "a refused save wrote the taskrc");
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_over_a_local_target_notes_that_taskwarrior_still_prefers_it() -> Result<()> {
+    let fx = Fixture::new()?;
+    let local = format!("sync.local.server_dir={}\n", fx.path("server").display());
+    let taskrc = fx.write("taskrc", &local)?;
+    #[cfg(unix)]
+    set_mode(&taskrc, 0o600)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Taskwarrior syncs to sync.local.server_dir until it is removed")
+        .await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "{local}sync.server.url=https://tw.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        )
+    );
     Ok(())
 }

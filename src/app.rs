@@ -22,7 +22,7 @@ use crate::handlers::input::Action;
 use crate::handlers::sync::SyncHandler;
 use crate::handlers::watcher::ReplicaWatcher;
 use crate::taskchampion::TaskChampionIntegration;
-use crate::taskrc::Taskrc;
+use crate::taskrc::TaskrcFile;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -94,6 +94,9 @@ pub struct Session {
     /// Problems that do not stop startup, for the UI to show.
     pub warnings: Vec<String>,
     pub taskchampion: TaskChampionIntegration,
+    /// Where the sync config modal saves; `None` when nothing names a
+    /// taskrc and there is no home directory.
+    pub taskrc: Option<TaskrcFile>,
 }
 
 impl Session {
@@ -104,18 +107,20 @@ impl Session {
         } = Config::load(config_path)?;
         // https://no-color.org: set and not empty.
         config.theme.no_color = env.no_color_var.as_ref().is_some_and(|v| !v.is_empty());
-        let home = env.home.as_deref();
-        let taskrc = match config
+        let taskrc_file = config
             .taskwarrior
-            .resolve_taskrc_path(env.taskrc_var.clone(), home)?
-        {
-            Some(path) => Taskrc::load(&path, &env)?,
-            None => Taskrc::default(),
-        };
-        let data_dir =
-            config
-                .taskwarrior
-                .resolve_data_location(env.taskdata_var.clone(), &taskrc, home)?;
+            .resolve_taskrc_path(env.taskrc_var.clone(), env.home.as_deref())?
+            .map(|path| TaskrcFile::new(path, env.clone()));
+        let taskrc = taskrc_file
+            .as_ref()
+            .map(TaskrcFile::load)
+            .transpose()?
+            .unwrap_or_default();
+        let data_dir = config.taskwarrior.resolve_data_location(
+            env.taskdata_var.clone(),
+            &taskrc,
+            env.home.as_deref(),
+        )?;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
 
         let mut warnings = Vec::new();
@@ -134,6 +139,7 @@ impl Session {
             config,
             warnings,
             taskchampion,
+            taskrc: taskrc_file,
         })
     }
 }
@@ -189,8 +195,9 @@ where
             config,
             mut warnings,
             mut taskchampion,
+            taskrc,
         } = session;
-        let mut sync_handler = SyncHandler::new();
+        let mut sync_handler = SyncHandler::new(taskrc);
         sync_handler.initialize(&taskchampion)?;
         ui.load_tasks(&mut taskchampion).await?;
 

@@ -529,14 +529,8 @@ impl AppUI {
                 }
             }
             Action::SyncConfig => {
-                if sync_handler.is_sync_configured(taskchampion) {
-                    self.set_status_message(format!(
-                        "ℹ️ Sync already configured. Press {} to sync.",
-                        self.key_label(GlobalAction::Sync)
-                    ));
-                } else {
-                    self.sync_config_widget.activate();
-                }
+                self.sync_config_widget
+                    .activate(taskchampion.sync_settings());
             }
             Action::Filter => {
                 if matches!(self.current_view, AppView::TaskList) {

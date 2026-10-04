@@ -57,7 +57,7 @@ impl Driver {
         let tmp = tempfile::tempdir()?;
         let mut ui = AppUI::new(&cfg)?;
         ui.show_config_warnings(startup_warnings);
-        let mut sync_handler = SyncHandler::new();
+        let mut sync_handler = SyncHandler::new(None);
         let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;
         let terminal = Terminal::new(TestBackend::new(width, height))?;

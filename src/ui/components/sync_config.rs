@@ -10,19 +10,11 @@ use ratatui::{
 };
 
 use crate::handlers::input::Action;
+use crate::taskchampion::SyncSettings;
 use crate::ui::theme::Theme;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SyncConfigType {
-    Server,
-    Local,
-    GCP,
-    AWS,
-}
 
 #[derive(Debug, Clone)]
 pub struct SyncConfig {
-    pub config_type: SyncConfigType,
     pub server_url: String,
     pub client_id: String,
     pub encryption_secret: String,
@@ -90,8 +82,19 @@ impl SyncConfigWidget {
         self.active
     }
 
-    pub fn activate(&mut self) {
+    /// Opens the modal, filled in with `in_effect` when it is a sync server.
+    pub fn activate(&mut self, in_effect: Option<&SyncSettings>) {
         self.active = true;
+        if let Some(SyncSettings::Server {
+            url,
+            client_id,
+            encryption_secret,
+        }) = in_effect
+        {
+            self.server_url = url.clone();
+            self.client_id = client_id.clone();
+            self.encryption_secret = encryption_secret.clone();
+        }
     }
 
     pub fn deactivate(&mut self) {
@@ -111,7 +114,6 @@ impl SyncConfigWidget {
             Action::Back => return Ok(Some(SyncConfigResult::Cancel)),
             Action::Select => {
                 let config = SyncConfig {
-                    config_type: SyncConfigType::Server,
                     server_url: self.server_url.trim().to_string(),
                     client_id: self.client_id.trim().to_string(),
                     encryption_secret: self.encryption_secret.clone(),

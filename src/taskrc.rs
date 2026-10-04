@@ -1,9 +1,9 @@
-//! Read-only view of Taskwarrior's taskrc, see taskrc(5) and task-sync(5).
+//! Taskwarrior's taskrc, see taskrc(5) and task-sync(5).
 
-use anyhow::{bail, Context, Result};
-use std::collections::HashMap;
-use std::fs;
-use std::io::ErrorKind;
+use anyhow::{bail, ensure, Context, Result};
+use std::collections::{BTreeMap, HashMap};
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use crate::app::LaunchEnv;
@@ -14,12 +14,83 @@ use crate::utils::helpers::expand_tilde;
 /// include cycles.
 const MAX_INCLUDE_DEPTH: usize = 10;
 
+const ENCRYPTION_SECRET: &str = "sync.encryption_secret";
+
+/// A taskrc on disk, with the launch environment its includes and values
+/// resolve against.
+#[derive(Debug, Clone)]
+pub struct TaskrcFile {
+    path: PathBuf,
+    env: LaunchEnv,
+}
+
+impl TaskrcFile {
+    pub fn new(path: PathBuf, env: LaunchEnv) -> Self {
+        TaskrcFile { path, env }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn load(&self) -> Result<Taskrc> {
+        Taskrc::load(&self.path, &self.env)
+    }
+
+    /// Sets each key to its value. A key already assigned is changed on the
+    /// line of the assignment in effect, in whichever file holds it, keeping
+    /// that line's comment; a key assigned nowhere is appended to this file,
+    /// which is created readable only by its owner when missing. A key that
+    /// already reads as its value is left alone.
+    ///
+    /// Nothing is written when a value would not read back as given, or
+    /// when `sync.encryption_secret` would go into a file other users can
+    /// read.
+    pub fn set(&self, assignments: &[(&str, &str)]) -> Result<()> {
+        let taskrc = self.load()?;
+        let mut edits: BTreeMap<&Path, Vec<(usize, String)>> = BTreeMap::new();
+        let mut appended = String::new();
+        for &(key, value) in assignments {
+            ensure_reads_back(key, value, &self.env)?;
+            let current = taskrc.values.get(key);
+            if current.is_some_and(|assigned| assigned.value == value) {
+                continue;
+            }
+            if key == ENCRYPTION_SECRET {
+                ensure_private(current.map_or(&self.path, |assigned| &assigned.file))?;
+            }
+            match current {
+                Some(assigned) => edits
+                    .entry(&assigned.file)
+                    .or_default()
+                    .push((assigned.line, format!("{key}={value}"))),
+                None => appended.push_str(&format!("{key}={value}\n")),
+            }
+        }
+        for (file, lines) in edits {
+            replace_lines(file, &lines)?;
+        }
+        if !appended.is_empty() {
+            append(&self.path, &appended)?;
+        }
+        Ok(())
+    }
+}
+
 /// The settings of a taskrc and every file it includes, later assignments
 /// overriding earlier ones. As in Taskwarrior, a leading `~` and any
 /// `$NAME` variable in a value or include path are expanded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Taskrc {
-    values: HashMap<String, String>,
+    values: HashMap<String, Assignment>,
+}
+
+/// A key's value and the line that assigned it, by its index in `file`.
+#[derive(Debug, Clone, PartialEq)]
+struct Assignment {
+    value: String,
+    file: PathBuf,
+    line: usize,
 }
 
 impl Taskrc {
@@ -52,7 +123,14 @@ impl Taskrc {
                     bail!("{}: malformed entry '{}'", location(), line);
                 }
                 let value = expand(value.trim(), env).with_context(location)?;
-                self.values.insert(key.to_string(), value);
+                self.values.insert(
+                    key.to_string(),
+                    Assignment {
+                        value,
+                        file: path.to_path_buf(),
+                        line: index,
+                    },
+                );
             } else if let Some(target) = include_target(line) {
                 if depth + 1 == MAX_INCLUDE_DEPTH {
                     bail!(
@@ -78,7 +156,7 @@ impl Taskrc {
     fn get(&self, key: &str) -> Option<&str> {
         self.values
             .get(key)
-            .map(String::as_str)
+            .map(|assigned| assigned.value.as_str())
             .filter(|v| !v.is_empty())
     }
 
@@ -147,6 +225,89 @@ impl Taskrc {
             encryption_secret,
         }))
     }
+}
+
+/// Fails unless `key=value` written to a taskrc reads back as `value`.
+fn ensure_reads_back(key: &str, value: &str, env: &LaunchEnv) -> Result<()> {
+    let mut parsed = Taskrc::default();
+    let reads_back = !value.contains(['\n', '\r'])
+        && parsed
+            .parse(Path::new(key), &format!("{key}={value}"), env, 0)
+            .is_ok()
+        && parsed.get(key) == Some(value);
+    ensure!(
+        reads_back,
+        "{key} cannot be saved as entered: a taskrc value cannot be empty, contain '#' \
+         or start or end with a space, and a leading '~' or a '$NAME' in it expands"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+fn ensure_private(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = match fs::metadata(path) {
+        Ok(meta) => meta.permissions().mode(),
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(err).with_context(|| format!("Failed to read {}", path.display())),
+    };
+    ensure!(
+        mode & 0o044 == 0,
+        "Not saving {ENCRYPTION_SECRET} to {path}: other users can read it. Run `chmod 600 {path}`, \
+         then save again",
+        path = path.display()
+    );
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn ensure_private(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+/// Replaces each numbered line of `file` with its new text, keeping the
+/// line's comment and line ending.
+fn replace_lines(file: &Path, lines: &[(usize, String)]) -> Result<()> {
+    let contents =
+        fs::read_to_string(file).with_context(|| format!("Failed to read {}", file.display()))?;
+    let mut out = String::with_capacity(contents.len());
+    for (index, raw) in contents.split_inclusive('\n').enumerate() {
+        let Some((_, text)) = lines.iter().find(|(line, _)| *line == index) else {
+            out.push_str(raw);
+            continue;
+        };
+        let body = raw.trim_end_matches(['\n', '\r']);
+        let code = body.split('#').next().unwrap_or_default();
+        let comment = if code.len() == body.len() {
+            ""
+        } else {
+            &body[code.trim_end().len()..]
+        };
+        out.push_str(text);
+        out.push_str(comment);
+        out.push_str(&raw[body.len()..]);
+    }
+    fs::write(file, out).with_context(|| format!("Failed to write {}", file.display()))
+}
+
+/// Appends `lines` to `file`, first ending its last line when it has no
+/// line ending. A missing file is created readable only by its owner.
+fn append(file: &Path, lines: &str) -> Result<()> {
+    let ends_mid_line = match fs::read(file) {
+        Ok(contents) => contents.last().is_some_and(|&byte| byte != b'\n'),
+        Err(err) if err.kind() == ErrorKind::NotFound => false,
+        Err(err) => return Err(err).with_context(|| format!("Failed to read {}", file.display())),
+    };
+    let mut options = OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut handle = options
+        .open(file)
+        .with_context(|| format!("Failed to open {}", file.display()))?;
+    let separator = if ends_mid_line { "\n" } else { "" };
+    write!(handle, "{separator}{lines}")
+        .with_context(|| format!("Failed to write {}", file.display()))
 }
 
 fn include_target(line: &str) -> Option<&str> {

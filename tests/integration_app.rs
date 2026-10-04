@@ -30,6 +30,7 @@ impl Harness {
                 config,
                 warnings: Vec::new(),
                 taskchampion,
+                taskrc: None,
             },
             input,
         )

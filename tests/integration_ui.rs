@@ -34,7 +34,7 @@ async fn make_ui() -> (
     let tmp = tempfile::tempdir().expect("tempdir");
     let cfg = Config::default();
     let ui = AppUI::new(&cfg).expect("AppUI::new");
-    let sync_handler = SyncHandler::new();
+    let sync_handler = SyncHandler::new(None);
     let engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
         .await
         .expect("engine");
@@ -207,7 +207,7 @@ async fn render_session(mut session: Session) -> Terminal<TestBackend> {
         .expect("load_tasks");
     let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
     terminal
-        .draw(|f| ui.render_with_sync(f, &SyncHandler::new()))
+        .draw(|f| ui.render_with_sync(f, &SyncHandler::new(None)))
         .expect("draw");
     terminal
 }
@@ -221,6 +221,7 @@ async fn render_with_config(config: Config) -> Terminal<TestBackend> {
         config,
         warnings: Vec::new(),
         taskchampion,
+        taskrc: None,
     })
     .await
 }
