@@ -353,7 +353,7 @@ podman rm -f lazytask-sync-test
 
 ## Releasing
 
-Maintainers: see [docs/releasing.md](docs/releasing.md). Releases come from a release PR that [release-please](https://github.com/googleapis/release-please) keeps open on `master`; merging it tags the version, and [cargo-dist](https://github.com/axodotdev/cargo-dist) attaches the archives and installers to the GitHub Release.
+Maintainers: see [docs/releasing.md](docs/releasing.md). Releases come from a release PR that [release-please](https://github.com/googleapis/release-please) keeps open on `main`; merging it tags the version, and [cargo-dist](https://github.com/axodotdev/cargo-dist) attaches the archives and installers to the GitHub Release.
 
 ## Contributing
 

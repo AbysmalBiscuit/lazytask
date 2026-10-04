@@ -4,8 +4,8 @@
 # directory, which misplaces them inside a worktree. The defaults are correct.
 [defaults]
 branch_prefix = ""
-baseline_ref = "origin/master"
-pr_base = "master"
+baseline_ref = "origin/main"
+pr_base = "main"
 
 [github]
 issues_repo = "AbysmalBiscuit/lazytask"

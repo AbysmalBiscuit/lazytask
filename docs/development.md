@@ -477,7 +477,7 @@ When reporting issues, include:
 
 ## Release Process
 
-Releases come from a release PR that release-please keeps open on `master`. See [releasing.md](releasing.md) for the flow, versioning rules and artifacts.
+Releases come from a release PR that release-please keeps open on `main`. See [releasing.md](releasing.md) for the flow, versioning rules and artifacts.
 
 ## Resources
 
