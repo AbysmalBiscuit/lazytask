@@ -153,7 +153,10 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
         .draw(|f| ui.render_with_sync(f, &sync_handler))
         .expect("draw");
 
-    assert!(buffer_contains(&terminal, "ui.colour"), "ui.colour not shown");
+    assert!(
+        buffer_contains(&terminal, "ui.colour"),
+        "ui.colour not shown"
+    );
     assert!(
         buffer_contains(&terminal, "taskwarrior.sync_enabled"),
         "taskwarrior.sync_enabled not shown"
