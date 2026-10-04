@@ -39,13 +39,14 @@ impl TaskrcFile {
 
     /// Sets each changed key on the line that assigns it, or its deprecated
     /// synonym, in whichever file holds it, or appends it to this file,
-    /// created mode 0600 when missing.
-    /// Writes nothing when a value would not read back as given, or when
-    /// `sync.encryption_secret` would go into a file others can read.
+    /// created mode 0600 when missing. A file that gets `sync.encryption_secret`
+    /// is first made mode 0600 when others can read it. Writes nothing when a
+    /// value would not read back as given or that file cannot be made private.
     pub fn set(&self, assignments: &[(&str, &str)]) -> Result<()> {
         let taskrc = self.load()?;
         let mut edits: BTreeMap<&Path, Vec<(usize, String)>> = BTreeMap::new();
         let mut appended = Vec::new();
+        let mut secret_file = None;
         for &(key, value) in assignments {
             ensure_reads_back(key, value, &self.env)?;
             let current = taskrc
@@ -56,7 +57,7 @@ impl TaskrcFile {
                 continue;
             }
             if key == ENCRYPTION_SECRET {
-                ensure_private(current.map_or(&self.path, |assigned| &assigned.file))?;
+                secret_file = Some(current.map_or(&self.path, |assigned| &assigned.file));
             }
             match current {
                 Some(assigned) => edits
@@ -65,6 +66,9 @@ impl TaskrcFile {
                     .push((assigned.line, format!("{key}={value}"))),
                 None => appended.push(format!("{key}={value}")),
             }
+        }
+        if let Some(file) = secret_file {
+            make_private(file)?;
         }
         for (file, lines) in edits {
             replace_lines(file, &lines)?;
@@ -242,24 +246,28 @@ fn ensure_reads_back(key: &str, value: &str, env: &LaunchEnv) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn ensure_private(path: &Path) -> Result<()> {
+/// Sets an existing `path` that other users can read to mode 0600.
+fn make_private(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let mode = match fs::metadata(path) {
         Ok(meta) => meta.permissions().mode(),
         Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
         Err(err) => return Err(err).with_context(|| format!("Failed to read {}", path.display())),
     };
-    ensure!(
-        mode & 0o044 == 0,
-        "Not saving {ENCRYPTION_SECRET} to {path}: other users can read it. Run `chmod 600 {path}`, \
-         then save again",
-        path = path.display()
-    );
-    Ok(())
+    if mode & 0o044 == 0 {
+        return Ok(());
+    }
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).with_context(|| {
+        format!(
+            "Not saving {ENCRYPTION_SECRET} to {path}: other users can read it. Run `chmod 600 \
+             {path}`, then save again",
+            path = path.display()
+        )
+    })
 }
 
 #[cfg(not(unix))]
-fn ensure_private(_path: &Path) -> Result<()> {
+fn make_private(_path: &Path) -> Result<()> {
     Ok(())
 }
 

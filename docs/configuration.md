@@ -146,6 +146,7 @@ The sync config modal (`Shift+S`) opens filled in with the taskrc's `sync.server
 - A key assigned nowhere is appended to the main taskrc, using its line ending (`\n` or `\r\n`). With no taskrc at that path, one is created holding only the sync keys, readable only by you (mode 0600).
 - A key whose value did not change is left as written, so a value given as `$NAME` or `~/...` keeps that form.
 - Every other line, comment and include stays as it was.
+- The file that gets `sync.encryption_secret` is set to mode 0600 first when other users can read it.
 
 lazytask then syncs to the target the saved taskrc selects. While the taskrc also sets `sync.local.server_dir`, `sync.aws.bucket` or `sync.gcp.bucket`, that target still wins, as it does for `task sync`, and the footer says so until you remove it.
 
@@ -153,7 +154,7 @@ A save is refused, and nothing is written, when:
 
 - A field is empty, or the client ID is not a UUID
 - A value would not read back as typed: a taskrc value cannot contain `#` or start or end with a space, and a leading `~` or a `$NAME` in it expands
-- `sync.encryption_secret` would go into a file other users can read. Run `chmod 600` on the file the message names, then save again
+- `sync.encryption_secret` would go into a file other users can read, and lazytask cannot change its mode, for example because you do not own it. Make the file the message names private with `chmod 600`, then save again
 
 ### Keybindings
 

@@ -682,21 +682,43 @@ fn save_new_server(app: &Driver, secret: &str) {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn saving_refuses_to_put_the_secret_in_a_file_others_can_read() -> Result<()> {
+async fn saving_the_secret_makes_a_file_others_can_read_private() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
     let fx = Fixture::new()?;
-    let contents = "color=on\n";
-    let taskrc = fx.write("taskrc", contents)?;
+    let taskrc = fx.write("taskrc", "color=on\n")?;
     set_mode(&taskrc, 0o644)?;
 
     let mut app = fx.launch(&taskrc).await?;
     save_new_server(&app, "s3cret");
-    let screen = app.wait_for("chmod 600").await?;
+    app.wait_for("Sync settings saved").await?;
 
-    assert!(
-        screen.contains(&taskrc.display().to_string()),
-        "refusal does not name the file:\n{screen}"
+    assert_eq!(
+        std::fs::metadata(&taskrc)?.permissions().mode() & 0o777,
+        0o600
     );
-    assert_eq!(std::fs::read_to_string(&taskrc)?, contents);
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!("color=on\n{}", server_block(CLIENT_ID, "s3cret"))
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn saving_refuses_the_secret_when_the_file_cannot_be_made_private() -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let fx = Fixture::new()?;
+    // /dev/null is readable by everyone and owned by root, so chmod fails for
+    // anyone else. Its owner would change its mode, so the test skips then.
+    let shared = Path::new("/dev/null");
+    let own_uid = std::fs::metadata(fx.write("probe", "")?)?.uid();
+    if std::fs::metadata(shared)?.uid() == own_uid {
+        return Ok(());
+    }
+
+    let mut app = fx.launch(shared).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Run `chmod 600 /dev/null`").await?;
     Ok(())
 }
 
