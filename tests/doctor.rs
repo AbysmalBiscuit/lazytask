@@ -413,16 +413,16 @@ fn taskrc_in_an_unsearchable_directory_fails() {
     assert!(!run.success, "exited zero:\n{}", run.stdout);
 }
 
-/// An HTTP server answering every request with a 404 whose body is `body`,
-/// as taskchampion-sync-server does when it has no version to give.
-struct NotFoundServer {
+/// An HTTP server answering every request with `response`, a full HTTP
+/// response, standing in for taskchampion-sync-server.
+struct StubServer {
     url: String,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     requests: std::thread::JoinHandle<Vec<String>>,
 }
 
-impl NotFoundServer {
-    fn start(body: &'static str) -> Self {
+impl StubServer {
+    fn start(response: String) -> Self {
         use std::io::{BufRead, BufReader, ErrorKind, Write};
         use std::sync::atomic::Ordering;
 
@@ -453,15 +453,11 @@ impl NotFoundServer {
                 while reader.read_line(&mut line).unwrap() > 2 {
                     line.clear();
                 }
-                let response = format!(
-                    "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
                 reader.get_mut().write_all(response.as_bytes()).unwrap();
                 requests.push(request_line);
             }
         });
-        NotFoundServer {
+        StubServer {
             url,
             stop,
             requests,
@@ -475,10 +471,19 @@ impl NotFoundServer {
     }
 }
 
-/// `doctor --sync` against a server answering 404 with `body`: the run and
-/// its Sync server check.
-fn sync_against_not_found(body: &'static str) -> (Run, String) {
-    let server = NotFoundServer::start(body);
+/// A 404 with `body`, as taskchampion-sync-server answers when it has no
+/// version to give.
+fn not_found(body: &str) -> String {
+    format!(
+        "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+/// `doctor --sync` against a server answering `response`: the run and its
+/// Sync server check.
+fn sync_against(response: String) -> (Run, String) {
+    let server = StubServer::start(response);
     let doctor = Doctor::new();
     sync_server_taskrc(&doctor, &server.url);
 
@@ -498,7 +503,7 @@ fn sync_against_not_found(body: &'static str) -> (Run, String) {
 
 #[test]
 fn with_sync_flag_a_server_answering_not_found_is_a_warning() {
-    let (run, check) = sync_against_not_found("");
+    let (run, check) = sync_against(not_found(""));
 
     assert!(check.starts_with("[warn]"), "{check}");
     assert!(check.contains("cannot confirm"), "{check}");
@@ -507,7 +512,7 @@ fn with_sync_flag_a_server_answering_not_found_is_a_warning() {
 
 #[test]
 fn with_sync_flag_an_unknown_client_is_named() {
-    let (run, check) = sync_against_not_found("no such client");
+    let (run, check) = sync_against(not_found("no such client"));
 
     assert!(check.starts_with("[warn]"), "{check}");
     assert!(
@@ -520,7 +525,7 @@ fn with_sync_flag_an_unknown_client_is_named() {
 
 #[test]
 fn with_sync_flag_a_known_client_without_history_is_named() {
-    let (run, check) = sync_against_not_found("no such version");
+    let (run, check) = sync_against(not_found("no such version"));
 
     assert!(check.starts_with("[warn]"), "{check}");
     assert!(
@@ -528,4 +533,25 @@ fn with_sync_flag_a_known_client_without_history_is_named() {
         "{check}"
     );
     assert!(run.success, "exited non-zero:\n{}", run.stdout);
+}
+
+#[test]
+fn with_sync_flag_history_the_secret_cannot_decrypt_fails() {
+    let body = "garbage";
+    let (run, check) = sync_against(format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: application/vnd.taskchampion.history-segment\r\n\
+         X-Version-Id: 6f3c0b5e-0f4e-4a7e-9a59-1c1f3b9a2d11\r\n\
+         X-Parent-Version-Id: 00000000-0000-0000-0000-000000000000\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
+
+    assert!(check.starts_with("[fail]"), "{check}");
+    assert!(
+        check.contains("its history does not decrypt with sync.encryption_secret"),
+        "{check}"
+    );
+    assert!(!check.contains("unreachable"), "{check}");
+    assert!(!run.success, "exited zero:\n{}", run.stdout);
 }

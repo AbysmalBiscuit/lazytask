@@ -10,6 +10,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use reqwest::StatusCode;
+
 use taskchampion::server::GetVersionResult;
 use taskchampion::storage::AccessMode;
 use taskchampion::{Replica, ServerConfig, SqliteStorage, Uuid};
@@ -408,14 +410,9 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
             check.note("reachable, and the encryption secret decrypts its history")
         }
         Ok(Ok(GetVersionResult::NoSuchVersion)) => {
-            let reason = match &remote {
-                Some((url, client_id)) => {
-                    tokio::time::timeout(SERVER_TIMEOUT, not_found_reason(url, *client_id))
-                        .await
-                        .ok()
-                        .flatten()
-                }
-                None => None,
+            let reason = match raw_first_version(remote.as_ref()).await {
+                Some((status, body)) if status == StatusCode::NOT_FOUND => Some(body),
+                _ => None,
             };
             match (reason.as_deref(), remote) {
                 (Some("no such client"), Some((_, client_id))) => check.warn(format!(
@@ -432,7 +429,13 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
                 ),
             }
         }
-        Ok(Err(err)) => check.fail(format!("unreachable or refused: {err:#}")),
+        Ok(Err(err)) => match raw_first_version(remote.as_ref()).await {
+            Some((status, _)) if status == StatusCode::OK => check.fail(format!(
+                "the server answered, but its history does not decrypt with \
+                 sync.encryption_secret: {err:#}"
+            )),
+            _ => check.fail(format!("unreachable or refused: {err:#}")),
+        },
         Err(_) => check.fail(format!(
             "no answer within {} seconds",
             SERVER_TIMEOUT.as_secs()
@@ -449,24 +452,30 @@ async fn first_version(config: ServerConfig) -> anyhow::Result<GetVersionResult>
     Ok(server.get_child_version(Uuid::nil()).await?)
 }
 
-/// The body of a taskchampion-sync-server's 404 for the client's first
-/// version: `no such client` or `no such version`. Only the body tells an
-/// unknown client from one with no history; TaskChampion reads both as no
-/// such version. `None` when the answer is not a 404 with a text body.
-async fn not_found_reason(url: &str, client_id: Uuid) -> Option<String> {
+/// What the taskchampion-sync-server at `remote` (URL, client id) answers
+/// for the first version, read directly: TaskChampion drops a 404 body and
+/// reports every failure as one error kind. A 200 means the server holds
+/// history for the client; a 404 body of `no such client` or `no such
+/// version` tells an unknown client from one with no history.
+async fn raw_first_version(remote: Option<&(String, Uuid)>) -> Option<(StatusCode, String)> {
+    let (url, client_id) = remote?;
     let url = format!(
         "{}/v1/client/get-child-version/{}",
         url.trim_end_matches('/'),
         Uuid::nil()
     );
-    let response = reqwest::Client::new()
-        .get(url)
-        .header("X-Client-Id", client_id.to_string())
-        .send()
+    let request = async {
+        let response = reqwest::Client::new()
+            .get(url)
+            .header("X-Client-Id", client_id.to_string())
+            .send()
+            .await
+            .ok()?;
+        let status = response.status();
+        Some((status, response.text().await.ok()?))
+    };
+    tokio::time::timeout(SERVER_TIMEOUT, request)
         .await
-        .ok()?;
-    if response.status() != reqwest::StatusCode::NOT_FOUND {
-        return None;
-    }
-    response.text().await.ok()
+        .ok()
+        .flatten()
 }
