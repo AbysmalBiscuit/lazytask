@@ -54,6 +54,25 @@ fn missing_config_file_runs_on_defaults_and_writes_nothing() -> anyhow::Result<(
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn unreadable_config_directory_is_an_error_not_defaults() -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = tempdir()?;
+    let config_dir = temp_dir.path().join("lazytask");
+    std::fs::create_dir(&config_dir)?;
+    let config_path = config_dir.join("config.toml");
+    std::fs::write(&config_path, "[ui]\nshow_help_bar = false\n")?;
+    std::fs::set_permissions(&config_dir, std::fs::Permissions::from_mode(0o000))?;
+
+    let result = Config::load(Some(config_path.to_str().unwrap()));
+
+    std::fs::set_permissions(&config_dir, std::fs::Permissions::from_mode(0o755))?;
+    assert!(result.is_err(), "loaded {:?}", result.map(|l| l.config));
+    Ok(())
+}
+
 #[test]
 fn unknown_keys_load_and_are_reported_by_dotted_path() -> anyhow::Result<()> {
     let loaded = load_toml(

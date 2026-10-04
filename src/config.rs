@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -118,15 +119,20 @@ impl Config {
             Self::default_config_path()?
         };
 
-        if !config_file_path.exists() {
-            return Ok(LoadedConfig {
-                config: Config::default(),
-                unknown_keys: Vec::new(),
-            });
-        }
-
-        let config_contents = fs::read_to_string(&config_file_path)
-            .with_context(|| format!("Failed to read config file: {:?}", config_file_path))?;
+        let config_contents = match fs::read_to_string(&config_file_path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                return Ok(LoadedConfig {
+                    config: Config::default(),
+                    unknown_keys: Vec::new(),
+                });
+            }
+            Err(err) => {
+                return Err(err).with_context(|| {
+                    format!("Failed to read config file: {:?}", config_file_path)
+                });
+            }
+        };
 
         let mut unknown_keys = Vec::new();
         let config = toml::de::Deserializer::parse(&config_contents)
