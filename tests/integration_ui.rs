@@ -141,7 +141,7 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     assert!(!loaded.config.ui.show_help_bar);
 
     let mut ui = AppUI::new(&loaded.config).expect("AppUI::new");
-    ui.warn_unknown_config_keys(&loaded.unknown_keys);
+    ui.show_config_warnings(&loaded.unknown_keys);
     let sync_handler = SyncHandler::new();
     let mut engine = TaskChampionIntegration::new(tmp.path().join("data"))
         .await

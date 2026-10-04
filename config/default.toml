@@ -31,30 +31,46 @@ task_list_columns = [
 taskrc_path = ""
 data_location = ""
 
+# Key syntax and every action: docs/keybindings.md
 [keybindings.global]
 quit = "q"
+force_quit = "Ctrl+c"
 help = "F1"
 refresh = "F5"
-force_quit = "Ctrl+c"
+back = "Esc"
+reports = "r"
+sync = "s"
+sync_config = "S"
+# force_sync has no default key
+# force_sync = "Ctrl+s"
 
 [keybindings.task_list]
+move_up = "Up"
+move_down = "Down"
 add_task = "a"
 edit_task = "e"
 done_task = "d"
 delete_task = "Delete"
+filter = "/"
+
+[keybindings.reports]
+toggle_calendar = "c"
+prev_day = "Left"
+next_day = "Right"
+prev_week = "Up"
+next_week = "Down"
+prev_month = "<"
+next_month = ">"
+today = "t"
+
+[keybindings.form]
+next_field = "Tab"
+prev_field = "Shift+Tab"
 move_up = "Up"
 move_down = "Down"
 move_left = "Left"
 move_right = "Right"
-select = "Enter"
-back = "Esc"
-filter = "/"
-context = "c"
-reports = "r"
-
-[keybindings.task_detail]
-save = "Ctrl+s"
+toggle = "Space"
+erase = "Backspace"
+confirm = "Enter"
 cancel = "Esc"
-next_field = "Tab"
-prev_field = "Shift+Tab"
-

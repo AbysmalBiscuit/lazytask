@@ -15,7 +15,8 @@ use crate::ui::components::sync_config::{SyncConfigResult, SyncConfigWidget};
 use crate::ui::components::sync_status::SyncStatusWidget;
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
 use crate::ui::views::main_view::MainView;
-use crate::ui::views::reports_view::ReportsView;
+use crate::ui::views::reports_view::{DateNavigation, ReportsView};
+use crate::utils::keybindings::{InputContext, Keymap, Section};
 
 pub enum AppView {
     TaskList,
@@ -39,10 +40,13 @@ pub struct AppUI {
     status_message_at: Option<std::time::Instant>,
     needs_task_refresh: bool,
     preserve_selection_uuid: Option<String>,
+    keymap: Keymap,
+    keymap_warnings: Vec<String>,
 }
 
 impl AppUI {
-    pub fn new(_config: &crate::config::Config) -> Result<Self> {
+    pub fn new(config: &crate::config::Config) -> Result<Self> {
+        let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings);
         Ok(AppUI {
             current_view: AppView::TaskList,
             main_view: MainView::new(),
@@ -57,6 +61,8 @@ impl AppUI {
             status_message_at: None,
             needs_task_refresh: false,
             preserve_selection_uuid: None,
+            keymap,
+            keymap_warnings,
         })
     }
 
@@ -91,14 +97,40 @@ impl AppUI {
             || self.sync_config_widget.is_active()
     }
 
+    /// Where the next key press goes, which decides the bindings it uses.
+    pub fn input_context(&self) -> InputContext {
+        if self.has_active_form() {
+            return InputContext::Form;
+        }
+        match self.current_view {
+            AppView::TaskList => InputContext::TaskList,
+            AppView::Reports => InputContext::Reports,
+            AppView::TaskDetail | AppView::Settings | AppView::Help => InputContext::Other,
+        }
+    }
+
+    /// The key bound to `action` in `section`, for hints such as "Press S".
+    fn key_label(&self, section: Section, action: &str) -> String {
+        self.keymap
+            .key(section, action)
+            .map_or_else(|| "(unbound)".to_string(), |key| key.to_string())
+    }
+
     pub fn set_status_message(&mut self, message: String) {
         self.status_message = Some(message);
         self.status_message_at = Some(std::time::Instant::now());
     }
 
-    pub fn warn_unknown_config_keys(&mut self, keys: &[String]) {
-        if !keys.is_empty() {
-            self.set_status_message(format!("⚠ Unknown config keys: {}", keys.join(", ")));
+    /// Shows one warning naming every config entry lazytask could not use:
+    /// `unknown_keys` from loading the file, then unusable keybindings.
+    pub fn show_config_warnings(&mut self, unknown_keys: &[String]) {
+        let mut warnings = Vec::new();
+        if !unknown_keys.is_empty() {
+            warnings.push(format!("Unknown config keys: {}", unknown_keys.join(", ")));
+        }
+        warnings.extend(self.keymap_warnings.iter().cloned());
+        if !warnings.is_empty() {
+            self.set_status_message(format!("⚠ {}", warnings.join("; ")));
         }
     }
 
@@ -297,9 +329,20 @@ impl AppUI {
             Action::Reports => {
                 self.current_view = AppView::Reports;
             }
-            Action::Context => {
+            Action::ToggleCalendar => {
                 if matches!(self.current_view, AppView::Reports) {
                     self.reports_view.toggle_mode();
+                }
+            }
+            Action::PrevMonth | Action::NextMonth | Action::Today => {
+                if matches!(self.current_view, AppView::Reports)
+                    && self.reports_view.is_calendar_mode()
+                {
+                    self.reports_view.navigate_date(match action {
+                        Action::PrevMonth => DateNavigation::PrevMonth,
+                        Action::NextMonth => DateNavigation::NextMonth,
+                        _ => DateNavigation::Today,
+                    });
                 }
             }
             Action::Back => {
@@ -365,9 +408,10 @@ impl AppUI {
             }
             Action::Sync => {
                 if !sync_handler.is_sync_configured(taskchampion) {
-                    self.set_status_message(
-                        "ℹ️ Sync not configured. Press Shift+S to configure.".to_string(),
-                    );
+                    self.set_status_message(format!(
+                        "ℹ️ Sync not configured. Press {} to configure.",
+                        self.key_label(Section::Global, "sync_config")
+                    ));
                 } else {
                     self.show_sync_overlay = true;
                     if let Err(e) = sync_handler.start_sync(taskchampion).await {
@@ -378,9 +422,10 @@ impl AppUI {
             }
             Action::ForceSync => {
                 if !sync_handler.is_sync_configured(taskchampion) {
-                    self.set_status_message(
-                        "ℹ️ Sync not configured. Press Shift+S to configure.".to_string(),
-                    );
+                    self.set_status_message(format!(
+                        "ℹ️ Sync not configured. Press {} to configure.",
+                        self.key_label(Section::Global, "sync_config")
+                    ));
                 } else {
                     self.show_sync_overlay = true;
                     if let Err(e) = sync_handler.force_sync(taskchampion).await {
@@ -391,9 +436,10 @@ impl AppUI {
             }
             Action::SyncConfig => {
                 if sync_handler.is_sync_configured(taskchampion) {
-                    self.set_status_message(
-                        "ℹ️ Sync already configured. Press 's' to sync.".to_string(),
-                    );
+                    self.set_status_message(format!(
+                        "ℹ️ Sync already configured. Press {} to sync.",
+                        self.key_label(Section::Global, "sync")
+                    ));
                 } else {
                     self.sync_config_widget.activate();
                 }
@@ -436,33 +482,9 @@ impl AppUI {
                         }
                         _ => {}
                     }
-                } else if self.task_form.is_none() {
-                    if matches!(self.current_view, AppView::Reports)
-                        && self.reports_view.is_calendar_mode()
-                    {
-                        match action {
-                            Action::Character('<') => {
-                                self.reports_view.navigate_date(
-                                    crate::ui::views::reports_view::DateNavigation::PrevMonth,
-                                );
-                            }
-                            Action::Character('>') => {
-                                self.reports_view.navigate_date(
-                                    crate::ui::views::reports_view::DateNavigation::NextMonth,
-                                );
-                            }
-                            Action::Character('t') => {
-                                self.reports_view.navigate_date(
-                                    crate::ui::views::reports_view::DateNavigation::Today,
-                                );
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if matches!(self.current_view, AppView::TaskList) {
-                        self.handle_task_list_action(action, taskchampion).await?;
-                    }
+                } else if self.task_form.is_none() && matches!(self.current_view, AppView::TaskList)
+                {
+                    self.handle_task_list_action(action, taskchampion).await?;
                 }
             }
         }

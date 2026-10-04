@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use lazytask::config::{Config, LoadedConfig};
+use lazytask::utils::keybindings::Keymap;
 use tempfile::tempdir;
 
 fn load_toml(contents: &str) -> anyhow::Result<LoadedConfig> {
@@ -93,6 +94,8 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
     let loaded = load_toml(include_str!("../../config/default.toml"))?;
 
     assert_eq!(loaded.unknown_keys, Vec::<String>::new());
+    let (_, keymap_warnings) = Keymap::from_config(&loaded.config.keybindings);
+    assert_eq!(keymap_warnings, Vec::<String>::new());
     assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
     assert_eq!(loaded.config.taskwarrior.data_location, None);
     Ok(())

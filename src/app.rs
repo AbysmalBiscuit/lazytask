@@ -44,7 +44,7 @@ impl App {
         let taskchampion = TaskChampionIntegration::new(data_dir).await?;
         let sync_handler = SyncHandler::new();
         let mut ui = AppUI::new(&config)?;
-        ui.warn_unknown_config_keys(&unknown_keys);
+        ui.show_config_warnings(&unknown_keys);
         let input_handler = InputHandler::new(&config);
 
         Ok(App {
@@ -74,10 +74,9 @@ impl App {
             if event::poll(Duration::from_millis(250))? {
                 match event::read()? {
                     Event::Key(key) => {
-                        let in_form = self.ui.has_active_form();
                         let action = self
                             .input_handler
-                            .handle_key_event_with_context(key, in_form);
+                            .handle_key_event_with_context(key, self.ui.input_context());
                         match action {
                             Action::Quit => {
                                 self.should_quit = true;

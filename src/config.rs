@@ -22,12 +22,15 @@ pub struct ThemeConfig {
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+/// Key overrides per section, action name to key string. Actions left out
+/// keep their default keys; see [`crate::utils::keybindings::ACTIONS`].
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct KeyBindingsConfig {
     pub global: HashMap<String, String>,
     pub task_list: HashMap<String, String>,
-    pub task_detail: HashMap<String, String>,
+    pub reports: HashMap<String, String>,
+    pub form: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -94,21 +97,6 @@ impl Default for ThemeConfig {
                 ("primary", "#89b4fa"),
                 ("secondary", "#f38ba8"),
             ]),
-        }
-    }
-}
-
-impl Default for KeyBindingsConfig {
-    fn default() -> Self {
-        KeyBindingsConfig {
-            global: string_map(&[("quit", "q"), ("help", "F1"), ("refresh", "F5")]),
-            task_list: string_map(&[
-                ("add_task", "a"),
-                ("edit_task", "e"),
-                ("done_task", "d"),
-                ("delete_task", "Delete"),
-            ]),
-            task_detail: HashMap::new(),
         }
     }
 }

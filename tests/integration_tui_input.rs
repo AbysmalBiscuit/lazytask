@@ -12,6 +12,7 @@ use lazytask::handlers::input::{Action, InputHandler};
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
+use lazytask::utils::keybindings::InputContext;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
 
@@ -27,9 +28,27 @@ struct Driver {
 
 impl Driver {
     async fn new(width: u16, height: u16) -> Result<Self> {
+        Self::with_config(width, height, Config::default(), &[]).await
+    }
+
+    /// Loads `toml` as a config file, wired up the way `App::new` does.
+    async fn from_toml(width: u16, height: u16, toml: &str) -> Result<Self> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, toml)?;
+        let loaded = Config::load(Some(path.to_str().unwrap()))?;
+        Self::with_config(width, height, loaded.config, &loaded.unknown_keys).await
+    }
+
+    async fn with_config(
+        width: u16,
+        height: u16,
+        cfg: Config,
+        unknown_keys: &[String],
+    ) -> Result<Self> {
         let tmp = tempfile::tempdir()?;
-        let cfg = Config::default();
-        let ui = AppUI::new(&cfg)?;
+        let mut ui = AppUI::new(&cfg)?;
+        ui.show_config_warnings(unknown_keys);
         let mut sync_handler = SyncHandler::new();
         let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;
@@ -61,8 +80,9 @@ impl Driver {
     /// Drives one keystroke through the same pipeline as App::run.
     async fn press(&mut self, code: KeyCode, mods: KeyModifiers) -> Result<Action> {
         let event = KeyEvent::new(code, mods);
-        let in_form = self.ui.has_active_form();
-        let action = self.input.handle_key_event_with_context(event, in_form);
+        let action = self
+            .input
+            .handle_key_event_with_context(event, self.ui.input_context());
         match action {
             Action::Quit => {
                 self.quit = true;
@@ -147,6 +167,102 @@ async fn ctrl_c_emits_quit_action() -> Result<()> {
         action
     );
     assert!(d.quit);
+    Ok(())
+}
+
+#[tokio::test]
+async fn rebinding_quit_to_ctrl_q_moves_quit_off_q() -> Result<()> {
+    let mut d = Driver::from_toml(120, 40, "[keybindings.global]\nquit = \"Ctrl+q\"\n").await?;
+    d.load().await?;
+
+    let action = d.ch('q').await?;
+    assert!(!matches!(action, Action::Quit), "q still quits");
+    assert!(!d.quit);
+
+    d.press(KeyCode::Char('q'), KeyModifiers::CONTROL).await?;
+    assert!(d.quit, "Ctrl+q should quit");
+    Ok(())
+}
+
+#[tokio::test]
+async fn unusable_keybindings_warn_and_keep_the_default() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        40,
+        "[keybindings.global]\nquit = \"Ctrl+Nope\"\nfrobnicate = \"x\"\n",
+    )
+    .await?;
+    d.load().await?;
+
+    d.assert_screen_has("keybindings.global.quit");
+    d.assert_screen_has("Ctrl+Nope");
+    d.assert_screen_has("keybindings.global.frobnicate");
+
+    d.ch('q').await?;
+    assert!(d.quit, "q should still quit");
+    Ok(())
+}
+
+#[tokio::test]
+async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
+    let d = Driver::from_toml(
+        120,
+        40,
+        "[keybindings.global]\nhelp = \"f2\"\nrefresh = \"Ctrl++\"\nreports = \"Alt+Home\"\n\n\
+         [keybindings.task_list]\nadd_task = \"Insert\"\ndone_task = \"Space\"\n\n\
+         [keybindings.form]\nnext_field = \"Shift+Tab\"\nprev_field = \"Ctrl+Shift+x\"\n",
+    )
+    .await?;
+
+    for (code, mods, context, expected) in [
+        (
+            KeyCode::F(2),
+            KeyModifiers::NONE,
+            InputContext::TaskList,
+            "Help",
+        ),
+        (
+            KeyCode::Char('+'),
+            KeyModifiers::CONTROL,
+            InputContext::TaskList,
+            "Refresh",
+        ),
+        (
+            KeyCode::Home,
+            KeyModifiers::ALT,
+            InputContext::TaskList,
+            "Reports",
+        ),
+        (
+            KeyCode::Insert,
+            KeyModifiers::NONE,
+            InputContext::TaskList,
+            "AddTask",
+        ),
+        (
+            KeyCode::Char(' '),
+            KeyModifiers::NONE,
+            InputContext::TaskList,
+            "DoneTask",
+        ),
+        (
+            KeyCode::BackTab,
+            KeyModifiers::SHIFT,
+            InputContext::Form,
+            "Tab",
+        ),
+        (
+            KeyCode::Char('X'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+            InputContext::Form,
+            "MoveUp",
+        ),
+    ] {
+        let action = d
+            .input
+            .handle_key_event_with_context(KeyEvent::new(code, mods), context);
+        assert_eq!(format!("{action:?}"), expected, "{code:?} with {mods:?}");
+    }
     Ok(())
 }
 
@@ -570,44 +686,25 @@ async fn d_then_d_advances_selection_to_next_task() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------
-// Known-bug regression test: ForceSync (Shift+s) is currently unreachable
+// Shifted letters: terminals differ in how they report Shift+s
 // ---------------------------------------------------------------------
 
 #[tokio::test]
-async fn shift_lowercase_s_does_not_emit_force_sync() -> Result<()> {
-    // crossterm reports Shift+'s' as Char('S'), not Char('s')+SHIFT modifier.
-    // The current handler checks `Char('s') if SHIFT` which is unreachable.
-    // This documents that and locks it down so a future "fix" doesn't
-    // silently re-introduce a wrong path.
+async fn shift_s_maps_to_sync_config_however_the_terminal_reports_it() -> Result<()> {
     let d = Driver::new(120, 40).await?;
-    let action = d.input.handle_key_event_with_context(
-        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::SHIFT),
-        false,
-    );
-    // The current implementation does match the SHIFT guard for Char('s'),
-    // so it returns ForceSync. But in reality crossterm never emits this
-    // event. So we just assert the binding is the one we expect.
-    assert!(
-        matches!(action, Action::ForceSync) || matches!(action, Action::Sync),
-        "Char('s')+SHIFT should map to ForceSync per current code (even if unreachable in practice). got {:?}",
-        action
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn capital_s_maps_to_sync_config_not_force_sync() -> Result<()> {
-    // What the user actually types when holding Shift: Char('S').
-    let d = Driver::new(120, 40).await?;
-    let action = d.input.handle_key_event_with_context(
-        KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
-        false,
-    );
-    assert!(
-        matches!(action, Action::SyncConfig),
-        "User pressing Shift+S sees Char('S') and should get SyncConfig. got {:?}",
-        action
-    );
+    for (code, mods) in [
+        (KeyCode::Char('S'), KeyModifiers::SHIFT),
+        (KeyCode::Char('S'), KeyModifiers::NONE),
+        (KeyCode::Char('s'), KeyModifiers::SHIFT),
+    ] {
+        let action = d
+            .input
+            .handle_key_event_with_context(KeyEvent::new(code, mods), InputContext::TaskList);
+        assert!(
+            matches!(action, Action::SyncConfig),
+            "{code:?} with {mods:?} should map to SyncConfig, got {action:?}"
+        );
+    }
     Ok(())
 }
 
