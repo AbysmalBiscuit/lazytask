@@ -47,19 +47,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/AbysmalBiscuit/laz
 
 ### Pre-built archives
 
-The same release carries an archive per platform, each holding the `lazytask` binary, `LICENSE` and `README.md`:
-
-| Platform | Archive |
-|---|---|
-| macOS Intel | `lazytask-x86_64-apple-darwin.tar.xz` |
-| macOS Apple Silicon | `lazytask-aarch64-apple-darwin.tar.xz` |
-| Linux x86_64 (glibc) | `lazytask-x86_64-unknown-linux-gnu.tar.xz` |
-| Linux x86_64 (musl, static) | `lazytask-x86_64-unknown-linux-musl.tar.xz` |
-| Windows x86_64 (MSVC) | `lazytask-x86_64-pc-windows-msvc.zip` |
-| Windows x86_64 (MinGW) | `lazytask-x86_64-pc-windows-gnu.zip` |
-| Windows i686 | `lazytask-i686-pc-windows-msvc.zip` |
-
-Each archive has a matching `.sha256` file, and `sha256.sum` lists the checksums of every file in the release.
+The same release carries an archive for each supported platform, holding the `lazytask` binary, `LICENSE` and `README.md`, with a matching `.sha256` file. [docs/releasing.md](docs/releasing.md#targets) lists the platforms and target triples.
 
 ### From source
 
