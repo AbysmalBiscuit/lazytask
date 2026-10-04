@@ -413,3 +413,54 @@ fn taskrc_in_an_unsearchable_directory_fails() {
     assert!(check.starts_with("[fail]"), "{check}");
     assert!(!run.success, "exited zero:\n{}", run.stdout);
 }
+
+#[test]
+fn with_sync_flag_a_server_answering_not_found_is_contacted_and_does_not_fail() {
+    use std::io::{BufRead, BufReader, Write};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    listener.set_nonblocking(true).unwrap();
+    let server = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "doctor --sync never contacted the server"
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(err) => panic!("accept: {err}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).unwrap();
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap() > 2 {
+            line.clear();
+        }
+        reader
+            .get_mut()
+            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        request_line
+    });
+    let doctor = Doctor::new();
+    sync_server_taskrc(&doctor, &url);
+
+    let run = doctor.run(&["--sync"]);
+
+    let request_line = server.join().unwrap();
+    assert!(
+        request_line.starts_with("GET /v1/client/get-child-version/"),
+        "{request_line}"
+    );
+    let check = run.check("Sync server");
+    assert!(!check.starts_with("[fail]"), "{check}");
+    assert!(run.success, "exited non-zero:\n{}", run.stdout);
+}
