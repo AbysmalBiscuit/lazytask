@@ -143,12 +143,16 @@ impl SyncHandler {
     ) -> Result<String> {
         match config.config_type {
             SyncConfigType::Server | SyncConfigType::Local => {
-                taskchampion.configure_sync(SyncSettings {
-                    server_url: config.server_url.clone(),
-                    client_id: config.client_id.clone(),
-                    encryption_secret: config.encryption_secret.clone(),
-                    local_server_dir: None,
-                })?;
+                let settings = if config.server_url.is_empty() {
+                    SyncSettings::Local { server_dir: None }
+                } else {
+                    SyncSettings::Server {
+                        url: config.server_url.clone(),
+                        client_id: config.client_id.clone(),
+                        encryption_secret: config.encryption_secret.clone(),
+                    }
+                };
+                taskchampion.configure_sync(settings)?;
                 if let Some(tx) = &self.sync_status_tx {
                     let mut s = tx.borrow().clone();
                     s.server_configured = true;

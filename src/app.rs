@@ -5,13 +5,17 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::{self, Stdout};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::{Config, LoadedConfig};
 use crate::handlers::input::Action;
 use crate::handlers::sync::SyncHandler;
 use crate::taskchampion::TaskChampionIntegration;
+use crate::taskrc::Taskrc;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -25,18 +29,106 @@ pub struct App {
     pub should_quit: bool,
 }
 
-impl App {
-    pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
+/// Where packaged Taskwarrior installs keep the rc files, such as themes,
+/// that a taskrc can include by bare name. Taskwarrior searches only the
+/// directory it was built with, so this covers the common builds.
+const PACKAGE_RC_DIRS: [&str; 4] = [
+    "/usr/share/taskwarrior",
+    "/usr/share/doc/task/rc",
+    "/usr/local/share/doc/task/rc",
+    "/opt/homebrew/share/doc/task/rc",
+];
+
+/// The parts of the process environment startup reads.
+#[derive(Debug, Clone, Default)]
+pub struct LaunchEnv {
+    /// `TASKRC`
+    pub taskrc_var: Option<OsString>,
+    /// `TASKDATA`
+    pub taskdata_var: Option<OsString>,
+    pub home: Option<PathBuf>,
+    pub cwd: Option<PathBuf>,
+    /// Environment variables, which taskrc paths and values may reference
+    /// as `$NAME`.
+    pub vars: HashMap<String, String>,
+    /// Package directories searched last for a relative taskrc include.
+    pub rc_dirs: Vec<PathBuf>,
+}
+
+impl LaunchEnv {
+    pub fn from_process() -> Self {
+        LaunchEnv {
+            taskrc_var: std::env::var_os("TASKRC"),
+            taskdata_var: std::env::var_os("TASKDATA"),
+            home: dirs::home_dir(),
+            cwd: std::env::current_dir().ok(),
+            vars: std::env::vars_os()
+                .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+                .collect(),
+            rc_dirs: PACKAGE_RC_DIRS.map(PathBuf::from).to_vec(),
+        }
+    }
+}
+
+/// Everything startup loads before the terminal is taken over: the config,
+/// the user's taskrc, and the replica they point at, with sync configured
+/// from the taskrc when it names a usable target.
+pub struct Session {
+    pub config: Config,
+    /// Problems that do not stop startup, for the UI to show.
+    pub warnings: Vec<String>,
+    pub taskchampion: TaskChampionIntegration,
+}
+
+impl Session {
+    pub async fn open(config_path: Option<&str>, env: LaunchEnv) -> Result<Self> {
         let LoadedConfig {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
-        let mut ui = AppUI::new(&config)?;
-        ui.show_config_warnings(&unknown_keys);
-        let data_dir = config
+        let home = env.home.as_deref();
+        let taskrc = match config
             .taskwarrior
-            .resolve_data_location(std::env::var_os("TASKDATA"), dirs::home_dir().as_deref())?;
-        let taskchampion = TaskChampionIntegration::new(data_dir).await?;
+            .resolve_taskrc_path(env.taskrc_var.clone(), home)?
+        {
+            Some(path) => Taskrc::load(&path, &env)?,
+            None => Taskrc::default(),
+        };
+        let data_dir =
+            config
+                .taskwarrior
+                .resolve_data_location(env.taskdata_var.clone(), &taskrc, home)?;
+        let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
+
+        let mut warnings = Vec::new();
+        if !unknown_keys.is_empty() {
+            warnings.push(format!("Unknown config keys: {}", unknown_keys.join(", ")));
+        }
+        let sync = taskrc.sync_settings().and_then(|settings| match settings {
+            Some(settings) => taskchampion.configure_sync(settings),
+            None => Ok(()),
+        });
+        if let Err(err) = sync {
+            warnings.push(format!("Sync settings in taskrc ignored: {err:#}"));
+        }
+
+        Ok(Session {
+            config,
+            warnings,
+            taskchampion,
+        })
+    }
+}
+
+impl App {
+    pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
+        let Session {
+            config,
+            warnings,
+            taskchampion,
+        } = Session::open(config_path, LaunchEnv::from_process()).await?;
+        let mut ui = AppUI::new(&config)?;
+        ui.show_config_warnings(&warnings);
         let sync_handler = SyncHandler::new();
 
         enable_raw_mode()?;

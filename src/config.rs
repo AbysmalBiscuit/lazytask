@@ -6,6 +6,9 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use crate::taskrc::Taskrc;
+use crate::utils::helpers::expand_tilde;
+
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -52,24 +55,42 @@ pub struct UIConfig {
 }
 
 impl TaskwarriorConfig {
+    /// The taskrc to read, first match wins: `taskrc_path`, then `taskrc_var`
+    /// (the `TASKRC` variable), then `~/.taskrc`. `None` when nothing names
+    /// one and there is no home directory.
+    pub fn resolve_taskrc_path(
+        &self,
+        taskrc_var: Option<OsString>,
+        home: Option<&Path>,
+    ) -> Result<Option<PathBuf>> {
+        let named = self
+            .taskrc_path
+            .clone()
+            .or_else(|| taskrc_var.filter(|v| !v.is_empty()).map(PathBuf::from));
+        match (named, home) {
+            (Some(path), _) => expand_tilde(&path, home).map(Some),
+            (None, Some(home)) => Ok(Some(home.join(".taskrc"))),
+            (None, None) => Ok(None),
+        }
+    }
+
     /// The TaskChampion data directory, first match wins: `data_location`,
-    /// then `taskdata` (the `TASKDATA` variable), then `~/.task`. A leading
-    /// `~` in the winning path expands to `home`, which is only required
-    /// when that expansion happens.
+    /// then `taskdata_var` (the `TASKDATA` variable), then the taskrc's
+    /// `data.location`, then `~/.task`. A leading `~` in the winning path
+    /// expands to `home`, which is only required when that expansion happens.
     pub fn resolve_data_location(
         &self,
-        taskdata: Option<OsString>,
+        taskdata_var: Option<OsString>,
+        taskrc: &Taskrc,
         home: Option<&Path>,
     ) -> Result<PathBuf> {
         let location = self
             .data_location
             .clone()
-            .or_else(|| taskdata.map(PathBuf::from))
+            .or_else(|| taskdata_var.map(PathBuf::from))
+            .or_else(|| taskrc.data_location())
             .unwrap_or_else(|| PathBuf::from("~/.task"));
-        match location.strip_prefix("~") {
-            Ok(rest) => Ok(home.context("Could not find home directory")?.join(rest)),
-            Err(_) => Ok(location),
-        }
+        expand_tilde(&location, home)
     }
 }
 

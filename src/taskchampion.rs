@@ -4,22 +4,51 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use taskchampion::server::AwsCredentials as TcAwsCredentials;
 use taskchampion::storage::AccessMode;
 use taskchampion::{Operations, Replica, ServerConfig, SqliteStorage, Status as TcStatus, Tag};
 use uuid::Uuid;
 
 use crate::data::models::{Priority, Task, TaskStatus};
 
-#[derive(Debug, Clone, Default)]
-pub struct SyncSettings {
-    pub server_url: String,
-    pub client_id: String,
-    pub encryption_secret: String,
-    /// Optional override for the local sync-server directory. When `server_url` is empty,
-    /// this path is used as a `ServerConfig::Local` target. Useful for testing two replicas
-    /// against one shared server directory. When `None`, defaults to `<data_dir>/sync-server`.
-    pub local_server_dir: Option<PathBuf>,
+/// Where a replica syncs to, one variant per TaskChampion backend.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncSettings {
+    /// A local sync-server directory, `<data_dir>/sync-server` when `None`.
+    Local { server_dir: Option<PathBuf> },
+    /// A taskchampion-sync-server; `client_id` must be a UUID.
+    Server {
+        url: String,
+        client_id: String,
+        encryption_secret: String,
+    },
+    /// A Google Cloud Storage bucket, with Application Default Credentials
+    /// when `credential_path` is `None`.
+    Gcp {
+        bucket: String,
+        credential_path: Option<String>,
+        encryption_secret: String,
+    },
+    /// An Amazon S3 bucket.
+    Aws {
+        region: String,
+        bucket: String,
+        credentials: AwsCredentials,
+        encryption_secret: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AwsCredentials {
+    AccessKey {
+        access_key_id: String,
+        secret_access_key: String,
+    },
+    /// A named profile from the AWS config files.
+    Profile(String),
+    /// The AWS SDK's default credential chain.
+    Default,
 }
 
 pub struct TaskChampionIntegration {
@@ -172,6 +201,10 @@ impl TaskChampionIntegration {
         self.sync_settings.is_some()
     }
 
+    pub fn sync_settings(&self) -> Option<&SyncSettings> {
+        self.sync_settings.as_ref()
+    }
+
     pub async fn sync(&mut self) -> Result<SyncResult> {
         let settings = self
             .sync_settings
@@ -201,24 +234,57 @@ impl TaskChampionIntegration {
     }
 }
 
-fn build_server_config(settings: &SyncSettings, data_dir: &PathBuf) -> Result<ServerConfig> {
-    if settings.server_url.is_empty() {
-        let server_dir = settings
-            .local_server_dir
-            .clone()
-            .unwrap_or_else(|| data_dir.join("sync-server"));
-        std::fs::create_dir_all(&server_dir)
-            .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
-        return Ok(ServerConfig::Local { server_dir });
-    }
-    let client_id = settings
-        .client_id
-        .parse::<Uuid>()
-        .context("Sync client_id must be a UUID")?;
-    Ok(ServerConfig::Remote {
-        url: settings.server_url.clone(),
-        client_id,
-        encryption_secret: settings.encryption_secret.as_bytes().to_vec(),
+fn build_server_config(settings: &SyncSettings, data_dir: &Path) -> Result<ServerConfig> {
+    Ok(match settings.clone() {
+        SyncSettings::Local { server_dir } => {
+            let server_dir = server_dir.unwrap_or_else(|| data_dir.join("sync-server"));
+            std::fs::create_dir_all(&server_dir)
+                .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
+            ServerConfig::Local { server_dir }
+        }
+        SyncSettings::Server {
+            url,
+            client_id,
+            encryption_secret,
+        } => ServerConfig::Remote {
+            url,
+            client_id: client_id
+                .parse::<Uuid>()
+                .context("Sync client_id must be a UUID")?,
+            encryption_secret: encryption_secret.into_bytes(),
+        },
+        SyncSettings::Gcp {
+            bucket,
+            credential_path,
+            encryption_secret,
+        } => ServerConfig::Gcp {
+            bucket,
+            credential_path,
+            encryption_secret: encryption_secret.into_bytes(),
+        },
+        SyncSettings::Aws {
+            region,
+            bucket,
+            credentials,
+            encryption_secret,
+        } => ServerConfig::Aws {
+            region: Some(region),
+            bucket,
+            endpoint_url: None,
+            force_path_style: false,
+            credentials: match credentials {
+                AwsCredentials::AccessKey {
+                    access_key_id,
+                    secret_access_key,
+                } => TcAwsCredentials::AccessKey {
+                    access_key_id,
+                    secret_access_key,
+                },
+                AwsCredentials::Profile(profile_name) => TcAwsCredentials::Profile { profile_name },
+                AwsCredentials::Default => TcAwsCredentials::Default,
+            },
+            encryption_secret: encryption_secret.into_bytes(),
+        },
     })
 }
 

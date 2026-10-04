@@ -25,7 +25,7 @@ LazyTask is **standalone**: you do **not** need the `task` binary installed. It 
 - A **Unicode-capable terminal**.
 - *(Optional)* A running [`taskchampion-sync-server`](https://github.com/GothenburgBitFactory/taskchampion-sync-server) instance if you want cross-device sync over HTTP. Local-only use needs nothing extra.
 
-> **Note on cloud sync (S3 / GCS).** TaskChampion 3.0.1 ships optional `server-aws` and `server-gcp` features for syncing through Amazon S3 or Google Cloud Storage. We deliberately do **not** enable them — their AWS SDK transitive deps require Rust 1.91+. If you want cloud-bucket sync, bump to `rustc 1.91+` and add the features to the `taskchampion` line in `Cargo.toml`. The HTTP `taskchampion-sync-server` path covered above works on Rust 1.90.
+> **Cloud sync (S3 / GCS).** lazytask can also sync through an Amazon S3 or Google Cloud Storage bucket, configured with Taskwarrior's `sync.aws.*` or `sync.gcp.*` keys in your taskrc. See [Configuration](docs/configuration.md#taskrc).
 
 ## Installation
 
@@ -213,7 +213,15 @@ echo "Use this client_id in LazyTask: $CLIENT_ID"
 4. Press **Enter** to save, **Esc** to close the modal.
 5. Press **`s`** to sync.
 
-> ⚠️ Sync settings are currently **held in memory only** and not persisted across launches. You must re-enter them each session. Persistent storage is on the roadmap.
+Settings entered in the modal last only for the session. To keep them, put them in your taskrc, where `task` reads them too; lazytask configures sync from it at startup:
+
+```ini
+sync.server.url=http://localhost:8810
+sync.server.client_id=<CLIENT_ID>
+sync.encryption_secret=<secret>
+```
+
+See [Configuration](docs/configuration.md#taskrc) for the keys lazytask reads.
 
 ## Architecture
 
@@ -289,7 +297,8 @@ lazytask shares Taskwarrior's TaskChampion database. The data directory resolves
 
 1. `[taskwarrior] data_location` in the lazytask config
 2. The `TASKDATA` environment variable
-3. `~/.task`, Taskwarrior's default
+3. `data.location` in your taskrc
+4. `~/.task`, Taskwarrior's default
 
 A leading `~` in the chosen path expands to the home directory.
 

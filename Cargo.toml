@@ -3,6 +3,7 @@ name = "lazytask"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.90"
+resolver = "3"
 default-run = "lazytask"
 authors = ["LazyTask Contributors"]
 description = "Modern Terminal UI for TaskChampion (Taskwarrior-compatible task storage)"
@@ -26,7 +27,7 @@ anyhow = "1.0"
 dirs = "6.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 serde_json = "1.0"
-taskchampion = { version = "3", default-features = false, features = ["server-sync", "server-local", "storage", "bundled", "tls-webpki-roots"] }
+taskchampion = { version = "3", default-features = false, features = ["server-sync", "server-local", "server-gcp", "server-aws", "storage", "bundled", "tls-webpki-roots"] }
 strum = { version = "0.28", features = ["derive"] }
 enum_dispatch = "0.3"
 
@@ -65,6 +66,10 @@ path = "tests/integration_remote_sync.rs"
 [[test]]
 name = "integration_tui_input"
 path = "tests/integration_tui_input.rs"
+
+[[test]]
+name = "integration_taskrc"
+path = "tests/integration_taskrc.rs"
 
 [profile.dist]
 inherits = "release"

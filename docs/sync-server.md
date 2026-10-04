@@ -107,8 +107,10 @@ For cross-device sync, every device's LazyTask instance must agree on:
    client-side before upload), so the server can't help you recover it if
    you forget it.
 
-Open the LazyTask sync config modal (`Shift+S`) on each device and enter
-those three identical values, then `s` to sync.
+Put those three identical values in each device's taskrc as
+`sync.server.url`, `sync.server.client_id` and `sync.encryption_secret`, or
+enter them in the LazyTask sync config modal (`Shift+S`), which keeps them
+for the session only. Then press `s` to sync.
 
 ## Versions
 

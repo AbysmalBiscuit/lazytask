@@ -131,14 +131,15 @@ impl AppUI {
         self.status_message_at = Some(std::time::Instant::now());
     }
 
-    /// Shows one warning naming every config entry lazytask could not use:
-    /// `unknown_keys` from loading the file, then unusable keybindings.
-    pub fn show_config_warnings(&mut self, unknown_keys: &[String]) {
-        let mut warnings = Vec::new();
-        if !unknown_keys.is_empty() {
-            warnings.push(format!("Unknown config keys: {}", unknown_keys.join(", ")));
-        }
-        warnings.extend(self.keymap_warnings.iter().cloned());
+    /// Shows one warning naming every startup problem that did not stop
+    /// lazytask: `startup_warnings` from loading the config and taskrc, then
+    /// unusable keybindings.
+    pub fn show_config_warnings(&mut self, startup_warnings: &[String]) {
+        let warnings: Vec<&str> = startup_warnings
+            .iter()
+            .chain(&self.keymap_warnings)
+            .map(String::as_str)
+            .collect();
         if !warnings.is_empty() {
             self.set_status_message(format!("⚠ {}", warnings.join("; ")));
         }

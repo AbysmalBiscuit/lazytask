@@ -64,9 +64,37 @@ Available columns:
 
 ```toml
 [taskwarrior]
-taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset (auto-detect)
-data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then ~/.task
+taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset: TASKRC, then ~/.taskrc
+data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then the taskrc, then ~/.task
 ```
+
+### Taskrc
+
+lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It never writes to the taskrc. A missing taskrc is not an error.
+
+The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
+
+As in Taskwarrior, values and include paths expand a leading `~` to the home directory and `$NAME` to that environment variable, or to nothing when it is unset. A relative include is looked up in this order:
+
+1. The working directory lazytask was started from
+2. The directory of the including file, after following symlinks
+3. The package rc directories that hold Taskwarrior's themes and holiday files: `/usr/share/taskwarrior`, `/usr/share/doc/task/rc`, `/usr/local/share/doc/task/rc` and `/opt/homebrew/share/doc/task/rc`
+
+So `include dark-16.theme` finds the packaged theme.
+
+lazytask uses these keys:
+
+- `data.location`: the data directory, when neither `[taskwarrior] data_location` nor `TASKDATA` is set
+- The sync keys from task-sync(5), which pick one sync target
+
+As in Taskwarrior's `task sync`, the first target whose key is set wins:
+
+1. `sync.local.server_dir`: a local directory
+2. `sync.aws.bucket`: an Amazon S3 bucket. Needs `sync.aws.region`, `sync.encryption_secret`, and exactly one way to get credentials: `sync.aws.profile`, the pair `sync.aws.access_key_id` and `sync.aws.secret_access_key`, or `sync.aws.default_credentials` (any value turns it on)
+3. `sync.gcp.bucket`: a Google Cloud Storage bucket. Needs `sync.encryption_secret`; `sync.gcp.credential_path` names a service-account key, otherwise Application Default Credentials are used
+4. `sync.server.url`, or its deprecated synonym `sync.server.origin` (`sync.server.url` wins): a TaskChampion sync server. Needs `sync.server.client_id` (a UUID) and `sync.encryption_secret`
+
+When a target is set, sync works from launch without the sync config modal. If the target is missing a key it needs, sync stays unconfigured and lazytask shows a warning at startup. The sync config modal only sets up a sync server; cloud buckets are configured through the taskrc.
 
 ### Keybindings
 

@@ -1,23 +1,15 @@
 // Common utility functions
 
-use std::env;
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 
-pub fn get_taskrc_path() -> Option<PathBuf> {
-    // Check environment variable first
-    if let Ok(taskrc) = env::var("TASKRC") {
-        return Some(PathBuf::from(taskrc));
+/// Expands a leading `~` component to `home`, which is only required when
+/// that expansion happens.
+pub fn expand_tilde(path: &Path, home: Option<&Path>) -> Result<PathBuf> {
+    match path.strip_prefix("~") {
+        Ok(rest) => Ok(home.context("Could not find home directory")?.join(rest)),
+        Err(_) => Ok(path.to_path_buf()),
     }
-
-    // Check home directory
-    if let Some(home) = dirs::home_dir() {
-        let taskrc = home.join(".taskrc");
-        if taskrc.exists() {
-            return Some(taskrc);
-        }
-    }
-
-    None
 }
 
 pub fn calculate_urgency(task: &crate::data::models::Task) -> f64 {

@@ -3,6 +3,7 @@
 // This catches regressions like the UTF-8 byte-slicing panics or missing
 // modules without requiring a real terminal.
 
+use lazytask::app::{LaunchEnv, Session};
 use lazytask::config::Config;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
@@ -137,16 +138,25 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     )
     .expect("write config");
 
-    let loaded = Config::load(Some(config_path.to_str().unwrap())).expect("config loads");
-    assert!(!loaded.config.ui.show_help_bar);
+    let mut session = Session::open(
+        Some(config_path.to_str().unwrap()),
+        LaunchEnv {
+            taskrc_var: Some(tmp.path().join("no-taskrc").into()),
+            taskdata_var: Some(tmp.path().join("data").into()),
+            home: None,
+            ..LaunchEnv::default()
+        },
+    )
+    .await
+    .expect("session opens");
+    assert!(!session.config.ui.show_help_bar);
 
-    let mut ui = AppUI::new(&loaded.config).expect("AppUI::new");
-    ui.show_config_warnings(&loaded.unknown_keys);
+    let mut ui = AppUI::new(&session.config).expect("AppUI::new");
+    ui.show_config_warnings(&session.warnings);
     let sync_handler = SyncHandler::new();
-    let mut engine = TaskChampionIntegration::new(tmp.path().join("data"))
+    ui.load_tasks(&mut session.taskchampion)
         .await
-        .expect("engine");
-    ui.load_tasks(&mut engine).await.expect("load_tasks");
+        .expect("load_tasks");
 
     let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
     terminal
