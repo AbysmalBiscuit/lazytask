@@ -170,7 +170,7 @@ impl SyncHandler {
     /// selects. The server fields are required without a local server dir.
     /// A cloud bucket in the taskrc still wins over the server, as it does
     /// for `task sync`.
-    pub async fn configure_sync(
+    pub async fn save_sync_config(
         &mut self,
         taskchampion: &mut TaskChampionIntegration,
         config: &SyncConfig,

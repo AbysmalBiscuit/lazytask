@@ -397,7 +397,7 @@ impl AppUI {
             if let Some(result) = self.sync_config_widget.handle_input(action.clone())? {
                 match result {
                     SyncConfigResult::Save(config) => {
-                        match sync_handler.configure_sync(taskchampion, &config).await {
+                        match sync_handler.save_sync_config(taskchampion, &config).await {
                             Ok(msg) => {
                                 self.set_status_message(format!("✅ {}", msg));
                                 self.sync_config_widget.deactivate();
