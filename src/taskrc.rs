@@ -153,7 +153,7 @@ impl Taskrc {
     }
 
     /// The value of `key`; an empty assignment (`key=`) reads as unset.
-    fn get(&self, key: &str) -> Option<&str> {
+    pub fn get(&self, key: &str) -> Option<&str> {
         self.values
             .get(key)
             .map(|assigned| assigned.value.as_str())

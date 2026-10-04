@@ -548,9 +548,9 @@ async fn saving_the_sync_modal_changes_only_the_sync_lines() -> Result<()> {
 
     let mut app = fx.launch(&taskrc).await?;
     app.open_sync_modal();
-    app.type_text("https://new.example.com");
+    app.retype("https://old.example.com", "https://new.example.com");
     app.press(KeyCode::Tab);
-    app.type_text(OTHER_CLIENT_ID);
+    app.retype(CLIENT_ID, OTHER_CLIENT_ID);
     app.press(KeyCode::Tab);
     app.type_text("s3cret");
     app.press(KeyCode::Enter);
@@ -593,6 +593,29 @@ async fn sync_modal_opens_prefilled_with_the_taskrc_sync_server() -> Result<()> 
             && screen.contains(CLIENT_ID)
             && screen.contains("│****** ")
             && !screen.contains("s3cret"),
+        "modal not prefilled:\n{screen}"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn sync_modal_prefills_server_keys_that_are_incomplete_or_outranked() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "sync.local.server_dir={}\nsync.server.url=https://tw.example.com\n\
+             sync.server.client_id={CLIENT_ID}\n",
+            fx.path("server").display()
+        ),
+    )?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    let screen = app.wait_for("Configure Sync").await?;
+
+    assert!(
+        screen.contains("https://tw.example.com") && screen.contains(CLIENT_ID),
         "modal not prefilled:\n{screen}"
     );
     Ok(())

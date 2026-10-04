@@ -141,6 +141,26 @@ impl SyncHandler {
         }
     }
 
+    /// The sync server the taskrc sets, as far as it is filled in, even when
+    /// it is incomplete or another sync target wins. Empty without a taskrc.
+    pub fn saved_server(&self) -> Result<SyncConfig> {
+        let Some(taskrc) = &self.taskrc else {
+            return Ok(SyncConfig::default());
+        };
+        let saved = taskrc.load()?;
+        let value = |keys: &[&str]| {
+            keys.iter()
+                .find_map(|key| saved.get(key))
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(SyncConfig {
+            server_url: value(&["sync.server.url", "sync.server.origin"]),
+            client_id: value(&["sync.server.client_id"]),
+            encryption_secret: value(&["sync.encryption_secret"]),
+        })
+    }
+
     /// Saves `config` to the taskrc as its sync server, then syncs to the
     /// target the taskrc now selects. That stays a local directory or cloud
     /// bucket while the taskrc names one, as it does for `task sync`.

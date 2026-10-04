@@ -528,10 +528,10 @@ impl AppUI {
                     }
                 }
             }
-            Action::SyncConfig => {
-                self.sync_config_widget
-                    .activate(taskchampion.sync_settings());
-            }
+            Action::SyncConfig => match sync_handler.saved_server() {
+                Ok(saved) => self.sync_config_widget.activate(saved),
+                Err(e) => self.set_status_message(format!("❌ Cannot read the taskrc: {e:#}")),
+            },
             Action::Filter => {
                 if matches!(self.current_view, AppView::TaskList) {
                     self.main_view.toggle_filter_focus();

@@ -140,7 +140,7 @@ When a target is set, sync works from launch without the sync config modal. If t
 
 #### Saving the sync config modal
 
-The sync config modal (`Shift+S`) opens filled in with the sync server in effect, or empty when sync is unconfigured or goes to a local directory or cloud bucket. Saving it writes `sync.server.url`, `sync.server.client_id` and `sync.encryption_secret` to the taskrc lazytask read at startup, so `task sync` and the next launch use them:
+The sync config modal (`Shift+S`) opens filled in with the taskrc's `sync.server.url` (or `sync.server.origin`), `sync.server.client_id` and `sync.encryption_secret`, as far as they are set, even when they are incomplete or another target wins. Saving it writes `sync.server.url`, `sync.server.client_id` and `sync.encryption_secret` to the taskrc lazytask read at startup, so `task sync` and the next launch use them:
 
 - A key already assigned is changed on the line of the assignment in effect, in whichever file holds it, included files too. A comment after the value stays.
 - A key assigned nowhere is appended to the main taskrc. With no taskrc at that path, one is created holding only the sync keys, readable only by you (mode 0600).
