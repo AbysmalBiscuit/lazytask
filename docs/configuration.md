@@ -36,8 +36,8 @@ error = "#f38ba8"
 [ui]
 default_view = "task_list"           # Initial view: task_list, calendar, reports
 show_help_bar = true                 # Show keybinding hints at bottom
-refresh_interval = 1000              # Auto-refresh interval (milliseconds)
-task_list_columns = [                # Columns to show in task list
+refresh_interval = 1000              # Reload tasks from the replica every N milliseconds; 0 turns it off
+task_list_columns = [                # Columns to show in task list, in this order
     "id",
     "project",
     "priority",
@@ -45,6 +45,8 @@ task_list_columns = [                # Columns to show in task list
     "description"
 ]
 ```
+
+`default_view` falls back to `task_list` when the name is not one of the views above. With `show_help_bar = false` the footer still appears while it shows a status message or warning. `refresh_interval` picks up tasks changed outside lazytask, for example with `task add`, without a restart; the selected task stays selected across reloads.
 
 Available columns:
 
@@ -163,6 +165,8 @@ last_task = "G"
 LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type.
 
 Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
+
+An unknown `default_view` or `task_list_columns` entry also only warns in the footer: the view falls back to `task_list`, and the column is skipped.
 
 ## Upgrading
 
