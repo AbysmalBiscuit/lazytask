@@ -639,6 +639,35 @@ async fn saving_updates_a_key_in_the_included_file_that_defines_it() -> Result<(
     Ok(())
 }
 
+#[tokio::test]
+async fn saving_rewrites_a_deprecated_origin_line_as_the_server_url() -> Result<()> {
+    let fx = Fixture::new()?;
+    let included = fx.write(
+        "sync.rc",
+        &format!(
+            "sync.server.origin=https://old.example.com\nsync.server.client_id={CLIENT_ID}\n\
+             sync.encryption_secret=s3cret\n"
+        ),
+    )?;
+    #[cfg(unix)]
+    set_mode(&included, 0o600)?;
+    let main = "include sync.rc\n";
+    let taskrc = fx.write("taskrc", main)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.retype("https://old.example.com", "https://tw.example.com");
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(std::fs::read_to_string(&taskrc)?, main);
+    assert_eq!(
+        std::fs::read_to_string(&included)?,
+        server_block(CLIENT_ID, "s3cret")
+    );
+    Ok(())
+}
+
 /// Fills in the empty sync modal with a server, client and `secret`, and
 /// saves.
 fn save_new_server(app: &Driver, secret: &str) {

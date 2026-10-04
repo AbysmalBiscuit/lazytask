@@ -37,8 +37,9 @@ impl TaskrcFile {
         Taskrc::load(&self.path, &self.env)
     }
 
-    /// Sets each changed key on the line that assigns it, in whichever file
-    /// holds it, or appends it to this file, created mode 0600 when missing.
+    /// Sets each changed key on the line that assigns it, or its deprecated
+    /// synonym, in whichever file holds it, or appends it to this file,
+    /// created mode 0600 when missing.
     /// Writes nothing when a value would not read back as given, or when
     /// `sync.encryption_secret` would go into a file others can read.
     pub fn set(&self, assignments: &[(&str, &str)]) -> Result<()> {
@@ -47,7 +48,10 @@ impl TaskrcFile {
         let mut appended = Vec::new();
         for &(key, value) in assignments {
             ensure_reads_back(key, value, &self.env)?;
-            let current = taskrc.values.get(key);
+            let current = taskrc
+                .values
+                .get(key)
+                .or_else(|| deprecated_synonym(key).and_then(|synonym| taskrc.values.get(synonym)));
             if current.is_some_and(|assigned| assigned.value == value) {
                 continue;
             }
@@ -318,6 +322,11 @@ fn append(file: &Path, lines: &[String]) -> Result<()> {
     handle
         .write_all(text.as_bytes())
         .with_context(|| format!("Failed to write {}", file.display()))
+}
+
+/// The older name Taskwarrior still reads for `key`.
+fn deprecated_synonym(key: &str) -> Option<&'static str> {
+    (key == "sync.server.url").then_some("sync.server.origin")
 }
 
 /// `line` up to its comment, which runs from the first `#` to the end.
