@@ -33,12 +33,17 @@ impl Fixture {
         Ok(path)
     }
 
-    /// Opens a session with no lazytask config file, `taskrc_var` as `TASKRC`
-    /// and `taskdata_var` as `TASKDATA`.
-    async fn open(&self, taskrc_var: &Path, taskdata_var: Option<&Path>) -> Result<Session> {
-        let missing_config = self.path("no-config.toml");
+    /// Opens a session with `taskrc_var` as `TASKRC`, `taskdata_var` as
+    /// `TASKDATA`, and the lazytask config at `config`, or none.
+    async fn open(
+        &self,
+        taskrc_var: &Path,
+        taskdata_var: Option<&Path>,
+        config: Option<&Path>,
+    ) -> Result<Session> {
+        let config = config.map_or_else(|| self.path("no-config.toml"), Path::to_path_buf);
         Session::open(
-            Some(missing_config.to_str().unwrap()),
+            Some(config.to_str().unwrap()),
             LaunchEnv {
                 taskrc_var: Some(taskrc_var.into()),
                 taskdata_var: taskdata_var.map(Into::into),
@@ -62,7 +67,7 @@ async fn sync_from_a_fresh_launch_pushes_to_the_taskrc_local_server() -> Result<
         ),
     )?;
 
-    let mut session = fx.open(&taskrc, None).await?;
+    let mut session = fx.open(&taskrc, None, None).await?;
     let uuid = session
         .taskchampion
         .add_task("Pushed via taskrc", &[])
@@ -120,7 +125,7 @@ async fn includes_are_followed_and_later_values_override_earlier_ones() -> Resul
         ),
     )?;
 
-    let mut session = fx.open(&taskrc, None).await?;
+    let mut session = fx.open(&taskrc, None, None).await?;
 
     assert_eq!(session.taskchampion.data_dir(), &fx.path("included"));
     session.taskchampion.sync().await?;
@@ -137,11 +142,13 @@ async fn taskrc_data_location_applies_only_when_config_and_taskdata_are_unset() 
         &format!("data.location={}\n", fx.path("from-taskrc").display()),
     )?;
 
-    let session = fx.open(&taskrc, None).await?;
+    let session = fx.open(&taskrc, None, None).await?;
     assert_eq!(session.taskchampion.data_dir(), &fx.path("from-taskrc"));
     drop(session);
 
-    let session = fx.open(&taskrc, Some(&fx.path("from-taskdata"))).await?;
+    let session = fx
+        .open(&taskrc, Some(&fx.path("from-taskdata")), None)
+        .await?;
     assert_eq!(session.taskchampion.data_dir(), &fx.path("from-taskdata"));
     drop(session);
 
@@ -152,15 +159,9 @@ async fn taskrc_data_location_applies_only_when_config_and_taskdata_are_unset() 
             fx.path("from-config").display()
         ),
     )?;
-    let session = Session::open(
-        Some(config.to_str().unwrap()),
-        LaunchEnv {
-            taskrc_var: Some(taskrc.into()),
-            taskdata_var: Some(fx.path("from-taskdata").into()),
-            home: Some(fx.path("home")),
-        },
-    )
-    .await?;
+    let session = fx
+        .open(&taskrc, Some(&fx.path("from-taskdata")), Some(&config))
+        .await?;
     assert_eq!(session.taskchampion.data_dir(), &fx.path("from-config"));
     Ok(())
 }
@@ -177,7 +178,7 @@ async fn malformed_line_reports_its_file_and_line_number() -> Result<()> {
         ),
     )?;
 
-    let err = match fx.open(&taskrc, None).await {
+    let err = match fx.open(&taskrc, None, None).await {
         Ok(_) => panic!("malformed taskrc opened"),
         Err(err) => format!("{:#}", err),
     };
@@ -204,7 +205,7 @@ async fn leading_tilde_in_local_server_dir_expands_to_home() -> Result<()> {
         ),
     )?;
 
-    let mut session = fx.open(&taskrc, None).await?;
+    let mut session = fx.open(&taskrc, None, None).await?;
     session.taskchampion.add_task("Synced home", &[]).await?;
     session.taskchampion.sync().await?;
 
@@ -226,7 +227,7 @@ async fn incomplete_taskrc_sync_settings_warn_and_leave_sync_unconfigured() -> R
         ),
     )?;
 
-    let session = fx.open(&taskrc, None).await?;
+    let session = fx.open(&taskrc, None, None).await?;
     assert!(!session.taskchampion.is_sync_configured());
 
     let mut ui = AppUI::new(&session.config)?;
