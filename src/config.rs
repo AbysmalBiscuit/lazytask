@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
@@ -45,6 +46,23 @@ pub struct UIConfig {
     pub show_help_bar: bool,
     pub task_list_columns: Vec<String>,
     pub refresh_interval: u64,
+}
+
+impl TaskwarriorConfig {
+    /// The TaskChampion data directory, first match wins: `data_location`
+    /// (a leading `~` expands to `home`), then `taskdata` (the `TASKDATA`
+    /// variable), then `~/.task`.
+    pub fn resolve_data_location(&self, taskdata: Option<OsString>, home: &Path) -> PathBuf {
+        match &self.data_location {
+            Some(location) => match location.strip_prefix("~") {
+                Ok(rest) => home.join(rest),
+                Err(_) => location.clone(),
+            },
+            None => taskdata
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".task")),
+        }
+    }
 }
 
 fn empty_path_as_none<'de, D: Deserializer<'de>>(

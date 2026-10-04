@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
@@ -38,7 +38,11 @@ impl App {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
-        let taskchampion = TaskChampionIntegration::new(None).await?;
+        let home = dirs::home_dir().context("Could not find home directory")?;
+        let data_dir = config
+            .taskwarrior
+            .resolve_data_location(std::env::var_os("TASKDATA"), &home);
+        let taskchampion = TaskChampionIntegration::new(data_dir).await?;
         let sync_handler = SyncHandler::new();
         let mut ui = AppUI::new(&config)?;
         ui.warn_unknown_config_keys(&unknown_keys);

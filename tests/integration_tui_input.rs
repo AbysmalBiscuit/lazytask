@@ -31,7 +31,7 @@ impl Driver {
         let cfg = Config::default();
         let ui = AppUI::new(&cfg)?;
         let mut sync_handler = SyncHandler::new();
-        let engine = TaskChampionIntegration::new(Some(tmp.path().to_path_buf())).await?;
+        let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;
         let input = InputHandler::new(&cfg);
         let terminal = Terminal::new(TestBackend::new(width, height))?;

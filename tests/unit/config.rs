@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use lazytask::config::{Config, LoadedConfig};
 use tempfile::tempdir;
@@ -95,5 +95,59 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
     assert_eq!(loaded.unknown_keys, Vec::<String>::new());
     assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
     assert_eq!(loaded.config.taskwarrior.data_location, None);
+    Ok(())
+}
+
+#[test]
+fn data_location_defaults_to_dot_task_in_home() -> anyhow::Result<()> {
+    let config = load_toml("")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(None, Path::new("/home/me"));
+
+    assert_eq!(location, PathBuf::from("/home/me/.task"));
+    Ok(())
+}
+
+#[test]
+fn taskdata_wins_over_the_home_default() -> anyhow::Result<()> {
+    let config = load_toml("")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(Some("/srv/tasks".into()), Path::new("/home/me"));
+
+    assert_eq!(location, PathBuf::from("/srv/tasks"));
+    Ok(())
+}
+
+#[test]
+fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ndata_location = \"/opt/tasks\"\n")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(Some("/srv/tasks".into()), Path::new("/home/me"));
+
+    assert_eq!(location, PathBuf::from("/opt/tasks"));
+    assert_eq!(
+        config
+            .taskwarrior
+            .resolve_data_location(None, Path::new("/home/me")),
+        PathBuf::from("/opt/tasks")
+    );
+    Ok(())
+}
+
+#[test]
+fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
+    let config = load_toml("[taskwarrior]\ndata_location = \"~/tasks/db\"\n")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(None, Path::new("/home/me"));
+
+    assert_eq!(location, PathBuf::from("/home/me/tasks/db"));
     Ok(())
 }
