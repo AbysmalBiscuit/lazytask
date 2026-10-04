@@ -47,7 +47,7 @@
 **TOML Configuration Files:**
 
 - ✅ `config/default.toml` - Main application settings
-- ✅ `config/themes.toml` - 4 complete themes (Catppuccin, Dracula, Gruvbox)
+- ✅ `catppuccin-mocha` theme, with `[theme.colors]` overrides per color role
 - ✅ Auto-detection of `~/.taskrc` and `TASKDATA` paths
 - ✅ Environment variable support (`TASKRC`, `XDG_CONFIG_HOME`)
 
@@ -57,7 +57,7 @@
 
 - ✅ **7 UI Components**: TaskList, TaskDetail, TaskForm, FilterBar, StatusBar, Calendar, Reports
 - ✅ **6 View Layouts**: Main, Detail, Reports, Calendar, Projects, Settings
-- ✅ **Theme System**: Color scheme management with 4 built-in themes
+- ✅ **Theme System**: Named color roles from the built-in `catppuccin-mocha` palette
 - ✅ **Event Handling**: Comprehensive keyboard input processing
 - ✅ **Modal Dialogs**: Task form with field navigation and validation
 
