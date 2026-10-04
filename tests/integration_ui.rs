@@ -202,14 +202,11 @@ fn lazytask_refuses_to_start_when_quit_has_no_key() {
     );
 }
 
-async fn render_with_config(cfg: Config, tasks: &[&str]) -> Terminal<TestBackend> {
+async fn render_with_config(cfg: Config) -> Terminal<TestBackend> {
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
         .await
         .expect("engine");
-    for description in tasks {
-        engine.add_task(description, &[]).await.expect("add_task");
-    }
     let mut ui = AppUI::new(&cfg).expect("AppUI::new");
     ui.show_config_warnings(&[]);
     ui.load_tasks(&mut engine).await.expect("load_tasks");
@@ -222,7 +219,7 @@ async fn render_with_config(cfg: Config, tasks: &[&str]) -> Terminal<TestBackend
 
 #[tokio::test]
 async fn show_help_bar_false_hides_keybinding_hints() {
-    let shown = render_with_config(Config::default(), &[]).await;
+    let shown = render_with_config(Config::default()).await;
     assert!(
         buffer_contains(&shown, "[a] add"),
         "help bar missing by default"
@@ -230,7 +227,7 @@ async fn show_help_bar_false_hides_keybinding_hints() {
 
     let mut cfg = Config::default();
     cfg.ui.show_help_bar = false;
-    let hidden = render_with_config(cfg, &[]).await;
+    let hidden = render_with_config(cfg).await;
     assert!(!buffer_contains(&hidden, "[a] add"), "help bar still shown");
 }
 
@@ -242,17 +239,17 @@ fn with_default_view(view: &str) -> Config {
 
 #[tokio::test]
 async fn default_view_picks_the_view_lazytask_opens_on() {
-    let task_list = render_with_config(with_default_view("task_list"), &[]).await;
+    let task_list = render_with_config(with_default_view("task_list")).await;
     assert!(
         buffer_contains(&task_list, " Tasks ("),
         "task list not shown"
     );
 
-    let reports = render_with_config(with_default_view("reports"), &[]).await;
+    let reports = render_with_config(with_default_view("reports")).await;
     assert!(buffer_contains(&reports, "Burndown"), "reports not shown");
     assert!(!buffer_contains(&reports, " Tasks ("), "task list shown");
 
-    let calendar = render_with_config(with_default_view("calendar"), &[]).await;
+    let calendar = render_with_config(with_default_view("calendar")).await;
     assert!(
         buffer_contains(&calendar, "Daily Details"),
         "calendar not shown"
@@ -262,7 +259,7 @@ async fn default_view_picks_the_view_lazytask_opens_on() {
 
 #[tokio::test]
 async fn unknown_default_view_warns_and_opens_task_list() {
-    let terminal = render_with_config(with_default_view("kanban"), &[]).await;
+    let terminal = render_with_config(with_default_view("kanban")).await;
     assert!(
         buffer_contains(&terminal, " Tasks ("),
         "task list not shown"
@@ -313,7 +310,7 @@ async fn task_list_columns_choose_and_order_the_columns() {
     cfg.ui.task_list_columns = ["urgency", "description", "tags"]
         .map(String::from)
         .to_vec();
-    let terminal = render_with_config(cfg, &[]).await;
+    let terminal = render_with_config(cfg).await;
     assert_eq!(
         task_list_headers(&terminal),
         ["Urgency", "Description", "Tags"]
@@ -324,7 +321,7 @@ async fn task_list_columns_choose_and_order_the_columns() {
 async fn unknown_task_list_column_warns_and_is_skipped() {
     let mut cfg = Config::default();
     cfg.ui.task_list_columns = ["id", "bogus", "description"].map(String::from).to_vec();
-    let terminal = render_with_config(cfg, &[]).await;
+    let terminal = render_with_config(cfg).await;
     assert_eq!(task_list_headers(&terminal), ["ID", "Description"]);
     assert!(buffer_contains(&terminal, "bogus"), "warning missing");
 }
