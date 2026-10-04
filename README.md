@@ -269,13 +269,10 @@ Config lives at `~/.config/lazytask/config.toml`. The file is optional and lazyt
 
 ```toml
 [theme]
-name = "catppuccin-mocha"
+name = "catppuccin-mocha"   # the only built-in theme
 
-[theme.colors]
-background = "#1e1e2e"
-foreground = "#cdd6f4"
-primary    = "#89b4fa"
-secondary  = "#f38ba8"
+[theme.colors]              # override any color role, see docs/configuration.md
+# primary = "#89b4fa"
 
 [ui]
 default_view      = "task_list"
@@ -290,8 +287,6 @@ quit    = "q"               # every key is rebindable, see docs/keybindings.md
 help    = "F1"
 refresh = "F5"
 ```
-
-> ℹ️ The `[theme]` and `[taskwarrior]` sections are accepted by the parser but not all fields are wired up yet.
 
 ## Data location
 
@@ -359,7 +354,7 @@ podman rm -f lazytask-sync-test
 - **Force sync has no default key.** Bind `force_sync` in `[keybindings.global]` to use it; see [docs/keybindings.md](docs/keybindings.md).
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
-- **The Catppuccin theme is configured but unused.** Live colors are bare named-color terminals defaults.
+- **One built-in theme.** `catppuccin-mocha` is the only palette; `[theme.colors]` recolors any role.
 
 ## Releasing
 

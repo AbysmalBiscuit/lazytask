@@ -63,7 +63,7 @@ src/
 │   │   ├── reports_view.rs  # Reports dashboard with project stats
 │   │   ├── calendar_view.rs # Calendar interface (stub)
 │   │   └── settings_view.rs # Configuration UI (stub)
-│   └── themes.rs        # Color schemes
+│   └── theme.rs         # Color roles and the built-in palette
 │
 ├── handlers/            # Event and command processing
 │   ├── input.rs         # The Action enum
@@ -116,7 +116,7 @@ The UI is built with Ratatui widgets organized into:
 
 - **Components**: Reusable widgets (task lists, forms, dialogs)
 - **Views**: Full screen layouts (main view, calendar, reports)
-- **Themes**: Color scheme management
+- **Theme**: Named color roles that every widget draws with
 
 ### Data Layer
 

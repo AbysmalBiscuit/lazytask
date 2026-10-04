@@ -59,6 +59,8 @@ pub struct LaunchEnv {
     pub taskrc_var: Option<OsString>,
     /// `TASKDATA`
     pub taskdata_var: Option<OsString>,
+    /// `NO_COLOR`
+    pub no_color_var: Option<OsString>,
     pub home: Option<PathBuf>,
     pub cwd: Option<PathBuf>,
     /// Environment variables, which taskrc paths and values may reference
@@ -73,6 +75,7 @@ impl LaunchEnv {
         LaunchEnv {
             taskrc_var: std::env::var_os("TASKRC"),
             taskdata_var: std::env::var_os("TASKDATA"),
+            no_color_var: std::env::var_os("NO_COLOR"),
             home: dirs::home_dir(),
             cwd: std::env::current_dir().ok(),
             vars: std::env::vars_os()
@@ -96,9 +99,11 @@ pub struct Session {
 impl Session {
     pub async fn open(config_path: Option<&str>, env: LaunchEnv) -> Result<Self> {
         let LoadedConfig {
-            config,
+            mut config,
             unknown_keys,
         } = Config::load(config_path)?;
+        // https://no-color.org: set and not empty.
+        config.theme.no_color = env.no_color_var.as_ref().is_some_and(|v| !v.is_empty());
         let home = env.home.as_deref();
         let taskrc = match config
             .taskwarrior

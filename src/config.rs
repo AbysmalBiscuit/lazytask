@@ -19,11 +19,20 @@ pub struct Config {
     pub sync: SyncConfig,
 }
 
+/// The only built-in theme, and the one an unknown `theme.name` falls back
+/// to.
+pub const DEFAULT_THEME_NAME: &str = "catppuccin-mocha";
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]
 pub struct ThemeConfig {
     pub name: String,
+    /// Role name to color, overriding the named theme's palette.
     pub colors: HashMap<String, String>,
+    /// Draw without color. Set from the `NO_COLOR` environment variable,
+    /// never from the config file.
+    #[serde(skip)]
+    pub no_color: bool,
 }
 
 /// Key overrides per section, action name to key string. Actions left out
@@ -116,23 +125,12 @@ fn empty_path_as_none<'de, D: Deserializer<'de>>(
     Ok(path.filter(|p| !p.as_os_str().is_empty()))
 }
 
-fn string_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-    pairs
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
-}
-
 impl Default for ThemeConfig {
     fn default() -> Self {
         ThemeConfig {
-            name: "catppuccin-mocha".to_string(),
-            colors: string_map(&[
-                ("background", "#1e1e2e"),
-                ("foreground", "#cdd6f4"),
-                ("primary", "#89b4fa"),
-                ("secondary", "#f38ba8"),
-            ]),
+            name: DEFAULT_THEME_NAME.to_string(),
+            colors: HashMap::new(),
+            no_color: false,
         }
     }
 }

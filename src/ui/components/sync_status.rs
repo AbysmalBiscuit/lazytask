@@ -2,13 +2,14 @@
 
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Gauge, Paragraph},
     Frame,
 };
 
 use crate::handlers::sync::{SyncPhase, SyncStatus};
+use crate::ui::theme::Theme;
 
 pub struct SyncStatusWidget;
 
@@ -17,14 +18,26 @@ impl SyncStatusWidget {
         SyncStatusWidget
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect, sync_status: Option<&SyncStatus>) {
+    pub fn render(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        sync_status: Option<&SyncStatus>,
+        theme: &Theme,
+    ) {
         match sync_status {
-            Some(status) => self.render_sync_status(f, area, status),
-            None => self.render_no_sync(f, area),
+            Some(status) => self.render_sync_status(f, area, status, theme),
+            None => self.render_no_sync(f, area, theme),
         }
     }
 
-    pub fn render_sync_overlay(&self, f: &mut Frame, area: Rect, sync_status: &SyncStatus) {
+    pub fn render_sync_overlay(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        sync_status: &SyncStatus,
+        theme: &Theme,
+    ) {
         if !sync_status.is_syncing {
             return;
         }
@@ -40,12 +53,12 @@ impl SyncStatusWidget {
             .title("Synchronizing with Taskserver")
             .title_style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             )
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
+            .border_style(Style::default().fg(theme.primary))
+            .style(Style::default().bg(theme.background));
         f.render_widget(block, popup_area);
 
         let inner = popup_area.inner(ratatui::layout::Margin {
@@ -77,11 +90,11 @@ impl SyncStatusWidget {
 
         let status_paragraph = Paragraph::new(vec![
             Line::from(vec![
-                Span::styled("Phase: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Phase: ", Style::default().fg(theme.accent)),
                 Span::raw(phase_text),
             ]),
             Line::from(vec![
-                Span::styled("Status: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Status: ", Style::default().fg(theme.accent)),
                 Span::raw(&sync_status.progress.message),
             ]),
         ]);
@@ -89,9 +102,9 @@ impl SyncStatusWidget {
 
         // Progress bar
         let progress_color = match sync_status.progress.phase {
-            SyncPhase::Error => Color::Red,
-            SyncPhase::Complete => Color::Green,
-            _ => Color::Blue,
+            SyncPhase::Error => theme.error,
+            SyncPhase::Complete => theme.success,
+            _ => theme.info,
         };
 
         let progress_bar = Gauge::default()
@@ -104,15 +117,15 @@ impl SyncStatusWidget {
         // Statistics
         let stats_text = vec![
             Line::from(vec![
-                Span::styled("Uploaded: ", Style::default().fg(Color::Green)),
+                Span::styled("Uploaded: ", Style::default().fg(theme.success)),
                 Span::raw(format!("{} tasks", sync_status.progress.tasks_uploaded)),
             ]),
             Line::from(vec![
-                Span::styled("Downloaded: ", Style::default().fg(Color::Blue)),
+                Span::styled("Downloaded: ", Style::default().fg(theme.info)),
                 Span::raw(format!("{} tasks", sync_status.progress.tasks_downloaded)),
             ]),
             Line::from(vec![
-                Span::styled("Conflicts: ", Style::default().fg(Color::Red)),
+                Span::styled("Conflicts: ", Style::default().fg(theme.error)),
                 Span::raw(format!("{}", sync_status.progress.conflicts_detected)),
             ]),
         ];
@@ -129,12 +142,12 @@ impl SyncStatusWidget {
         };
 
         let instructions = Paragraph::new(instruction_text)
-            .style(Style::default().fg(Color::Gray))
+            .style(Style::default().fg(theme.muted))
             .alignment(Alignment::Center);
         f.render_widget(instructions, chunks[3]);
     }
 
-    fn render_sync_status(&self, f: &mut Frame, area: Rect, status: &SyncStatus) {
+    fn render_sync_status(&self, f: &mut Frame, area: Rect, status: &SyncStatus, theme: &Theme) {
         let last_sync_text = if let Some(last_sync) = status.last_sync {
             let elapsed = last_sync.elapsed();
             if elapsed.as_secs() < 60 {
@@ -150,25 +163,25 @@ impl SyncStatusWidget {
 
         let mut sync_text = vec![
             Line::from(vec![
-                Span::styled("Server: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Server: ", Style::default().fg(theme.accent)),
                 if status.server_configured {
-                    Span::styled("✅ Configured", Style::default().fg(Color::Green))
+                    Span::styled("✅ Configured", Style::default().fg(theme.success))
                 } else {
-                    Span::styled("❌ Not configured", Style::default().fg(Color::Red))
+                    Span::styled("❌ Not configured", Style::default().fg(theme.error))
                 },
             ]),
             Line::from(vec![
-                Span::styled("Status: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Status: ", Style::default().fg(theme.accent)),
                 if status.is_syncing {
-                    Span::styled("🔄 Syncing...", Style::default().fg(Color::Blue))
+                    Span::styled("🔄 Syncing...", Style::default().fg(theme.info))
                 } else if status.sync_error.is_some() {
-                    Span::styled("❌ Error", Style::default().fg(Color::Red))
+                    Span::styled("❌ Error", Style::default().fg(theme.error))
                 } else {
-                    Span::styled("✅ Ready", Style::default().fg(Color::Green))
+                    Span::styled("✅ Ready", Style::default().fg(theme.success))
                 },
             ]),
             Line::from(vec![
-                Span::styled("Last Sync: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Last Sync: ", Style::default().fg(theme.accent)),
                 Span::raw(last_sync_text),
             ]),
         ];
@@ -176,8 +189,8 @@ impl SyncStatusWidget {
         if let Some(ref error) = status.sync_error {
             let error_text = crate::utils::formatting::truncate_chars(error, 40);
             sync_text.push(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red)),
-                Span::styled(error_text, Style::default().fg(Color::Red)),
+                Span::styled("Error: ", Style::default().fg(theme.error)),
+                Span::styled(error_text, Style::default().fg(theme.error)),
             ]));
         }
 
@@ -185,21 +198,21 @@ impl SyncStatusWidget {
             Block::default()
                 .title("Sync Status")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         );
 
         f.render_widget(sync_panel, area);
     }
 
-    fn render_no_sync(&self, f: &mut Frame, area: Rect) {
+    fn render_no_sync(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let no_sync = Paragraph::new("Sync not initialized")
             .block(
                 Block::default()
                     .title("Sync Status")
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Gray)),
+                    .border_style(Style::default().fg(theme.muted)),
             )
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(theme.muted));
 
         f.render_widget(no_sync, area);
     }

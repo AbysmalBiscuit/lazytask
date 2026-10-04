@@ -27,7 +27,7 @@ pub struct Task {
     pub udas: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum TaskStatus {
     Pending,
     Completed,

@@ -17,18 +17,32 @@ LazyTask looks for configuration in the following locations (in order of precede
 
 ```toml
 [theme]
-name = "catppuccin-mocha"  # Available: catppuccin-mocha, catppuccin-latte, dracula, gruvbox
+name = "catppuccin-mocha"  # The only built-in theme
 
 [theme.colors]
-# Override specific theme colors
-background = "#1e1e2e"
-foreground = "#cdd6f4"
+# Override any role; the others keep the theme's color
 primary = "#89b4fa"
-secondary = "#f38ba8"
-success = "#a6e3a1"
-warning = "#f9e2af"
-error = "#f38ba8"
+error = "red"
 ```
+
+Every color in the UI comes from one of these roles:
+
+- `background` - Screen and dialog background
+- `foreground` - Plain text
+- `muted` - De-emphasized text, such as dates and the UUID, and unfocused borders
+- `primary` - Titles, field labels and borders
+- `secondary` - Tags and waiting tasks
+- `accent` - Key hints, column headers and the focused panel or field
+- `info` - Active and recurring tasks, sync in progress
+- `success` - Completed tasks and confirmations
+- `warning` - Pending tasks, things due soon, and footer warnings
+- `error` - Overdue tasks, deletions and failures
+- `selection` - Background of the selected task row and calendar day
+- `priority_high`, `priority_medium`, `priority_low` - Task priority
+
+[`config/default.toml`](../config/default.toml) lists each role's `catppuccin-mocha` color. A color is a hex `#rrggbb`, a terminal color name such as `red`, `light-blue` or `dark-gray`, an ANSI color index from `0` to `255`, or `reset` for the terminal's own color.
+
+When `NO_COLOR` is set to a non-empty value, LazyTask draws with the terminal's default colors only and marks the selected row with reverse video. Setting `selection = "reset"` also marks the selected row and calendar day with reverse video.
 
 ### UI Configuration
 
@@ -134,15 +148,15 @@ LazyTask respects these environment variables:
 - `TASKRC` - Path to taskrc file
 - `TASKDATA` - Path to task data directory
 - `XDG_CONFIG_HOME` - Alternative config directory
-- `NO_COLOR` - Disable colors when set
+- `NO_COLOR` - Disable colors when set to a non-empty value
 
 ## Configuration Examples
 
 ### Minimal Configuration
 
 ```toml
-[theme]
-name = "dracula"
+[theme.colors]
+primary = "cyan"
 
 [ui]
 show_help_bar = false
@@ -154,9 +168,6 @@ quit = "Ctrl+q"
 ### Power User Configuration
 
 ```toml
-[theme]
-name = "gruvbox"
-
 [ui]
 default_view = "calendar"
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
@@ -178,6 +189,8 @@ LazyTask refuses to start when the config file has invalid TOML syntax or a valu
 Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
 
 An unknown `default_view` or `task_list_columns` entry also only warns in the footer: the view falls back to `task_list`, and the column is skipped.
+
+Theme problems warn the same way. An unknown `theme.name` uses `catppuccin-mocha`. An unknown role in `theme.colors` is skipped, and a value that is not a color warns naming its key, such as `theme.colors.primary`, and that role keeps the theme's color.
 
 ## Upgrading
 
@@ -202,9 +215,9 @@ LazyTask never rewrites your config file. Keys you leave out pick up the current
 ### Colors Not Showing
 
 1. Check terminal color support (`echo $TERM`)
-2. Try different theme
-3. Check if `NO_COLOR` environment variable is set
-4. Some terminals may not support all colors
+2. Check if `NO_COLOR` environment variable is set
+3. Hex colors need a terminal with 24-bit color; elsewhere, set the `theme.colors` roles to color names or ANSI indexes
+4. Check the footer for a warning naming a `theme` key
 
 ### Taskwarrior Integration Issues
 

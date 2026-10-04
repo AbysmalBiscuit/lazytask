@@ -3,12 +3,13 @@
 use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame,
 };
 
 use crate::data::models::Task;
+use crate::ui::theme::Theme;
 
 /// A task list column, named in config by its `ui.task_list_columns` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,7 +188,7 @@ impl TaskListWidget {
         }
     }
 
-    pub fn render(&mut self, f: &mut Frame, area: Rect) {
+    pub fn render(&mut self, f: &mut Frame, area: Rect, theme: &Theme) {
         let formatter = TaskTableFormatter::new();
 
         let header_cells = self
@@ -196,21 +197,19 @@ impl TaskListWidget {
             .map(|column| {
                 Cell::from(column.header()).style(
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent)
                         .add_modifier(Modifier::BOLD),
                 )
             })
             .collect::<Vec<_>>();
 
-        let header = Row::new(header_cells)
-            .style(Style::default().bg(Color::DarkGray))
-            .height(1);
+        let header = Row::new(header_cells).height(1);
 
         // Create data rows with intelligent color coding
         let rows: Vec<Row> = self
             .tasks
             .iter()
-            .map(|task| formatter.format_task_row(task, &self.columns))
+            .map(|task| formatter.format_task_row(task, &self.columns, theme))
             .collect();
 
         let column_widths: Vec<Constraint> = self.columns.iter().map(|c| c.width()).collect();
@@ -223,17 +222,11 @@ impl TaskListWidget {
                 Block::default()
                     .title(title)
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(theme.primary)),
             )
             .column_spacing(2) // Clean spacing between columns
-            .style(Style::default().fg(Color::White))
-            .row_highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
-                    .add_modifier(Modifier::REVERSED),
-            );
+            .style(Style::default().fg(theme.foreground))
+            .row_highlight_style(theme.selected().add_modifier(Modifier::BOLD));
 
         f.render_stateful_widget(table, area, &mut self.state);
     }
@@ -248,9 +241,9 @@ impl TaskTableFormatter {
     }
 
     // Format a complete task row with intelligent row-level color coding
-    fn format_task_row(&self, task: &Task, columns: &[Column]) -> Row<'static> {
+    fn format_task_row(&self, task: &Task, columns: &[Column], theme: &Theme) -> Row<'static> {
         // Determine the most important styling factor for the entire row
-        let row_style = self.get_row_style(task);
+        let row_style = self.get_row_style(task, theme);
 
         let cells = columns
             .iter()
@@ -284,18 +277,7 @@ impl TaskTableFormatter {
     // ===== INTELLIGENT ROW-LEVEL COLOR CODING SYSTEM =====
 
     // Get overall row style based on intelligent task priority hierarchy
-    fn get_row_style(&self, task: &Task) -> Style {
-        // Intelligent priority hierarchy combining multiple factors:
-        // 1. High priority + overdue/due soon = CRITICAL RED BOLD
-        // 2. Any overdue tasks = URGENT RED BOLD
-        // 3. High priority + due within 2 days = URGENT RED BOLD
-        // 4. Due today/tomorrow = URGENT YELLOW BOLD
-        // 5. High priority tasks = RED
-        // 6. Medium priority tasks = YELLOW
-        // 7. Completed tasks = DIMMED GRAY
-        // 8. Low priority tasks = GREEN
-        // 9. Default/no priority tasks = WHITE
-
+    fn get_row_style(&self, task: &Task, theme: &Theme) -> Style {
         let is_high_priority = task.priority == Some(crate::data::models::Priority::High);
         let is_overdue = self.is_overdue(task.due);
         let is_due_today = self.is_due_today(task.due);
@@ -303,36 +285,28 @@ impl TaskTableFormatter {
         let is_due_tomorrow = self.is_due_tomorrow(task.due);
 
         if is_overdue || is_due_today || (is_high_priority && is_due_within_2_days) {
-            // CRITICAL RED:
-            // - All overdue tasks (regardless of priority)
-            // - All tasks due today (regardless of priority)
-            // - High priority tasks due within 2 days
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-        } else if is_due_tomorrow {
-            // URGENT YELLOW: Due tomorrow = high urgency
             Style::default()
-                .fg(Color::Yellow)
+                .fg(theme.error)
+                .add_modifier(Modifier::BOLD)
+        } else if is_due_tomorrow {
+            Style::default()
+                .fg(theme.warning)
                 .add_modifier(Modifier::BOLD)
         } else if is_high_priority {
-            // HIGH PRIORITY - Important but not time-critical
-            Style::default().fg(Color::Red)
+            Style::default().fg(theme.priority_high)
         } else if task.priority == Some(crate::data::models::Priority::Medium) {
-            // MEDIUM PRIORITY - Moderate importance
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(theme.priority_medium)
         } else if task.status == crate::data::models::TaskStatus::Completed {
-            // COMPLETED - Dimmed
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(theme.muted)
         } else if task.priority == Some(crate::data::models::Priority::Low) {
-            // LOW PRIORITY - Less urgent
-            Style::default().fg(Color::Green)
+            Style::default().fg(theme.priority_low)
         } else if task.urgency >= 10.0 {
-            // HIGH URGENCY (calculated, without explicit priority)
+            // Only tasks with no priority get here, so computed urgency flags them
             Style::default()
-                .fg(Color::White)
+                .fg(theme.foreground)
                 .add_modifier(Modifier::BOLD)
         } else {
-            // DEFAULT - Normal tasks
-            Style::default().fg(Color::White)
+            Style::default().fg(theme.foreground)
         }
     }
 

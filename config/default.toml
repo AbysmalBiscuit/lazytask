@@ -5,14 +5,23 @@
 [theme]
 name = "catppuccin-mocha"
 
+# Each color role and its catppuccin-mocha color. Roles are described in
+# docs/configuration.md.
 [theme.colors]
 background = "#1e1e2e"
-foreground = "#cdd6f4"  
+foreground = "#cdd6f4"
+muted = "#7f849c"
 primary = "#89b4fa"
-secondary = "#f38ba8"
+secondary = "#cba6f7"
+accent = "#fab387"
+info = "#89dceb"
 success = "#a6e3a1"
 warning = "#f9e2af"
 error = "#f38ba8"
+selection = "#45475a"
+priority_high = "#f38ba8"
+priority_medium = "#f9e2af"
+priority_low = "#a6e3a1"
 
 [ui]
 default_view = "task_list"
