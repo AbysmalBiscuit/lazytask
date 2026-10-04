@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use lazytask::app::{LaunchEnv, Session};
 use lazytask::config::Config;
 use lazytask::data::models::TaskStatus;
 use lazytask::handlers::input::Action;
@@ -34,19 +35,27 @@ impl Driver {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("config.toml");
         std::fs::write(&path, toml)?;
-        let loaded = Config::load(Some(path.to_str().unwrap()))?;
-        Self::with_config(width, height, loaded.config, &loaded.unknown_keys).await
+        let session = Session::open(
+            Some(path.to_str().unwrap()),
+            LaunchEnv {
+                taskrc: Some(dir.path().join("no-taskrc").into()),
+                taskdata: Some(dir.path().join("data").into()),
+                home: None,
+            },
+        )
+        .await?;
+        Self::with_config(width, height, session.config, &session.warnings).await
     }
 
     async fn with_config(
         width: u16,
         height: u16,
         cfg: Config,
-        unknown_keys: &[String],
+        startup_warnings: &[String],
     ) -> Result<Self> {
         let tmp = tempfile::tempdir()?;
         let mut ui = AppUI::new(&cfg)?;
-        ui.show_config_warnings(unknown_keys);
+        ui.show_config_warnings(startup_warnings);
         let mut sync_handler = SyncHandler::new();
         let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;

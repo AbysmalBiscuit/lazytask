@@ -80,7 +80,7 @@ lazytask uses these keys:
 - `sync.local.server_dir`: sync to a local directory; takes precedence over a sync server, as in Taskwarrior
 - `sync.server.url` (or its deprecated synonym `sync.server.origin`; `sync.server.url` wins), `sync.server.client_id`, `sync.encryption_secret`: sync to a TaskChampion sync server
 
-When either sync target is set, sync works from launch without the sync config modal. The GCP and AWS sync keys are not read, since lazytask does not support those backends.
+When either sync target is set, sync works from launch without the sync config modal. Sync settings lazytask cannot use, such as a server URL without a UUID `sync.server.client_id`, leave sync unconfigured and show a warning at startup. The GCP and AWS sync keys are not read, since lazytask does not support those backends.
 
 ### Keybindings
 

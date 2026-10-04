@@ -9,6 +9,7 @@ use lazytask::app::{LaunchEnv, Session};
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::{SyncSettings, TaskChampionIntegration};
 use lazytask::ui::app_ui::AppUI;
+use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
 
 struct Fixture {
@@ -210,6 +211,40 @@ async fn leading_tilde_in_local_server_dir_expands_to_home() -> Result<()> {
     assert!(
         fx.path("home/syncdir").is_dir(),
         "server dir not under home"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn incomplete_taskrc_sync_settings_warn_and_leave_sync_unconfigured() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "data.location={}\nsync.server.url=https://tw.example.com\n",
+            fx.path("data").display()
+        ),
+    )?;
+
+    let session = fx.open(&taskrc, None).await?;
+    assert!(!session.taskchampion.is_sync_configured());
+
+    let mut ui = AppUI::new(&session.config)?;
+    ui.show_config_warnings(&session.warnings);
+    let mut sync_handler = SyncHandler::new();
+    sync_handler.initialize(&session.taskchampion)?;
+    let mut terminal = Terminal::new(TestBackend::new(200, 40))?;
+    terminal.draw(|f| ui.render_with_sync(f, &sync_handler))?;
+    let screen: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(
+        screen.contains("taskrc") && screen.contains("client_id"),
+        "warning missing from screen:\n{screen}"
     );
     Ok(())
 }

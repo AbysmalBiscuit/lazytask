@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
@@ -49,11 +49,11 @@ impl LaunchEnv {
 
 /// Everything startup loads before the terminal is taken over: the config,
 /// the user's taskrc, and the replica they point at, with sync configured
-/// from the taskrc when it names a target.
+/// from the taskrc when it names a usable target.
 pub struct Session {
     pub config: Config,
-    /// Keys the config file set that lazytask does not know.
-    pub unknown_keys: Vec<String>,
+    /// Problems that do not stop startup, for the UI to show.
+    pub warnings: Vec<String>,
     pub taskchampion: TaskChampionIntegration,
 }
 
@@ -72,14 +72,24 @@ impl Session {
             .taskwarrior
             .resolve_data_location(env.taskdata, &taskrc, home)?;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
-        if let Some(settings) = taskrc.sync_settings(home)? {
-            taskchampion
-                .configure_sync(settings)
-                .context("Invalid sync settings in taskrc")?;
+
+        let mut warnings = Vec::new();
+        if !unknown_keys.is_empty() {
+            warnings.push(format!("Unknown config keys: {}", unknown_keys.join(", ")));
         }
+        let sync = taskrc
+            .sync_settings(home)
+            .and_then(|settings| match settings {
+                Some(settings) => taskchampion.configure_sync(settings),
+                None => Ok(()),
+            });
+        if let Err(err) = sync {
+            warnings.push(format!("Sync settings in taskrc ignored: {err:#}"));
+        }
+
         Ok(Session {
             config,
-            unknown_keys,
+            warnings,
             taskchampion,
         })
     }
@@ -89,11 +99,11 @@ impl App {
     pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
         let Session {
             config,
-            unknown_keys,
+            warnings,
             taskchampion,
         } = Session::open(config_path, LaunchEnv::from_process()).await?;
         let mut ui = AppUI::new(&config)?;
-        ui.show_config_warnings(&unknown_keys);
+        ui.show_config_warnings(&warnings);
         let sync_handler = SyncHandler::new();
 
         enable_raw_mode()?;
