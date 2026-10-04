@@ -53,7 +53,7 @@ Available columns:
 - `id` - Task ID number
 - `uuid` - Task UUID (shortened)
 - `project` - Project name
-- `priority` - Priority (H/M/L)
+- `priority` - Priority (High/Medium/Low)
 - `due` - Due date
 - `description` - Task description
 - `tags` - Task tags
