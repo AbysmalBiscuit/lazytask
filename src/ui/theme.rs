@@ -1,6 +1,7 @@
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::config::ThemeConfig;
+use crate::data::models::TaskStatus;
 
 /// The only built-in palette, and the one an unknown `theme.name` falls
 /// back to.
@@ -127,6 +128,17 @@ impl Theme {
             "priority_low" => &mut self.priority_low,
             _ => return None,
         })
+    }
+
+    /// The color of a task's status.
+    pub fn status(&self, status: TaskStatus) -> Color {
+        match status {
+            TaskStatus::Pending => self.warning,
+            TaskStatus::Completed => self.success,
+            TaskStatus::Deleted => self.error,
+            TaskStatus::Waiting => self.secondary,
+            TaskStatus::Recurring => self.info,
+        }
     }
 
     /// Plain text on the theme's background.

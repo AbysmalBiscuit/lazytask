@@ -503,18 +503,10 @@ impl CalendarWidget {
                     TaskStatus::Recurring => "🔁",
                 };
 
-                let status_color = match task.status {
-                    TaskStatus::Pending => {
-                        if task.is_overdue() {
-                            theme.error
-                        } else {
-                            theme.warning
-                        }
-                    }
-                    TaskStatus::Completed => theme.success,
-                    TaskStatus::Deleted => theme.muted,
-                    TaskStatus::Waiting => theme.primary,
-                    TaskStatus::Recurring => theme.secondary,
+                let status_color = if task.is_overdue() {
+                    theme.error
+                } else {
+                    theme.status(task.status)
                 };
 
                 let priority_str = match &task.priority {

@@ -91,13 +91,7 @@ impl TaskDetailWidget {
         ]));
 
         // Status
-        let status_color = match task.status {
-            TaskStatus::Pending => theme.warning,
-            TaskStatus::Completed => theme.success,
-            TaskStatus::Deleted => theme.error,
-            TaskStatus::Waiting => theme.secondary,
-            TaskStatus::Recurring => theme.info,
-        };
+        let status_color = theme.status(task.status);
         lines.push(Line::from(vec![
             Span::styled("Status        ", Style::default().fg(theme.primary)),
             Span::styled(
