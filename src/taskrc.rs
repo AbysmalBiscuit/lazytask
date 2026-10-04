@@ -92,24 +92,28 @@ impl Taskrc {
 
     /// The sync target Taskwarrior would use: a local server directory
     /// first, then a sync server, whose URL may also be given by the
-    /// deprecated `sync.server.origin`.
-    pub fn sync_settings(&self) -> Option<SyncSettings> {
+    /// deprecated `sync.server.origin`. A leading `~` in the local server
+    /// directory expands to `home`.
+    pub fn sync_settings(&self, home: Option<&Path>) -> Result<Option<SyncSettings>> {
         if let Some(server_dir) = self.get("sync.local.server_dir") {
-            return Some(SyncSettings {
-                local_server_dir: Some(PathBuf::from(server_dir)),
+            return Ok(Some(SyncSettings {
+                local_server_dir: Some(expand_tilde(Path::new(server_dir), home)?),
                 ..Default::default()
-            });
+            }));
         }
-        let server_url = self
+        let Some(server_url) = self
             .get("sync.server.url")
-            .or_else(|| self.get("sync.server.origin"))?;
+            .or_else(|| self.get("sync.server.origin"))
+        else {
+            return Ok(None);
+        };
         let owned = |key| self.get(key).unwrap_or_default().to_string();
-        Some(SyncSettings {
+        Ok(Some(SyncSettings {
             server_url: server_url.to_string(),
             client_id: owned("sync.server.client_id"),
             encryption_secret: owned("sync.encryption_secret"),
             local_server_dir: None,
-        })
+        }))
     }
 }
 

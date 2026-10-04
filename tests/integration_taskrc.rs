@@ -191,3 +191,25 @@ async fn malformed_line_reports_its_file_and_line_number() -> Result<()> {
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn leading_tilde_in_local_server_dir_expands_to_home() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "data.location={}\nsync.local.server_dir=~/syncdir\n",
+            fx.path("data").display()
+        ),
+    )?;
+
+    let mut session = fx.open(&taskrc, None).await?;
+    session.taskchampion.add_task("Synced home", &[]).await?;
+    session.taskchampion.sync().await?;
+
+    assert!(
+        fx.path("home/syncdir").is_dir(),
+        "server dir not under home"
+    );
+    Ok(())
+}

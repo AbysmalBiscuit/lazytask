@@ -72,7 +72,7 @@ impl Session {
             .taskwarrior
             .resolve_data_location(env.taskdata, &taskrc, home)?;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
-        if let Some(settings) = taskrc.sync_settings() {
+        if let Some(settings) = taskrc.sync_settings(home)? {
             taskchampion
                 .configure_sync(settings)
                 .context("Invalid sync settings in taskrc")?;
