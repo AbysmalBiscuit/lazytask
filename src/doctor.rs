@@ -13,8 +13,7 @@ use std::time::Duration;
 use reqwest::StatusCode;
 
 use taskchampion::server::GetVersionResult;
-use taskchampion::storage::AccessMode;
-use taskchampion::{Replica, ServerConfig, SqliteStorage, Uuid};
+use taskchampion::{ServerConfig, Uuid};
 
 use crate::app::LaunchEnv;
 use crate::config::{Config, LoadedConfig, PathSource, ResolvedPath};
@@ -139,7 +138,7 @@ impl fmt::Display for Report {
 pub async fn run(config_path: Option<&str>, env: &LaunchEnv, contact_sync_server: bool) -> Report {
     let (config_check, config) = check_config(config_path);
     let (taskrc_check, taskrc) = check_taskrc(&config, env);
-    let (data_check, data_dir) = check_data_dir(&config, &taskrc, env).await;
+    let (data_check, data_dir) = check_data_dir(&config, &taskrc, env);
     let (settings_check, target) = check_sync_settings(&taskrc, &data_dir.unwrap_or_default());
     let server_check = check_sync_server(target, contact_sync_server).await;
     Report {
@@ -259,11 +258,7 @@ fn check_taskrc(config: &Config, env: &LaunchEnv) -> (Check, Taskrc) {
 }
 
 /// The data directory check, and the directory when it resolved.
-async fn check_data_dir(
-    config: &Config,
-    taskrc: &Taskrc,
-    env: &LaunchEnv,
-) -> (Check, Option<PathBuf>) {
+fn check_data_dir(config: &Config, taskrc: &Taskrc, env: &LaunchEnv) -> (Check, Option<PathBuf>) {
     const NAME: &str = "Data directory";
     let resolved = config.taskwarrior.resolve_data_location(
         env.taskdata_var.clone(),
@@ -303,24 +298,15 @@ async fn check_data_dir(
             "has no {REPLICA_FILE}; lazytask creates an empty replica on first start"
         ));
     } else {
-        match count_tasks(&path).await {
-            Ok(1) => check.note("replica opens, 1 task"),
-            Ok(count) => check.note(format!("replica opens, {count} tasks")),
-            Err(err) => check.fail(format!("replica does not open: {err:#}")),
-        }
+        // Opening the replica, even read-only, leaves SQLite's -wal and -shm
+        // files beside it, so doctor only checks that it is there.
+        check.note(format!("holds a replica, {REPLICA_FILE}"));
     }
     (check, Some(path))
 }
 
 /// The SQLite file TaskChampion keeps a replica in.
 const REPLICA_FILE: &str = "taskchampion.sqlite3";
-
-/// Opens the replica in `data_dir` read-only, without creating anything,
-/// and counts its tasks.
-async fn count_tasks(data_dir: &Path) -> anyhow::Result<usize> {
-    let storage = SqliteStorage::new(data_dir, AccessMode::ReadOnly, false).await?;
-    Ok(Replica::new(storage).all_task_uuids().await?.len())
-}
 
 /// A sync target whose settings are valid.
 struct SyncTarget {

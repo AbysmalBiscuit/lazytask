@@ -272,7 +272,7 @@ fn missing_data_directory_is_reported_and_left_uncreated() {
 }
 
 #[tokio::test]
-async fn existing_replica_opens_and_reports_its_tasks() {
+async fn existing_replica_passes_and_its_directory_is_left_unchanged() {
     let doctor = Doctor::new();
     doctor.clean_default_config();
     let data = doctor.home().join("data");
@@ -282,12 +282,22 @@ async fn existing_replica_opens_and_reports_its_tasks() {
     replica.add_task("one", &[]).await.unwrap();
     drop(replica);
     let doctor = doctor.env("TASKDATA", &data);
+    let listing = || {
+        let mut names: Vec<_> = std::fs::read_dir(&data)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        names.sort();
+        names
+    };
+    let before = listing();
 
     let run = doctor.run(&[]);
 
+    assert_eq!(listing(), before, "doctor changed the data directory");
     let check = run.check("Data directory");
     assert!(check.starts_with("[pass]"), "{check}");
-    assert!(check.ends_with("note:   replica opens, 1 task"), "{check}");
+    assert!(check.contains("taskchampion.sqlite3"), "{check}");
 }
 
 #[test]
