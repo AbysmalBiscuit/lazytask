@@ -151,3 +151,15 @@ fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
     assert_eq!(location, PathBuf::from("/home/me/tasks/db"));
     Ok(())
 }
+
+#[test]
+fn leading_tilde_in_taskdata_expands_to_home() -> anyhow::Result<()> {
+    let config = load_toml("")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(Some("~/tilde".into()), Path::new("/home/me"));
+
+    assert_eq!(location, PathBuf::from("/home/me/tilde"));
+    Ok(())
+}

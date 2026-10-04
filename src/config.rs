@@ -49,18 +49,18 @@ pub struct UIConfig {
 }
 
 impl TaskwarriorConfig {
-    /// The TaskChampion data directory, first match wins: `data_location`
-    /// (a leading `~` expands to `home`), then `taskdata` (the `TASKDATA`
-    /// variable), then `~/.task`.
+    /// The TaskChampion data directory, first match wins: `data_location`,
+    /// then `taskdata` (the `TASKDATA` variable), then `~/.task`. A leading
+    /// `~` in the winning path expands to `home`.
     pub fn resolve_data_location(&self, taskdata: Option<OsString>, home: &Path) -> PathBuf {
-        match &self.data_location {
-            Some(location) => match location.strip_prefix("~") {
-                Ok(rest) => home.join(rest),
-                Err(_) => location.clone(),
-            },
-            None => taskdata
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home.join(".task")),
+        let location = self
+            .data_location
+            .clone()
+            .or_else(|| taskdata.map(PathBuf::from))
+            .unwrap_or_else(|| home.join(".task"));
+        match location.strip_prefix("~") {
+            Ok(rest) => home.join(rest),
+            Err(_) => location,
         }
     }
 }
