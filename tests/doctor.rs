@@ -165,6 +165,16 @@ fn taskrc_reports_each_source_in_precedence_order() {
     );
 
     let doctor = Doctor::new();
+    doctor.file("xdg/lazytask/config.toml", SCHEMA_HEADER);
+    let xdg = doctor.file("xdg/task/taskrc", "");
+    let config_home = doctor.home().join("xdg");
+    let doctor = doctor.env("XDG_CONFIG_HOME", config_home);
+    assert_eq!(
+        value_and_source(&doctor.run(&[]), "Taskrc"),
+        (xdg.display().to_string(), "default".into())
+    );
+
+    let doctor = Doctor::new();
     doctor.clean_default_config();
     let from_env = doctor.file("env.taskrc", "");
     let doctor = doctor.env("TASKRC", &from_env);

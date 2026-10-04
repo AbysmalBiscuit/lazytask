@@ -208,9 +208,11 @@ fn check_config(flag: Option<&str>) -> (Check, Config) {
 /// when it is missing or does not parse.
 fn check_taskrc(config: &Config, env: &LaunchEnv) -> (Check, Taskrc) {
     const NAME: &str = "Taskrc";
-    let resolved = config
-        .taskwarrior
-        .resolve_taskrc_path(env.taskrc_var.clone(), env.home.as_deref());
+    let resolved = config.taskwarrior.resolve_taskrc_path(
+        env.taskrc_var.clone(),
+        env.xdg_config_home_var.clone(),
+        env.home.as_deref(),
+    );
     let ResolvedPath { path, source } = match resolved {
         Ok(Some(resolved)) => resolved,
         Ok(None) => {
