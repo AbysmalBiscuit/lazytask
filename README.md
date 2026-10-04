@@ -71,7 +71,13 @@ cargo run --release
 # CLI options
 lazytask --help
 lazytask --config /custom/path/config.toml
+
+# Check the config, taskrc, data directory and sync settings
+lazytask doctor
+lazytask doctor --sync   # also contacts the sync server
 ```
+
+`lazytask doctor` prints each setting with its resolved value, where that value came from, and a `pass`, `warn`, `fail` or `skip` status; `skip` marks a check that did not run, such as the sync server without `--sync`. It changes nothing and makes no network calls unless given `--sync`. The one exception: on an empty GCP or AWS bucket, `--sync` creates the `salt` object TaskChampion needs, as the first sync would. It exits non-zero when any check fails; warnings alone exit zero.
 
 ### Application modes
 
@@ -230,6 +236,7 @@ src/
 ├── lib.rs               # Library root (re-exports modules)
 ├── app.rs               # Event loop, terminal setup, App struct
 ├── config.rs            # TOML config loading
+├── doctor.rs            # `lazytask doctor` checks and report
 ├── taskrc.rs            # Taskwarrior taskrc reader
 ├── taskchampion.rs      # Data engine, wraps Replica/Operations
 ├── data/
@@ -345,6 +352,7 @@ podman rm -f lazytask-sync-test
 |---|---|
 | `tests/unit/config.rs` | Config loading and data-location resolution |
 | `tests/config_schema.rs` | The committed `schema/lazytask-config.json` matches `lazytask schema` |
+| `tests/doctor.rs` | `lazytask doctor` findings, sources and exit codes, run as the binary |
 | `tests/unit/filters.rs` | `TaskFilter` predicate matrix |
 | `tests/unit/models.rs` | `Task` JSON parsing (RFC3339, Taskwarrior-compact, Unix timestamps) |
 | `tests/integration_engine.rs` | CRUD on a real TaskChampion replica in a temp dir |

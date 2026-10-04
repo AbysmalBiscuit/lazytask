@@ -1,10 +1,12 @@
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use lazytask::app::App;
+use lazytask::app::{App, LaunchEnv};
 use lazytask::config::Config;
+use lazytask::doctor;
 use lazytask::schema::{self, InitOutcome};
 
 #[derive(Parser)]
@@ -33,6 +35,16 @@ enum Command {
         #[command(subcommand)]
         action: Option<SchemaAction>,
     },
+    /// Report how the config, taskrc, data directory and sync settings
+    /// resolve, where each came from, and whether it works. Exits non-zero
+    /// when a check fails.
+    Doctor {
+        /// Also contact the sync server to check it is reachable and the
+        /// credentials work. On an empty GCP or AWS bucket this creates the
+        /// `salt` object TaskChampion needs, as the first sync would.
+        #[arg(long)]
+        sync: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -46,7 +58,7 @@ enum SchemaAction {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -69,7 +81,14 @@ async fn main() -> Result<()> {
             };
             println!("{}: {message}", path.display());
         }
+        Some(Command::Doctor { sync }) => {
+            let report = doctor::run(cli.config.as_deref(), &LaunchEnv::from_process(), sync).await;
+            print!("{report}");
+            if report.failed() {
+                return Ok(ExitCode::FAILURE);
+            }
+        }
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }

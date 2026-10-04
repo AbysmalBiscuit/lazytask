@@ -32,6 +32,9 @@ strum = { version = "0.28", features = ["derive"] }
 enum_dispatch = "0.3"
 notify = "8.2"
 schemars = "1"
+# TLS comes from taskchampion's `tls-webpki-roots` feature, which enables it
+# on this same reqwest.
+reqwest = { version = "0.12", default-features = false }
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -80,6 +83,10 @@ path = "tests/integration_app.rs"
 [[test]]
 name = "config_schema"
 path = "tests/config_schema.rs"
+
+[[test]]
+name = "doctor"
+path = "tests/doctor.rs"
 
 [profile.dist]
 inherits = "release"

@@ -257,6 +257,8 @@ Running LazyTask never rewrites your config file. Keys you leave out pick up the
 
 ## Troubleshooting
 
+Start with `lazytask doctor`. It reports the config file, taskrc, data directory and sync settings lazytask resolves, where each came from (`--config`, a config key, `TASKRC`, `TASKDATA`, the taskrc's `data.location`, or the default), and what is wrong with each. `lazytask doctor --sync` also contacts the sync server.
+
 ### Configuration Not Loading
 
 1. Check file path: `~/.config/lazytask/config.toml`

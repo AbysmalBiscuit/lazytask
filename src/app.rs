@@ -117,17 +117,16 @@ impl Session {
                 env.xdg_config_home_var.clone(),
                 env.home.as_deref(),
             )?
-            .map(|path| TaskrcFile::new(path, env.clone()));
+            .map(|taskrc| TaskrcFile::new(taskrc.path, env.clone()));
         let taskrc = taskrc_file
             .as_ref()
             .map(TaskrcFile::load)
             .transpose()?
             .unwrap_or_default();
-        let data_dir = config.taskwarrior.resolve_data_location(
-            env.taskdata_var.clone(),
-            &taskrc,
-            env.home.as_deref(),
-        )?;
+        let data_dir = config
+            .taskwarrior
+            .resolve_data_location(env.taskdata_var.clone(), &taskrc, env.home.as_deref())?
+            .path;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
 
         let mut warnings = Vec::new();
