@@ -50,15 +50,12 @@ impl Fixture {
             .await
     }
 
-    /// A launch environment with a home directory, no working directory,
-    /// variables or package rc directories, and the given `TASKRC` and
-    /// `TASKDATA`.
+    /// `home_env` with the given `TASKRC` and `TASKDATA`.
     fn env(&self, taskrc_var: &Path, taskdata_var: Option<&Path>) -> LaunchEnv {
         LaunchEnv {
             taskrc_var: Some(taskrc_var.into()),
             taskdata_var: taskdata_var.map(Into::into),
-            home: Some(self.path("home")),
-            ..LaunchEnv::default()
+            ..self.home_env()
         }
     }
 
@@ -67,8 +64,9 @@ impl Fixture {
         Session::open(Some(config.to_str().unwrap()), env).await
     }
 
-    /// A launch environment with a home directory and nothing else, so the
-    /// taskrc is found the way Taskwarrior finds it without `TASKRC`.
+    /// A launch environment with a home directory and no working directory,
+    /// variables or package rc directories, so the taskrc is found the way
+    /// Taskwarrior finds it without `TASKRC`.
     fn home_env(&self) -> LaunchEnv {
         LaunchEnv {
             home: Some(self.path("home")),
