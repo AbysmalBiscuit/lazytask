@@ -8,6 +8,9 @@ use lazytask::config::Config;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
+use std::ffi::OsStr;
+use std::os::unix::ffi::OsStrExt;
+
 use ratatui::{backend::TestBackend, buffer::Buffer, style::Color, Terminal};
 
 fn buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
@@ -419,8 +422,8 @@ async fn unknown_theme_name_warns_and_uses_the_default() {
 }
 
 /// Draws a session holding a task with every colored attribute, with
-/// `vars` as the process environment.
-async fn render_with_env(vars: &[(&str, &str)]) -> Terminal<TestBackend> {
+/// `no_color` as the `NO_COLOR` variable.
+async fn render_with_no_color(no_color: Option<&OsStr>) -> Terminal<TestBackend> {
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut session = Session::open(
         Some(tmp.path().join("no-config.toml").to_str().unwrap()),
@@ -428,10 +431,7 @@ async fn render_with_env(vars: &[(&str, &str)]) -> Terminal<TestBackend> {
             taskrc_var: Some(tmp.path().join("no-taskrc").into()),
             taskdata_var: Some(tmp.path().join("data").into()),
             home: None,
-            vars: vars
-                .iter()
-                .map(|&(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
+            no_color_var: no_color.map(OsStr::to_os_string),
             ..LaunchEnv::default()
         },
     )
@@ -468,14 +468,19 @@ fn colored_cells(terminal: &Terminal<TestBackend>) -> usize {
 
 #[tokio::test]
 async fn no_color_renders_without_color() {
-    assert_ne!(colored_cells(&render_with_env(&[]).await), 0);
+    assert_ne!(colored_cells(&render_with_no_color(None).await), 0);
     assert_ne!(
-        colored_cells(&render_with_env(&[("NO_COLOR", "")]).await),
+        colored_cells(&render_with_no_color(Some(OsStr::new(""))).await),
         0,
         "an empty NO_COLOR must not disable color"
     );
     assert_eq!(
-        colored_cells(&render_with_env(&[("NO_COLOR", "1")]).await),
+        colored_cells(&render_with_no_color(Some(OsStr::new("1"))).await),
         0
+    );
+    assert_eq!(
+        colored_cells(&render_with_no_color(Some(OsStr::from_bytes(b"\xff"))).await),
+        0,
+        "a NO_COLOR that is not UTF-8 is still set"
     );
 }
