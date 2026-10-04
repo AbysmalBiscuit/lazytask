@@ -7,7 +7,6 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::taskrc::Taskrc;
-use crate::ui::theme::DEFAULT_THEME_NAME;
 use crate::utils::helpers::expand_tilde;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -19,6 +18,10 @@ pub struct Config {
     pub ui: UIConfig,
     pub sync: SyncConfig,
 }
+
+/// The only built-in theme, and the one an unknown `theme.name` falls back
+/// to.
+pub const DEFAULT_THEME_NAME: &str = "catppuccin-mocha";
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default)]

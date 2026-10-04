@@ -1,11 +1,7 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::config::ThemeConfig;
+use crate::config::{ThemeConfig, DEFAULT_THEME_NAME};
 use crate::data::models::TaskStatus;
-
-/// The only built-in palette, and the one an unknown `theme.name` falls
-/// back to.
-pub const DEFAULT_THEME_NAME: &str = "catppuccin-mocha";
 
 /// The color of each role the UI draws with. Views and components take
 /// their colors from here, never from literal colors.
