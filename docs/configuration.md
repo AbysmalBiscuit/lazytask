@@ -53,14 +53,14 @@ Column names in `task_list_columns` ignore case. A column named twice shows once
 
 Available columns:
 
-- `id` - Task ID number
+- `id` - Task ID, the same one `task` shows; blank once `task` stops numbering the task, as it does for completed tasks
 - `uuid` - Task UUID (shortened)
 - `project` - Project name
 - `priority` - Priority (High/Medium/Low)
 - `due` - Due date
 - `description` - Task description
 - `tags` - Task tags
-- `urgency` - Calculated urgency
+- `urgency` - Urgency, computed as Taskwarrior 3 does with its default coefficients
 - `entry` - Creation date
 - `modified` - Last modified date
 - `status` - Task status
