@@ -586,7 +586,10 @@ impl AppUI {
     fn draw_help(&self, f: &mut Frame, area: Rect) {
         // Render the outer block, then split the inner area into two columns.
         let block = Block::default()
-            .title("Help — Keyboard Shortcuts (Esc to close)")
+            .title(format!(
+                "Help— Keyboard Shortcuts ({} to close)",
+                self.key_label(Section::Global, "back")
+            ))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan));
         let inner = block.inner(area);
@@ -607,7 +610,7 @@ impl AppUI {
             Line::from(vec![
                 Span::raw(" "),
                 Span::styled(
-                    format!("{:<10}", key),
+                    format!("{:<11}", key),
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -623,65 +626,41 @@ impl AppUI {
             ))
         };
 
-        let left = vec![
-            header("Global"),
-            row("q", "Quit"),
-            row("Ctrl+C", "Quit"),
-            row("F1", "Toggle this help"),
-            row("F5", "Reload tasks from replica"),
-            row("Esc", "Cancel / back / close modal"),
-            row("Enter", "Confirm / save"),
-            blank(),
-            header("Task list"),
-            row("↑ ↓", "Move selection"),
-            row("a", "Add new task"),
-            row("e", "Edit selected task"),
-            row("d", "Mark task done"),
-            row("Delete", "Soft-delete task"),
-            row("/", "Toggle filter mode"),
-            row("r", "Open Reports view"),
-            row("s", "Sync (needs sync config)"),
-            row("Shift+S", "Open Sync Config modal"),
-            blank(),
-            header("Filter mode"),
-            row("Tab", "Cycle Status→Project→Tags→Search"),
-            row("↑ ↓", "Navigate items"),
-            row("Space", "Toggle item (multi-select)"),
-            row("type", "Search (Search section only)"),
-            row("Backspace", "Erase a character"),
-            row("Esc", "Exit (selections stay applied)"),
-        ];
+        let rows = |section: Section| {
+            self.keymap
+                .bindings(section)
+                .map(|(spec, key)| row(&key.to_string(), spec.description))
+                .collect::<Vec<_>>()
+        };
 
-        let right = vec![
-            header("Reports → Calendar"),
-            row("c", "Toggle Calendar / Dashboard"),
-            row("← →", "Move by one day"),
-            row("↑ ↓", "Move by one week"),
-            row("< >", "Previous / next month"),
-            row("t", "Jump to today"),
-            blank(),
-            header("Form (add / edit task)"),
-            row("Tab / ↓", "Next field"),
-            row("Shift+Tab/↑", "Previous field"),
-            row("← →", "Move cursor in text field"),
-            row("type", "Edit active field"),
-            row("Backspace", "Erase a character"),
-            row("Enter", "Commit field, then save"),
-            row("Esc", "Cancel without saving"),
+        let mut left = vec![header("Global")];
+        left.extend(rows(Section::Global));
+        left.extend([blank(), header("Task list")]);
+        left.extend(rows(Section::TaskList));
+        left.extend([blank(), header("Form and filter panel")]);
+        left.extend(rows(Section::Form));
+        left.push(row("type", "Edit active field / search"));
+
+        let sync_config = self.key_label(Section::Global, "sync_config");
+        let confirm = self.key_label(Section::Form, "confirm");
+        let sync = self.key_label(Section::Global, "sync");
+        let mut right = vec![header("Reports")];
+        right.extend(rows(Section::Reports));
+        right.extend([
             blank(),
             header("Sync setup"),
             note(" 1. Run a taskchampion-sync-server"),
             note("    (see README §Sync)"),
-            note(" 2. Press Shift+S, fill URL,"),
+            note(&format!(" 2. Press {sync_config}, fill URL,")),
             note("    client_id (UUID), and secret"),
-            note(" 3. Press Enter to save"),
-            note(" 4. Press s to sync"),
+            note(&format!(" 3. Press {confirm} to save")),
+            note(&format!(" 4. Press {sync} to sync")),
             blank(),
             header("Tag syntax (Tags field)"),
             note(" +work     add tag"),
             note(" -old      remove tag"),
             note(" (empty)   clear all user tags"),
-        ];
+        ]);
 
         if two_columns {
             let columns = Layout::default()

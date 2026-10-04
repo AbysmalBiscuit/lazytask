@@ -424,41 +424,55 @@ async fn f1_shows_help_then_esc_returns_to_task_list() -> Result<()> {
 }
 
 #[tokio::test]
-async fn help_screen_lists_all_major_shortcuts() -> Result<()> {
-    // Regression test: the original help screen only listed q / F1 / a / e / d / Del
-    // and was missing F5, /, r, s, Shift+S, Tab, Space, arrows, Calendar nav, etc.
+async fn help_lists_the_configured_keys() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        50,
+        "[keybindings.global]\nhelp = \"F2\"\n\n[keybindings.task_list]\nadd_task = \"Insert\"\n",
+    )
+    .await?;
+    d.load().await?;
+    d.key(KeyCode::F(2)).await?;
+
+    let screen = d.screen();
+    let row = |description: &str| {
+        screen
+            .lines()
+            .find(|line| line.contains(description))
+            .unwrap_or_else(|| panic!("help has no {description:?} row:\n{screen}"))
+            .to_string()
+    };
+    assert!(
+        row("Add new task").contains("Insert"),
+        "{}",
+        row("Add new task")
+    );
+    assert!(
+        row("Show this help").contains("F2"),
+        "{}",
+        row("Show this help")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn help_screen_lists_every_section() -> Result<()> {
     let mut d = Driver::new(160, 50).await?;
     d.load().await?;
     d.key(KeyCode::F(1)).await?;
 
-    // Section headers
-    for marker in ["Global", "Task list", "Filter mode", "Reports", "Form"] {
+    for marker in [
+        "Global",
+        "Task list",
+        "Form and filter panel",
+        "Reports",
+        "Sync setup",
+    ] {
         assert!(
             d.screen_contains(marker),
             "help missing section header {:?}\n{}",
             marker,
             d.screen()
-        );
-    }
-
-    // Key bindings that the original screen didn't show
-    for key_label in [
-        "Ctrl+C",
-        "F5",
-        "/",
-        "r",
-        "s",
-        "Shift+S",
-        "Tab",
-        "Space",
-        "Backspace",
-        "Esc",
-        "Enter",
-    ] {
-        assert!(
-            d.screen_contains(key_label),
-            "help should list shortcut {:?}",
-            key_label,
         );
     }
     Ok(())
