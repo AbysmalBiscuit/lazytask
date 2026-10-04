@@ -107,11 +107,11 @@ impl Taskrc {
         else {
             return Ok(None);
         };
-        let owned = |key| self.get(key).unwrap_or_default().to_string();
+        let value_or_empty = |key| self.get(key).unwrap_or_default().to_string();
         Ok(Some(SyncSettings {
             server_url: server_url.to_string(),
-            client_id: owned("sync.server.client_id"),
-            encryption_secret: owned("sync.encryption_secret"),
+            client_id: value_or_empty("sync.server.client_id"),
+            encryption_secret: value_or_empty("sync.encryption_secret"),
             local_server_dir: None,
         }))
     }
