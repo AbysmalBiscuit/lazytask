@@ -278,17 +278,6 @@ impl TaskTableFormatter {
 
     // Get overall row style based on intelligent task priority hierarchy
     fn get_row_style(&self, task: &Task, theme: &Theme) -> Style {
-        // Intelligent priority hierarchy combining multiple factors:
-        // 1. High priority + overdue/due soon = CRITICAL RED BOLD
-        // 2. Any overdue tasks = URGENT RED BOLD
-        // 3. High priority + due within 2 days = URGENT RED BOLD
-        // 4. Due today/tomorrow = URGENT YELLOW BOLD
-        // 5. High priority tasks = RED
-        // 6. Medium priority tasks = YELLOW
-        // 7. Completed tasks = DIMMED GRAY
-        // 8. Low priority tasks = GREEN
-        // 9. Default/no priority tasks = WHITE
-
         let is_high_priority = task.priority == Some(crate::data::models::Priority::High);
         let is_overdue = self.is_overdue(task.due);
         let is_due_today = self.is_due_today(task.due);
@@ -296,7 +285,7 @@ impl TaskTableFormatter {
         let is_due_tomorrow = self.is_due_tomorrow(task.due);
 
         if is_overdue || is_due_today || (is_high_priority && is_due_within_2_days) {
-            // CRITICAL RED:
+            // Bold error:
             // - All overdue tasks (regardless of priority)
             // - All tasks due today (regardless of priority)
             // - High priority tasks due within 2 days
@@ -304,7 +293,7 @@ impl TaskTableFormatter {
                 .fg(theme.error)
                 .add_modifier(Modifier::BOLD)
         } else if is_due_tomorrow {
-            // URGENT YELLOW: Due tomorrow = high urgency
+            // Bold warning: due tomorrow
             Style::default()
                 .fg(theme.warning)
                 .add_modifier(Modifier::BOLD)
