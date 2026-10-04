@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use std::time::{Duration, Instant};
 
 use crate::data::models::Task;
 use crate::handlers::input::Action;
@@ -50,6 +51,8 @@ pub struct AppUI {
     keymap_warnings: Vec<String>,
     show_help_bar: bool,
     config_warnings: Vec<String>,
+    refresh_interval: Option<Duration>,
+    last_refresh: Instant,
 }
 
 impl AppUI {
@@ -82,6 +85,11 @@ impl AppUI {
             keymap_warnings,
             show_help_bar: config.ui.show_help_bar,
             config_warnings: Vec::new(),
+            refresh_interval: match config.ui.refresh_interval {
+                0 => None,
+                ms => Some(Duration::from_millis(ms)),
+            },
+            last_refresh: Instant::now(),
         };
 
         match config.ui.default_view.as_str() {
@@ -108,13 +116,43 @@ impl AppUI {
 
     pub async fn load_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<()> {
         let mut tasks = taskchampion.list_tasks().await?;
-        tasks.sort_by(|a, b| b.entry.cmp(&a.entry));
+        // The replica returns tasks in no fixed order, so tie-break on uuid to
+        // keep rows from swapping places on every refresh.
+        tasks.sort_by(|a, b| b.entry.cmp(&a.entry).then_with(|| a.uuid.cmp(&b.uuid)));
 
+        self.last_refresh = Instant::now();
         self.tasks = tasks.clone();
         self.main_view.update_available_filters(&self.tasks);
         self.reports_view.update_tasks(tasks);
         self.apply_filters();
         Ok(())
+    }
+
+    /// Reloads tasks from the replica once `ui.refresh_interval` has passed
+    /// since the last load, keeping the selected task selected. A failed
+    /// reload shows in the footer and is retried an interval later. Returns
+    /// whether the screen needs a redraw.
+    pub async fn refresh_if_due(
+        &mut self,
+        now: Instant,
+        taskchampion: &mut TaskChampionIntegration,
+    ) -> bool {
+        if self.time_until_refresh(now) != Some(Duration::ZERO) {
+            return false;
+        }
+        self.preserve_selection_uuid = self.main_view.selected_task_uuid();
+        if let Err(e) = self.load_tasks(taskchampion).await {
+            self.last_refresh = now;
+            self.set_status_message(format!("❌ Refresh failed: {e}"));
+        }
+        true
+    }
+
+    /// Time left until `refresh_if_due` reloads, or `None` when
+    /// auto-refresh is off.
+    pub fn time_until_refresh(&self, now: Instant) -> Option<Duration> {
+        let interval = self.refresh_interval?;
+        Some(interval.saturating_sub(now.saturating_duration_since(self.last_refresh)))
     }
 
     fn apply_filters(&mut self) {

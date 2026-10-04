@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, Stdout};
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::config::{Config, LoadedConfig};
 use crate::handlers::input::Action;
@@ -19,6 +19,8 @@ use crate::taskrc::Taskrc;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
+
+const EVENT_POLL_TIMEOUT: Duration = Duration::from_millis(250);
 
 pub struct App {
     pub config: Config,
@@ -159,7 +161,11 @@ impl App {
                 needs_redraw = false;
             }
 
-            if event::poll(Duration::from_millis(250))? {
+            let poll_timeout = self
+                .ui
+                .time_until_refresh(Instant::now())
+                .map_or(EVENT_POLL_TIMEOUT, |t| t.min(EVENT_POLL_TIMEOUT));
+            if event::poll(poll_timeout)? {
                 match event::read()? {
                     Event::Key(key) => {
                         let action = self.ui.action(key);
@@ -188,6 +194,14 @@ impl App {
 
             if self.should_quit {
                 break;
+            }
+
+            if self
+                .ui
+                .refresh_if_due(Instant::now(), &mut self.taskchampion)
+                .await
+            {
+                needs_redraw = true;
             }
         }
 
