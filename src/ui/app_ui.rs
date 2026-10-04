@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::config::UIConfig;
+use crate::config::{DefaultView, UIConfig};
 use crate::data::models::Task;
 use crate::handlers::input::Action;
 use crate::handlers::sync::{SyncHandler, SyncPhase};
@@ -88,15 +88,16 @@ impl AppUI {
             theme,
         };
 
-        match config.ui.default_view.as_str() {
-            "task_list" => {}
-            "reports" => ui.current_view = AppView::Reports,
-            "calendar" => {
+        match config.ui.default_view.parse::<DefaultView>() {
+            Ok(DefaultView::TaskList) => {}
+            Ok(DefaultView::Reports) => ui.current_view = AppView::Reports,
+            Ok(DefaultView::Calendar) => {
                 ui.current_view = AppView::Reports;
                 ui.reports_view.open_calendar();
             }
-            unknown => ui.config_warnings.push(format!(
-                "Unknown default_view \"{unknown}\", opening task_list"
+            Err(_) => ui.config_warnings.push(format!(
+                "Unknown default_view \"{}\", opening task_list",
+                config.ui.default_view
             )),
         }
 

@@ -376,15 +376,20 @@ To add new configuration options:
 
 ```rust
 // Update Config struct in src/config.rs
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct Config {
     // ... existing fields
+    /// Shown as the table's hover text in editors.
     pub new_feature: NewFeatureConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
+#[serde(default)]
 pub struct NewFeatureConfig {
+    /// Turns the feature on.
     pub enabled: bool,
+    /// What the setting controls.
     pub setting: String,
 }
 
@@ -401,6 +406,8 @@ impl Default for Config {
     }
 }
 ```
+
+The doc comments become the key descriptions in the published JSON schema. Regenerate the committed `schema/lazytask-config.json` with `devrun task schema`; the `config_schema` test fails until you do.
 
 ## Debugging
 

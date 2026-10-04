@@ -1,6 +1,6 @@
 # LazyTask Configuration
 
-LazyTask is highly configurable through TOML configuration files. The main configuration is read from `~/.config/lazytask/config.toml`. The file is optional and LazyTask never writes it: without one, LazyTask runs on built-in defaults. A config file may set any subset of keys; every key it leaves out keeps its default. [`config/default.toml`](../config/default.toml) lists the defaults.
+LazyTask is highly configurable through TOML configuration files. The main configuration is read from `~/.config/lazytask/config.toml`. The file is optional, and only `lazytask schema init` writes it: without one, LazyTask runs on built-in defaults. A config file may set any subset of keys; every key it leaves out keeps its default. [`config/default.toml`](../config/default.toml) lists the defaults.
 
 ## Configuration File Locations
 
@@ -10,6 +10,20 @@ LazyTask looks for configuration in the following locations (in order of precede
 2. `$XDG_CONFIG_HOME/lazytask/config.toml`
 3. `~/.config/lazytask/config.toml`
 4. Built-in defaults
+
+## Editor Support
+
+lazytask publishes a JSON schema for its config file. Editors running the TOML language server [taplo](https://taplo.tamasfe.dev) (for example VS Code with Even Better TOML) use it to complete keys, show each key's description and default on hover, and flag values of the wrong type.
+
+Point your config at the schema with:
+
+```bash
+lazytask schema init
+```
+
+This adds a `#:schema` header to the top of the config file. When the file does not exist yet, it writes a starter with every key commented out at its default instead. A file that already has a `#:schema` header is left unchanged, so running it again does nothing. It updates the file named by `lazytask schema init <path>`, else the `--config` file, else the default location.
+
+The header points at the schema attached to the latest release. `lazytask schema` prints the schema of the version you run.
 
 ## Main Configuration File
 
@@ -172,19 +186,24 @@ quit = "Ctrl+q"
 default_view = "calendar"
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
 
+[sync]
+auto_sync_interval = 60
+
 # Vim-style navigation
 [keybindings.task_list]
 move_up = "k"
 move_down = "j"
-move_left = "h"
-move_right = "l"
-first_task = "gg"
-last_task = "G"
+
+[keybindings.reports]
+prev_day = "h"
+next_day = "l"
+prev_week = "k"
+next_week = "j"
 ```
 
 ## Validation and Errors
 
-LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type.
+LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type. An editor using the schema (see [Editor Support](#editor-support)) flags wrong types as you type.
 
 Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
 
@@ -194,16 +213,15 @@ Theme problems warn the same way. An unknown `theme.name` uses `catppuccin-mocha
 
 ## Upgrading
 
-LazyTask never rewrites your config file. Keys you leave out pick up the current built-in defaults, so new settings and changed defaults reach you without editing the file. Keys a newer version no longer reads show up in the unknown-key warning.
+Running LazyTask never rewrites your config file. Keys you leave out pick up the current built-in defaults, so new settings and changed defaults reach you without editing the file. Keys a newer version no longer reads show up in the unknown-key warning.
 
 ## Troubleshooting
 
 ### Configuration Not Loading
 
 1. Check file path: `~/.config/lazytask/config.toml`
-2. Verify TOML syntax with `toml-validate config.toml`
+2. Check syntax and value types with `taplo check config.toml` once the file has a `#:schema` header
 3. Check file permissions (should be readable)
-4. Run with `--verbose` to see config loading messages
 
 ### Keybindings Not Working
 

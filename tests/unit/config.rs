@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use lazytask::config::{Config, KeyBindingsConfig, LoadedConfig};
+use lazytask::config::{Config, KeyBindingsConfig, LoadedConfig, ThemeConfig};
 use lazytask::taskrc::Taskrc;
 use lazytask::ui::theme::Theme;
 use lazytask::utils::keybindings::{Keymap, Section};
@@ -113,8 +113,16 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
         (Theme::CATPPUCCIN_MOCHA, Vec::new()),
         "[theme] in config/default.toml differs from the built-in palette"
     );
-    assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
-    assert_eq!(loaded.config.taskwarrior.data_location, None);
+    let outside_keybindings_and_theme = Config {
+        keybindings: KeyBindingsConfig::default(),
+        theme: ThemeConfig::default(),
+        ..loaded.config
+    };
+    assert_eq!(
+        outside_keybindings_and_theme,
+        Config::default(),
+        "config/default.toml differs from the built-in defaults"
+    );
     Ok(())
 }
 

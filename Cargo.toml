@@ -31,6 +31,7 @@ taskchampion = { version = "3", default-features = false, features = ["server-sy
 strum = { version = "0.28", features = ["derive"] }
 enum_dispatch = "0.3"
 notify = "8.2"
+schemars = "1"
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -75,6 +76,10 @@ path = "tests/integration_taskrc.rs"
 [[test]]
 name = "integration_app"
 path = "tests/integration_app.rs"
+
+[[test]]
+name = "config_schema"
+path = "tests/config_schema.rs"
 
 [profile.dist]
 inherits = "release"
