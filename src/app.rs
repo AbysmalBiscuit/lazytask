@@ -96,9 +96,11 @@ pub struct Session {
 impl Session {
     pub async fn open(config_path: Option<&str>, env: LaunchEnv) -> Result<Self> {
         let LoadedConfig {
-            config,
+            mut config,
             unknown_keys,
         } = Config::load(config_path)?;
+        // https://no-color.org: set and not empty.
+        config.theme.no_color = env.vars.get("NO_COLOR").is_some_and(|v| !v.is_empty());
         let home = env.home.as_deref();
         let taskrc = match config
             .taskwarrior

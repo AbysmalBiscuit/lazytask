@@ -1,7 +1,7 @@
 // Primary task list view with detail panel and filters
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -10,6 +10,7 @@ use ratatui::{
 use crate::data::models::{Task, TaskStatus};
 use crate::ui::components::task_detail::TaskDetailWidget;
 use crate::ui::components::task_list::{Column, TaskListWidget};
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FilterSection {
@@ -58,7 +59,7 @@ impl MainView {
         }
     }
 
-    pub fn render(&mut self, f: &mut Frame, area: Rect, terminal_width: u16) {
+    pub fn render(&mut self, f: &mut Frame, area: Rect, terminal_width: u16, theme: &Theme) {
         let available_height = area.height;
         let filter_height = if available_height < 20 {
             9 // Compact filter area for small screens
@@ -94,15 +95,15 @@ impl MainView {
             .split(main_content_chunks[0]);
 
         // Draw task list on the left
-        self.task_list_widget.render(f, top_chunks[0]);
+        self.task_list_widget.render(f, top_chunks[0], theme);
 
         // Draw task detail on the right
         let selected_task = self.task_list_widget.selected_task();
         self.task_detail_widget
-            .render(f, top_chunks[1], selected_task);
+            .render(f, top_chunks[1], selected_task, theme);
 
         // Draw filters at the bottom spanning full width
-        self.draw_filters_panel(f, main_content_chunks[1], terminal_width);
+        self.draw_filters_panel(f, main_content_chunks[1], terminal_width, theme);
     }
 
     pub fn update_available_filters(&mut self, tasks: &[Task]) {
@@ -390,7 +391,13 @@ impl MainView {
         }
     }
 
-    fn draw_filters_panel(&mut self, f: &mut Frame, area: Rect, terminal_width: u16) {
+    fn draw_filters_panel(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        terminal_width: u16,
+        theme: &Theme,
+    ) {
         // Responsive filter layout based on terminal width
         let filter_chunks = if terminal_width < 120 {
             // Stack filters vertically on narrow screens
@@ -432,20 +439,20 @@ impl MainView {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(filter_chunks[1]);
 
-            self.draw_status_filters(f, top_row[0]);
-            self.draw_project_filters(f, top_row[1]);
-            self.draw_tag_filters(f, bottom_row[0]);
-            self.draw_search_filter(f, bottom_row[1]);
+            self.draw_status_filters(f, top_row[0], theme);
+            self.draw_project_filters(f, top_row[1], theme);
+            self.draw_tag_filters(f, bottom_row[0], theme);
+            self.draw_search_filter(f, bottom_row[1], theme);
         } else {
             // Wide screen: horizontal layout
-            self.draw_status_filters(f, filter_chunks[0]);
-            self.draw_project_filters(f, filter_chunks[1]);
-            self.draw_tag_filters(f, filter_chunks[2]);
-            self.draw_search_filter(f, filter_chunks[3]);
+            self.draw_status_filters(f, filter_chunks[0], theme);
+            self.draw_project_filters(f, filter_chunks[1], theme);
+            self.draw_tag_filters(f, filter_chunks[2], theme);
+            self.draw_search_filter(f, filter_chunks[3], theme);
         }
     }
 
-    fn draw_status_filters(&self, f: &mut Frame, area: Rect) {
+    fn draw_status_filters(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let statuses = [
             ("Pending", TaskStatus::Pending),
             ("Active", TaskStatus::Pending),
@@ -474,19 +481,19 @@ impl MainView {
                     Span::styled(
                         "[✓] ",
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(theme.success)
                             .add_modifier(Modifier::BOLD),
                     )
                 } else {
-                    Span::styled("[ ] ", Style::default().fg(Color::Gray))
+                    Span::styled("[ ] ", Style::default().fg(theme.muted))
                 };
 
                 let text_style = if is_highlighted {
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(theme.foreground)
                 };
 
                 Line::from(vec![checkbox, Span::styled(*name, text_style)])
@@ -495,11 +502,11 @@ impl MainView {
 
         let border_color =
             if self.filter_focused && self.active_filter_section == FilterSection::Status {
-                Color::Yellow
+                theme.accent
             } else if self.filter_focused {
-                Color::DarkGray
+                theme.muted
             } else {
-                Color::Cyan
+                theme.primary
             };
 
         let status_panel = Paragraph::new(status_text)
@@ -509,15 +516,15 @@ impl MainView {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.foreground));
 
         f.render_widget(status_panel, area);
     }
 
-    fn draw_project_filters(&self, f: &mut Frame, area: Rect) {
+    fn draw_project_filters(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let mut project_text = vec![
             Line::from(vec![
-                Span::styled("Selected: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Selected: ", Style::default().fg(theme.accent)),
                 Span::styled(
                     if self.selected_projects.is_empty() {
                         "None".to_string()
@@ -527,7 +534,7 @@ impl MainView {
                             20,
                         )
                     },
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(theme.success),
                 ),
             ]),
             Line::from(""),
@@ -570,7 +577,7 @@ impl MainView {
             project_text.push(Line::from(vec![Span::styled(
                 format!("↑ {} more above", scroll_offset),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::ITALIC),
             )]));
         }
@@ -584,19 +591,19 @@ impl MainView {
                 Span::styled(
                     "[✓] ",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled("[ ] ", Style::default().fg(Color::Gray))
+                Span::styled("[ ] ", Style::default().fg(theme.muted))
             };
 
             let text_style = if is_highlighted {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme.foreground)
             };
 
             let max_chars = (area.width as usize).saturating_sub(6).max(8);
@@ -620,18 +627,18 @@ impl MainView {
             project_text.push(Line::from(vec![Span::styled(
                 format!("↓ {} more below", items_below),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::ITALIC),
             )]));
         }
 
         let border_color =
             if self.filter_focused && self.active_filter_section == FilterSection::Project {
-                Color::Yellow
+                theme.accent
             } else if self.filter_focused {
-                Color::DarkGray
+                theme.muted
             } else {
-                Color::Cyan
+                theme.primary
             };
 
         let project_panel = Paragraph::new(project_text)
@@ -641,15 +648,15 @@ impl MainView {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.foreground));
 
         f.render_widget(project_panel, area);
     }
 
-    fn draw_tag_filters(&self, f: &mut Frame, area: Rect) {
+    fn draw_tag_filters(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let mut tag_text = vec![
             Line::from(vec![
-                Span::styled("Selected: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Selected: ", Style::default().fg(theme.accent)),
                 Span::styled(
                     if self.selected_tags.is_empty() {
                         "None".to_string()
@@ -659,7 +666,7 @@ impl MainView {
                             20,
                         )
                     },
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(theme.success),
                 ),
             ]),
             Line::from(""),
@@ -700,7 +707,7 @@ impl MainView {
             tag_text.push(Line::from(vec![Span::styled(
                 format!("↑ {} more above", scroll_offset),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::ITALIC),
             )]));
         }
@@ -714,19 +721,19 @@ impl MainView {
                 Span::styled(
                     "[✓] ",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled("[ ] ", Style::default().fg(Color::Gray))
+                Span::styled("[ ] ", Style::default().fg(theme.muted))
             };
 
             let text_style = if is_highlighted {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme.foreground)
             };
 
             let max_chars = (area.width as usize).saturating_sub(6).max(6);
@@ -750,18 +757,18 @@ impl MainView {
             tag_text.push(Line::from(vec![Span::styled(
                 format!("↓ {} more below", items_below),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::ITALIC),
             )]));
         }
 
         let border_color =
             if self.filter_focused && self.active_filter_section == FilterSection::Tags {
-                Color::Yellow
+                theme.accent
             } else if self.filter_focused {
-                Color::DarkGray
+                theme.muted
             } else {
-                Color::Cyan
+                theme.primary
             };
 
         let tag_panel = Paragraph::new(tag_text)
@@ -771,17 +778,17 @@ impl MainView {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.foreground));
 
         f.render_widget(tag_panel, area);
     }
 
-    fn draw_search_filter(&self, f: &mut Frame, area: Rect) {
+    fn draw_search_filter(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let is_active = self.active_filter_section == FilterSection::Search;
 
         let mut search_text = vec![
             Line::from(vec![
-                Span::styled("Search: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Search: ", Style::default().fg(theme.accent)),
                 Span::styled(
                     if self.search_text.is_empty() && is_active {
                         "_".to_string()
@@ -790,10 +797,10 @@ impl MainView {
                     },
                     if is_active {
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(theme.success)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(theme.success)
                     },
                 ),
             ]),
@@ -804,7 +811,7 @@ impl MainView {
             search_text.push(Line::from(vec![Span::styled(
                 "Type to search",
                 Style::default()
-                    .fg(Color::Gray)
+                    .fg(theme.muted)
                     .add_modifier(Modifier::ITALIC),
             )]));
         } else {
@@ -818,11 +825,11 @@ impl MainView {
 
         let border_color =
             if self.filter_focused && self.active_filter_section == FilterSection::Search {
-                Color::Yellow
+                theme.accent
             } else if self.filter_focused {
-                Color::DarkGray
+                theme.muted
             } else {
-                Color::Cyan
+                theme.primary
             };
 
         let search_panel = Paragraph::new(search_text)
@@ -832,7 +839,7 @@ impl MainView {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(border_color)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.foreground));
 
         f.render_widget(search_panel, area);
     }

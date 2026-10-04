@@ -3,14 +3,16 @@
 use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Frame,
 };
+
 use std::collections::HashMap;
 
 use crate::data::models::{Priority, Task, TaskStatus};
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone)]
 pub struct ProjectStats {
@@ -69,7 +71,7 @@ impl DashboardWidget {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Responsive reports layout based on terminal size
         let terminal_width = area.width;
 
@@ -84,9 +86,9 @@ impl DashboardWidget {
                 ])
                 .split(area);
 
-            self.render_enhanced_summary_panel(f, chunks[0]);
-            self.render_enhanced_project_table(f, chunks[1]);
-            self.render_recent_activity_panel(f, chunks[2]);
+            self.render_enhanced_summary_panel(f, chunks[0], theme);
+            self.render_enhanced_project_table(f, chunks[1], theme);
+            self.render_recent_activity_panel(f, chunks[2], theme);
         } else {
             // Wide screen - full layout
             let chunks = Layout::default()
@@ -109,14 +111,14 @@ impl DashboardWidget {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
 
-            self.render_enhanced_summary_panel(f, top_chunks[0]);
-            self.render_burndown_panel(f, top_chunks[1]);
-            self.render_enhanced_project_table(f, bottom_chunks[0]);
-            self.render_recent_activity_panel(f, bottom_chunks[1]);
+            self.render_enhanced_summary_panel(f, top_chunks[0], theme);
+            self.render_burndown_panel(f, top_chunks[1], theme);
+            self.render_enhanced_project_table(f, bottom_chunks[0], theme);
+            self.render_recent_activity_panel(f, bottom_chunks[1], theme);
         }
     }
 
-    fn render_enhanced_summary_panel(&self, f: &mut Frame, area: Rect) {
+    fn render_enhanced_summary_panel(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let cache = match &self.task_summary_cache {
             Some(cache) => cache,
             None => {
@@ -136,17 +138,17 @@ impl DashboardWidget {
 
         let summary_text = vec![
             Line::from(vec![
-                Span::styled("Total Tasks: ", Style::default().fg(Color::Cyan)),
+                Span::styled("Total Tasks: ", Style::default().fg(theme.primary)),
                 Span::styled(
                     format!("{}", cache.total),
                     Style::default()
-                        .fg(Color::White)
+                        .fg(theme.foreground)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Pending: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Pending: ", Style::default().fg(theme.warning)),
                 Span::raw(format!(
                     "{:3} ({:4.1}%)",
                     cache.pending,
@@ -154,11 +156,11 @@ impl DashboardWidget {
                 )),
             ]),
             Line::from(vec![
-                Span::styled("Completed: ", Style::default().fg(Color::Green)),
+                Span::styled("Completed: ", Style::default().fg(theme.success)),
                 Span::raw(format!("{:3} ({:4.1}%)", cache.completed, completion_rate)),
             ]),
             Line::from(vec![
-                Span::styled("Deleted: ", Style::default().fg(Color::Red)),
+                Span::styled("Deleted: ", Style::default().fg(theme.error)),
                 Span::raw(format!(
                     "{:3} ({:4.1}%)",
                     cache.deleted,
@@ -166,16 +168,16 @@ impl DashboardWidget {
                 )),
             ]),
             Line::from(vec![
-                Span::styled("Waiting: ", Style::default().fg(Color::Magenta)),
+                Span::styled("Waiting: ", Style::default().fg(theme.secondary)),
                 Span::raw(format!("{:3}", cache.waiting)),
             ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Active: ", Style::default().fg(Color::Blue)),
+                Span::styled("Active: ", Style::default().fg(theme.info)),
                 Span::raw(format!("{}", cache.active)),
             ]),
             Line::from(vec![
-                Span::styled("Overdue: ", Style::default().fg(Color::Red)),
+                Span::styled("Overdue: ", Style::default().fg(theme.error)),
                 Span::raw(format!("{}", cache.overdue)),
             ]),
         ];
@@ -184,13 +186,13 @@ impl DashboardWidget {
             Block::default()
                 .title("Summary")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         );
 
         f.render_widget(summary, area);
     }
 
-    fn render_burndown_panel(&self, f: &mut Frame, area: Rect) {
+    fn render_burndown_panel(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let now = Utc::now();
         let mut daily_counts = vec![0; 30];
 
@@ -237,41 +239,44 @@ impl DashboardWidget {
             Block::default()
                 .title("Burndown (Last 30 days)")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         );
 
         f.render_widget(burndown_panel, area);
     }
 
-    fn render_enhanced_project_table(&self, f: &mut Frame, area: Rect) {
+    fn render_enhanced_project_table(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let header = Row::new(vec![
             Cell::from("Project").style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             ),
             Cell::from("Pending").style(
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.warning)
                     .add_modifier(Modifier::BOLD),
             ),
             Cell::from("Completed").style(
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(theme.success)
                     .add_modifier(Modifier::BOLD),
             ),
             Cell::from("%Done").style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             ),
             Cell::from("Urgency Avg").style(
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(theme.secondary)
                     .add_modifier(Modifier::BOLD),
             ),
-            Cell::from("Next Due")
-                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Cell::from("Next Due").style(
+                Style::default()
+                    .fg(theme.error)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]);
 
         let mut rows = Vec::new();
@@ -328,36 +333,36 @@ impl DashboardWidget {
 
                 let row = Row::new(vec![
                     Cell::from(format!("{}", project_name))
-                        .style(Style::default().fg(Color::Green)),
+                        .style(Style::default().fg(theme.success)),
                     Cell::from(format!("{}", stats.pending))
-                        .style(Style::default().fg(Color::Yellow)),
+                        .style(Style::default().fg(theme.warning)),
                     Cell::from(format!("{}", stats.completed))
-                        .style(Style::default().fg(Color::Green)),
+                        .style(Style::default().fg(theme.success)),
                     Cell::from(format!("{:.0}%", completion_rate)).style(
                         if completion_rate >= 80.0 {
-                            Style::default().fg(Color::Green)
+                            Style::default().fg(theme.success)
                         } else if completion_rate >= 50.0 {
-                            Style::default().fg(Color::Yellow)
+                            Style::default().fg(theme.warning)
                         } else {
-                            Style::default().fg(Color::Red)
+                            Style::default().fg(theme.error)
                         },
                     ),
                     Cell::from(format!("{:.1}", project_urgency)).style(
                         if project_urgency >= 10.0 {
-                            Style::default().fg(Color::Red)
+                            Style::default().fg(theme.error)
                         } else if project_urgency >= 5.0 {
-                            Style::default().fg(Color::Yellow)
+                            Style::default().fg(theme.warning)
                         } else {
-                            Style::default().fg(Color::Green)
+                            Style::default().fg(theme.success)
                         },
                     ),
                     Cell::from(next_due.clone()).style(
                         if next_due.contains("ago") || next_due == "Today" {
-                            Style::default().fg(Color::Red)
+                            Style::default().fg(theme.error)
                         } else if next_due == "Tomorrow" {
-                            Style::default().fg(Color::Yellow)
+                            Style::default().fg(theme.warning)
                         } else {
-                            Style::default().fg(Color::White)
+                            Style::default().fg(theme.foreground)
                         },
                     ),
                 ]);
@@ -381,14 +386,14 @@ impl DashboardWidget {
             Block::default()
                 .title("By Project")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         )
         .column_spacing(1);
 
         f.render_widget(table, area);
     }
 
-    fn render_recent_activity_panel(&self, f: &mut Frame, area: Rect) {
+    fn render_recent_activity_panel(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let now = chrono::Utc::now();
         let mut recent_activities = Vec::new();
 
@@ -493,21 +498,24 @@ impl DashboardWidget {
                 let short_desc = crate::utils::formatting::truncate_chars(&description, 45);
 
                 let action_color = if action.contains("Completed") {
-                    Color::Green
+                    theme.success
                 } else if action.contains("[H]") {
-                    Color::Red
+                    theme.priority_high
                 } else if action.contains("[M]") {
-                    Color::Yellow
+                    theme.priority_medium
                 } else if action.contains("tags") {
-                    Color::Magenta
+                    theme.secondary
                 } else {
-                    Color::Blue
+                    theme.info
                 };
 
                 activity_text.push(Line::from(vec![
-                    Span::styled(format!("{:8} ", time_str), Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        format!("{:8} ", time_str),
+                        Style::default().fg(theme.primary),
+                    ),
                     Span::styled(format!("{:30} ", action), Style::default().fg(action_color)),
-                    Span::styled(short_desc, Style::default().fg(Color::White)),
+                    Span::styled(short_desc, Style::default().fg(theme.foreground)),
                 ]));
             }
         }
@@ -516,7 +524,7 @@ impl DashboardWidget {
             Block::default()
                 .title("Recent Activity")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         );
 
         f.render_widget(activity_panel, area);

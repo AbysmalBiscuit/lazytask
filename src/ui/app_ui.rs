@@ -16,6 +16,7 @@ use crate::ui::components::sync_config::{SyncConfigResult, SyncConfigWidget};
 use crate::ui::components::sync_status::SyncStatusWidget;
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
 use crate::ui::components::task_list::Column;
+use crate::ui::theme::Theme;
 use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::{DateNavigation, ReportsView};
 use crossterm::event::KeyEvent;
@@ -51,6 +52,7 @@ pub struct AppUI {
     keymap_warnings: Vec<String>,
     show_help_bar: bool,
     config_warnings: Vec<String>,
+    theme: Theme,
 }
 
 impl AppUI {
@@ -58,6 +60,7 @@ impl AppUI {
         let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
         let (configured_columns, unknown_columns) = Column::resolve(&config.ui.task_list_columns);
         let columns_fell_back = configured_columns.is_empty();
+        let (theme, theme_warnings) = Theme::from_config(&config.theme);
         let columns = if columns_fell_back {
             Column::resolve(&UIConfig::default().task_list_columns).0
         } else {
@@ -81,7 +84,8 @@ impl AppUI {
             keymap,
             keymap_warnings,
             show_help_bar: config.ui.show_help_bar,
-            config_warnings: Vec::new(),
+            config_warnings: theme_warnings,
+            theme,
         };
 
         match config.ui.default_view.as_str() {
@@ -261,6 +265,8 @@ impl AppUI {
 
     pub fn draw(&mut self, f: &mut Frame) {
         let size = f.area();
+        let theme = self.theme;
+        f.render_widget(Block::default().style(theme.base()), size);
 
         let terminal_height = size.height;
         let (header_size, footer_size) = if terminal_height < 20 {
@@ -289,7 +295,7 @@ impl AppUI {
 
         match self.current_view {
             AppView::TaskList => {
-                self.main_view.render(f, main_chunks[1], size.width);
+                self.main_view.render(f, main_chunks[1], size.width, &theme);
             }
             AppView::TaskDetail => self.draw_task_detail(f, main_chunks[1]),
             AppView::Reports => self.draw_reports(f, main_chunks[1]),
@@ -302,11 +308,11 @@ impl AppUI {
         }
 
         if let Some(ref form) = self.task_form {
-            form.render(f, size);
+            form.render(f, size, &theme);
         }
 
         if self.sync_config_widget.is_active() {
-            self.sync_config_widget.render(f, size);
+            self.sync_config_widget.render(f, size, &theme);
         }
     }
 
@@ -319,7 +325,7 @@ impl AppUI {
         if self.show_sync_overlay {
             if let Some(sync_status) = sync_handler.get_sync_status() {
                 self.sync_status_widget
-                    .render_sync_overlay(f, size, &sync_status);
+                    .render_sync_overlay(f, size, &sync_status, &self.theme);
 
                 if !sync_status.is_syncing {
                     self.show_sync_overlay = false;
@@ -604,23 +610,24 @@ impl AppUI {
     }
 
     fn draw_header(&self, f: &mut Frame, area: Rect) {
+        let theme = &self.theme;
         use GlobalAction as G;
         let mut spans = vec![
             Span::styled(
                 "LazyTask v0.1",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("                    "),
         ];
         spans.extend(self.hints(&[
-            (&[G::Help.into()], "Help", Color::Yellow),
-            (&[G::Refresh.into()], "Refresh", Color::Yellow),
-            (&[TaskListAction::Filter.into()], "Filter", Color::Yellow),
-            (&[G::Reports.into()], "Reports", Color::Yellow),
-            (&[G::Sync.into()], "Sync", Color::Yellow),
-            (&[G::SyncConfig.into()], "Config", Color::Yellow),
+            (&[G::Help.into()], "Help", theme.accent),
+            (&[G::Refresh.into()], "Refresh", theme.accent),
+            (&[TaskListAction::Filter.into()], "Filter", theme.accent),
+            (&[G::Reports.into()], "Reports", theme.accent),
+            (&[G::Sync.into()], "Sync", theme.accent),
+            (&[G::SyncConfig.into()], "Config", theme.accent),
         ]));
         let header_content = Line::from(spans);
 
@@ -628,9 +635,9 @@ impl AppUI {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(theme.primary)),
             )
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(theme.foreground))
             .alignment(ratatui::layout::Alignment::Left);
 
         f.render_widget(header, area);
@@ -649,7 +656,7 @@ impl AppUI {
     }
 
     fn draw_reports(&self, f: &mut Frame, area: Rect) {
-        self.reports_view.render(f, area);
+        self.reports_view.render(f, area, &self.theme);
     }
 
     fn draw_settings(&self, f: &mut Frame, area: Rect) {
@@ -659,6 +666,7 @@ impl AppUI {
     }
 
     fn draw_help(&self, f: &mut Frame, area: Rect) {
+        let theme = &self.theme;
         // Render the outer block, then split the inner area into two columns.
         let block = Block::default()
             .title(format!(
@@ -666,7 +674,7 @@ impl AppUI {
                 self.key_label(GlobalAction::Back)
             ))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan));
+            .border_style(Style::default().fg(theme.primary));
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -677,7 +685,7 @@ impl AppUI {
             Line::from(Span::styled(
                 s.to_string(),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             ))
         };
@@ -687,17 +695,17 @@ impl AppUI {
                 Span::styled(
                     format!("{:<11}", key),
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(desc.to_string(), Style::default().fg(Color::White)),
+                Span::styled(desc.to_string(), Style::default().fg(theme.foreground)),
             ])
         };
         let blank = || Line::from("");
         let note = |s: &str| {
             Line::from(Span::styled(
                 s.to_string(),
-                Style::default().fg(Color::Gray),
+                Style::default().fg(theme.muted),
             ))
         };
 
@@ -755,13 +763,14 @@ impl AppUI {
     }
 
     fn draw_footer_panel(&self, f: &mut Frame, area: Rect) {
+        let theme = &self.theme;
         if let Some(ref message) = self.status_message {
             let color = if message.starts_with('❌') {
-                Color::Red
+                theme.error
             } else if message.starts_with('✅') {
-                Color::Green
+                theme.success
             } else {
-                Color::Yellow
+                theme.warning
             };
             let panel = Paragraph::new(message.clone())
                 .block(
@@ -784,75 +793,79 @@ impl AppUI {
                 (
                     &[F::MoveUp.into(), F::MoveDown.into()],
                     "Navigate fields",
-                    Color::Cyan,
+                    theme.primary,
                 ),
                 (
                     &[F::MoveLeft.into(), F::MoveRight.into()],
                     "Move cursor",
-                    Color::Magenta,
+                    theme.secondary,
                 ),
-                (&[F::Confirm.into()], "Save", Color::Green),
-                (&[F::Cancel.into()], "Cancel", Color::Red),
+                (&[F::Confirm.into()], "Save", theme.success),
+                (&[F::Cancel.into()], "Cancel", theme.error),
             ])
         } else if self.main_view.is_filter_focused() {
             let mut spans = self.hints(&[
-                (&[F::NextField.into()], "Next section", Color::Magenta),
+                (&[F::NextField.into()], "Next section", theme.secondary),
                 (
                     &[F::MoveUp.into(), F::MoveDown.into()],
                     "Navigate",
-                    Color::Cyan,
+                    theme.primary,
                 ),
-                (&[F::Toggle.into()], "Toggle", Color::Green),
+                (&[F::Toggle.into()], "Toggle", theme.success),
             ]);
             spans.extend([
                 Span::raw("  "),
                 Span::styled(
                     "Type",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Search  "),
             ]);
-            spans.extend(self.hints(&[(&[F::Cancel.into()], "Exit", Color::Red)]));
+            spans.extend(self.hints(&[(&[F::Cancel.into()], "Exit", theme.error)]));
             spans
         } else {
             match self.current_view {
                 AppView::TaskList => self.hints(&[
-                    (&[T::AddTask.into()], "add", Color::Yellow),
-                    (&[T::EditTask.into()], "edit", Color::Yellow),
-                    (&[T::DoneTask.into()], "done", Color::Yellow),
-                    (&[T::DeleteTask.into()], "delete", Color::Yellow),
-                    (&[T::Filter.into()], "filter", Color::Yellow),
-                    (&[G::Reports.into()], "reports", Color::Yellow),
-                    (&[G::Sync.into()], "sync", Color::Yellow),
-                    (&[G::Quit.into()], "quit", Color::Red),
+                    (&[T::AddTask.into()], "add", theme.accent),
+                    (&[T::EditTask.into()], "edit", theme.accent),
+                    (&[T::DoneTask.into()], "done", theme.accent),
+                    (&[T::DeleteTask.into()], "delete", theme.accent),
+                    (&[T::Filter.into()], "filter", theme.accent),
+                    (&[G::Reports.into()], "reports", theme.accent),
+                    (&[G::Sync.into()], "sync", theme.accent),
+                    (&[G::Quit.into()], "quit", theme.error),
                 ]),
                 AppView::Reports if self.reports_view.is_calendar_mode() => self.hints(&[
-                    (&[R::PrevDay.into(), R::NextDay.into()], "day", Color::Cyan),
+                    (
+                        &[R::PrevDay.into(), R::NextDay.into()],
+                        "day",
+                        theme.primary,
+                    ),
                     (
                         &[R::PrevWeek.into(), R::NextWeek.into()],
                         "week",
-                        Color::Cyan,
+                        theme.primary,
                     ),
                     (
                         &[R::PrevMonth.into(), R::NextMonth.into()],
                         "month",
-                        Color::Magenta,
+                        theme.secondary,
                     ),
-                    (&[R::Today.into()], "today", Color::Yellow),
-                    (&[R::ToggleCalendar.into()], "dashboard", Color::Green),
-                    (&[G::Back.into()], "back", Color::Red),
+                    (&[R::Today.into()], "today", theme.accent),
+                    (&[R::ToggleCalendar.into()], "dashboard", theme.success),
+                    (&[G::Back.into()], "back", theme.error),
                 ]),
                 AppView::Reports => self.hints(&[
-                    (&[R::ToggleCalendar.into()], "calendar", Color::Yellow),
-                    (&[G::Back.into()], "back", Color::Red),
-                    (&[G::Quit.into()], "quit", Color::Red),
+                    (&[R::ToggleCalendar.into()], "calendar", theme.accent),
+                    (&[G::Back.into()], "back", theme.error),
+                    (&[G::Quit.into()], "quit", theme.error),
                 ]),
-                AppView::Help => self.hints(&[(&[G::Back.into()], "back", Color::Red)]),
+                AppView::Help => self.hints(&[(&[G::Back.into()], "back", theme.error)]),
                 _ => self.hints(&[
-                    (&[G::Back.into()], "back", Color::Red),
-                    (&[G::Quit.into()], "quit", Color::Red),
+                    (&[G::Back.into()], "back", theme.error),
+                    (&[G::Quit.into()], "quit", theme.error),
                 ]),
             }
         };
@@ -862,9 +875,9 @@ impl AppUI {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Gray)),
+                    .border_style(Style::default().fg(theme.muted)),
             )
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(theme.foreground))
             .alignment(ratatui::layout::Alignment::Center);
 
         f.render_widget(footer_panel, area);

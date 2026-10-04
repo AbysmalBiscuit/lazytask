@@ -1,10 +1,11 @@
 // Calendar widget component with daily stats
 
 use crate::data::models::{Priority, Task, TaskStatus};
+use crate::ui::theme::Theme;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -23,7 +24,7 @@ impl CalendarWidget {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Split area: 3-Month Calendar grid (top) + Daily stats (bottom)
         // Give more space to calendar now that we have 3 months
         let chunks = Layout::default()
@@ -34,8 +35,8 @@ impl CalendarWidget {
             ])
             .split(area);
 
-        self.render_calendar_grid(f, chunks[0]);
-        self.render_daily_stats(f, chunks[1]);
+        self.render_calendar_grid(f, chunks[0], theme);
+        self.render_daily_stats(f, chunks[1], theme);
     }
 
     fn get_tasks_for_date(&self, date: DateTime<Utc>) -> Vec<&Task> {
@@ -62,7 +63,7 @@ impl CalendarWidget {
             .collect()
     }
 
-    fn render_calendar_grid(&self, f: &mut Frame, area: Rect) {
+    fn render_calendar_grid(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Calculate the 3 months to display (previous, current, next)
         let center_date = self.selected_date;
 
@@ -77,9 +78,9 @@ impl CalendarWidget {
             .split(area);
 
         // Render each month
-        self.render_single_month(f, month_chunks[0], center_date, -1);
-        self.render_single_month(f, month_chunks[1], center_date, 0);
-        self.render_single_month(f, month_chunks[2], center_date, 1);
+        self.render_single_month(f, month_chunks[0], center_date, -1, theme);
+        self.render_single_month(f, month_chunks[1], center_date, 0, theme);
+        self.render_single_month(f, month_chunks[2], center_date, 1, theme);
     }
 
     fn render_single_month(
@@ -88,6 +89,7 @@ impl CalendarWidget {
         area: Rect,
         center_date: DateTime<Utc>,
         month_offset: i32,
+        theme: &Theme,
     ) {
         // Calculate the target month based on offset
         let target_date = if month_offset < 0 {
@@ -162,12 +164,12 @@ impl CalendarWidget {
         // Different styling for center vs side month titles
         let title_style = if month_offset == 0 {
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme.primary)
                 .add_modifier(Modifier::BOLD)
                 .add_modifier(Modifier::UNDERLINED) // Underline for emphasis
         } else {
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme.primary)
                 .add_modifier(Modifier::BOLD)
         };
 
@@ -178,13 +180,13 @@ impl CalendarWidget {
             )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("   Mo   ", Style::default().fg(Color::Yellow)),
-                Span::styled("   Tu   ", Style::default().fg(Color::Yellow)),
-                Span::styled("   We   ", Style::default().fg(Color::Yellow)),
-                Span::styled("   Th   ", Style::default().fg(Color::Yellow)),
-                Span::styled("   Fr   ", Style::default().fg(Color::Yellow)),
-                Span::styled("   Sa   ", Style::default().fg(Color::Cyan)),
-                Span::styled("   Su   ", Style::default().fg(Color::Cyan)),
+                Span::styled("   Mo   ", Style::default().fg(theme.accent)),
+                Span::styled("   Tu   ", Style::default().fg(theme.accent)),
+                Span::styled("   We   ", Style::default().fg(theme.accent)),
+                Span::styled("   Th   ", Style::default().fg(theme.accent)),
+                Span::styled("   Fr   ", Style::default().fg(theme.accent)),
+                Span::styled("   Sa   ", Style::default().fg(theme.primary)),
+                Span::styled("   Su   ", Style::default().fg(theme.primary)),
             ]),
         ];
 
@@ -219,7 +221,7 @@ impl CalendarWidget {
 
                     // Determine task indicators
                     let (indicator, indicator_color) = if task_count == 0 {
-                        ("  ", Color::White)
+                        ("  ", theme.foreground)
                     } else {
                         let has_overdue = tasks_on_day.iter().any(|t| t.is_overdue());
                         let has_pending =
@@ -229,13 +231,13 @@ impl CalendarWidget {
                             .all(|t| t.status == TaskStatus::Completed);
 
                         if has_overdue {
-                            ("⚠", Color::Red)
+                            ("⚠", theme.error)
                         } else if all_completed {
-                            ("✓", Color::Green)
+                            ("✓", theme.success)
                         } else if has_pending {
-                            ("•", Color::Yellow)
+                            ("•", theme.warning)
                         } else {
-                            ("○", Color::Cyan)
+                            ("○", theme.primary)
                         }
                     };
 
@@ -255,13 +257,13 @@ impl CalendarWidget {
                     // Always make date numbers BOLD for readability
 
                     let mut style = if is_selected {
-                        Style::default().fg(Color::Black).bg(Color::Yellow)
+                        theme.selected()
                     } else if is_today {
-                        Style::default().fg(Color::Cyan)
+                        Style::default().fg(theme.primary)
                     } else if task_count > 0 {
                         Style::default().fg(indicator_color)
                     } else {
-                        Style::default().fg(Color::Gray)
+                        Style::default().fg(theme.muted)
                     };
 
                     // Always make date numbers bold
@@ -299,11 +301,11 @@ impl CalendarWidget {
             if area.width > 40 {
                 // Create centered legend line
                 let legend_spans = vec![
-                    Span::styled("⚠", Style::default().fg(Color::Red)),
+                    Span::styled("⚠", Style::default().fg(theme.error)),
                     Span::raw("=Overdue  "),
-                    Span::styled("•", Style::default().fg(Color::Yellow)),
+                    Span::styled("•", Style::default().fg(theme.warning)),
                     Span::raw("=Pending  "),
-                    Span::styled("✓", Style::default().fg(Color::Green)),
+                    Span::styled("✓", Style::default().fg(theme.success)),
                     Span::raw("=Done"),
                 ];
 
@@ -333,16 +335,16 @@ impl CalendarWidget {
                 .borders(Borders::ALL)
                 .border_type(border_type)
                 .border_style(Style::default().fg(if month_offset == 0 {
-                    Color::Cyan // Highlight current month
+                    theme.primary // Highlight current month
                 } else {
-                    Color::DarkGray // Dim previous/next months
+                    theme.muted // Dim previous/next months
                 })),
         );
 
         f.render_widget(calendar, area);
     }
 
-    fn render_daily_stats(&self, f: &mut Frame, area: Rect) {
+    fn render_daily_stats(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let tasks_on_day = self.get_tasks_for_date(self.selected_date);
 
         let date_str = self.selected_date.format("%A, %B %d, %Y").to_string();
@@ -395,48 +397,53 @@ impl CalendarWidget {
             Line::from(vec![Span::styled(
                 format!("📅 {}", date_str),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
             Line::from(vec![Span::styled(
                 "📊 Daily Summary:",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(vec![
                 Span::raw("  Total tasks: "),
-                Span::styled(format!("{}", total_tasks), Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{}", total_tasks),
+                    Style::default().fg(theme.primary),
+                ),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("•", Style::default().fg(Color::Yellow)),
+                Span::styled("•", Style::default().fg(theme.warning)),
                 Span::raw(" Pending: "),
-                Span::styled(format!("{}", pending), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{}", pending), Style::default().fg(theme.warning)),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("✓", Style::default().fg(Color::Green)),
+                Span::styled("✓", Style::default().fg(theme.success)),
                 Span::raw(" Completed: "),
-                Span::styled(format!("{}", completed), Style::default().fg(Color::Green)),
+                Span::styled(format!("{}", completed), Style::default().fg(theme.success)),
             ]),
             Line::from(vec![
                 Span::raw("  "),
-                Span::styled("✗", Style::default().fg(Color::Red)),
+                Span::styled("✗", Style::default().fg(theme.error)),
                 Span::raw(" Deleted: "),
-                Span::styled(format!("{}", deleted), Style::default().fg(Color::Red)),
+                Span::styled(format!("{}", deleted), Style::default().fg(theme.error)),
             ]),
         ];
 
         if overdue > 0 {
             stats_text.push(Line::from(vec![
                 Span::raw("  "),
-                Span::styled("⚠️", Style::default().fg(Color::Red)),
+                Span::styled("⚠️", Style::default().fg(theme.error)),
                 Span::raw(" Overdue: "),
                 Span::styled(
                     format!("{}", overdue),
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(theme.error)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]));
         }
@@ -444,7 +451,7 @@ impl CalendarWidget {
         stats_text.push(Line::from(""));
         stats_text.push(Line::from(vec![Span::styled(
             "📋 Task Categories:",
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(theme.primary),
         )]));
         stats_text.push(Line::from(vec![Span::raw(format!(
             "  Due today: {} | Completed today: {} | Created today: {}",
@@ -457,11 +464,11 @@ impl CalendarWidget {
                 Span::styled(
                     format!("{:.1}", avg_urgency),
                     if avg_urgency >= 10.0 {
-                        Style::default().fg(Color::Red)
+                        Style::default().fg(theme.error)
                     } else if avg_urgency >= 5.0 {
-                        Style::default().fg(Color::Yellow)
+                        Style::default().fg(theme.warning)
                     } else {
-                        Style::default().fg(Color::Green)
+                        Style::default().fg(theme.success)
                     },
                 ),
             ]));
@@ -473,7 +480,7 @@ impl CalendarWidget {
             stats_text.push(Line::from(vec![Span::styled(
                 "📝 Tasks:",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             )]));
 
@@ -499,15 +506,15 @@ impl CalendarWidget {
                 let status_color = match task.status {
                     TaskStatus::Pending => {
                         if task.is_overdue() {
-                            Color::Red
+                            theme.error
                         } else {
-                            Color::Yellow
+                            theme.warning
                         }
                     }
-                    TaskStatus::Completed => Color::Green,
-                    TaskStatus::Deleted => Color::Gray,
-                    TaskStatus::Waiting => Color::Cyan,
-                    TaskStatus::Recurring => Color::Magenta,
+                    TaskStatus::Completed => theme.success,
+                    TaskStatus::Deleted => theme.muted,
+                    TaskStatus::Waiting => theme.primary,
+                    TaskStatus::Recurring => theme.secondary,
                 };
 
                 let priority_str = match &task.priority {
@@ -524,7 +531,7 @@ impl CalendarWidget {
                     Span::styled(status_icon, Style::default().fg(status_color)),
                     Span::raw(" "),
                     Span::raw(description),
-                    Span::styled(priority_str, Style::default().fg(Color::Magenta)),
+                    Span::styled(priority_str, Style::default().fg(theme.secondary)),
                 ]));
             }
 
@@ -532,7 +539,7 @@ impl CalendarWidget {
                 stats_text.push(Line::from(vec![Span::styled(
                     format!("  ... and {} more", tasks_on_day.len() - max_tasks),
                     Style::default()
-                        .fg(Color::Gray)
+                        .fg(theme.muted)
                         .add_modifier(Modifier::ITALIC),
                 )]));
             }
@@ -541,7 +548,7 @@ impl CalendarWidget {
             stats_text.push(Line::from(vec![Span::styled(
                 "No tasks on this date",
                 Style::default()
-                    .fg(Color::Gray)
+                    .fg(theme.muted)
                     .add_modifier(Modifier::ITALIC),
             )]));
         }
@@ -550,7 +557,7 @@ impl CalendarWidget {
             Block::default()
                 .title("Daily Details")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(theme.primary)),
         );
 
         f.render_widget(stats_panel, area);

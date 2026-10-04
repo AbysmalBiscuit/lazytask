@@ -8,7 +8,7 @@ use lazytask::config::Config;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
-use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
+use ratatui::{backend::TestBackend, buffer::Buffer, style::Color, Terminal};
 
 fn buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
     let buf = terminal.backend().buffer();
@@ -352,4 +352,130 @@ async fn empty_task_list_columns_warn_and_fall_back_to_defaults() {
             "fallback warning missing"
         );
     }
+}
+
+/// The foreground color of the first cell of `needle` on screen.
+fn fg_at(terminal: &Terminal<TestBackend>, needle: &str) -> Color {
+    let buf = terminal.backend().buffer();
+    (0..buf.area.height)
+        .find_map(|y| {
+            let line = buffer_line(buf, y);
+            let byte = line.find(needle)?;
+            let x = line[..byte].chars().count() as u16;
+            Some(buf[(x, y)].fg)
+        })
+        .unwrap_or_else(|| panic!("{needle:?} not on screen"))
+}
+
+async fn render_config_file(contents: &str) -> Terminal<TestBackend> {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let config_path = tmp.path().join("config.toml");
+    std::fs::write(&config_path, contents).expect("write config");
+    render_session(open_session(&tmp, &config_path).await).await
+}
+
+#[tokio::test]
+async fn overriding_primary_recolors_the_cells_that_use_it() {
+    let default = render_config_file("").await;
+    let overridden = render_config_file("[theme.colors]\nprimary = \"#ff0000\"\n").await;
+
+    let red = Color::Rgb(255, 0, 0);
+    assert_ne!(fg_at(&default, "LazyTask v0.1"), red);
+    assert_eq!(fg_at(&overridden, "LazyTask v0.1"), red, "header title");
+    assert_eq!(fg_at(&overridden, " Tasks ("), red, "task list title");
+    assert_eq!(
+        overridden.backend().buffer()[(0, 0)].fg,
+        red,
+        "header border"
+    );
+}
+
+#[tokio::test]
+async fn invalid_color_warns_naming_the_key_and_falls_back() {
+    let default = render_config_file("").await;
+    let terminal = render_config_file("[theme.colors]\nprimary = \"not-a-color\"\n").await;
+
+    assert!(
+        buffer_contains(&terminal, "theme.colors.primary"),
+        "warning does not name the key"
+    );
+    assert_eq!(
+        fg_at(&terminal, "LazyTask v0.1"),
+        fg_at(&default, "LazyTask v0.1"),
+        "primary did not fall back to the palette"
+    );
+}
+
+#[tokio::test]
+async fn unknown_theme_name_warns_and_uses_the_default() {
+    let default = render_config_file("").await;
+    let terminal = render_config_file("[theme]\nname = \"solarized\"\n").await;
+
+    assert!(buffer_contains(&terminal, "solarized"), "warning missing");
+    assert_eq!(
+        fg_at(&terminal, "LazyTask v0.1"),
+        fg_at(&default, "LazyTask v0.1")
+    );
+}
+
+/// Draws a session holding a task with every colored attribute, with
+/// `vars` as the process environment.
+async fn render_with_env(vars: &[(&str, &str)]) -> Terminal<TestBackend> {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut session = Session::open(
+        Some(tmp.path().join("no-config.toml").to_str().unwrap()),
+        LaunchEnv {
+            taskrc_var: Some(tmp.path().join("no-taskrc").into()),
+            taskdata_var: Some(tmp.path().join("data").into()),
+            home: None,
+            vars: vars
+                .iter()
+                .map(|&(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            ..LaunchEnv::default()
+        },
+    )
+    .await
+    .expect("session opens");
+    session
+        .taskchampion
+        .add_task(
+            "Colorful",
+            &[
+                ("project", "home"),
+                ("priority", "H"),
+                ("due", "2020-01-01"),
+            ],
+        )
+        .await
+        .expect("add task");
+    render_session(session).await
+}
+
+fn colored_cells(terminal: &Terminal<TestBackend>) -> usize {
+    terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .filter(|cell| {
+            [cell.fg, cell.bg, cell.underline_color]
+                .iter()
+                .any(|&c| c != Color::Reset)
+        })
+        .count()
+}
+
+#[tokio::test]
+async fn no_color_renders_without_color() {
+    assert_ne!(colored_cells(&render_with_env(&[]).await), 0);
+    assert_ne!(
+        colored_cells(&render_with_env(&[("NO_COLOR", "")]).await),
+        0,
+        "an empty NO_COLOR must not disable color"
+    );
+    assert_eq!(
+        colored_cells(&render_with_env(&[("NO_COLOR", "1")]).await),
+        0
+    );
 }

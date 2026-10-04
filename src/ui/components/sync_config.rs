@@ -3,13 +3,14 @@
 use anyhow::Result;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 
 use crate::handlers::input::Action;
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncConfigType {
@@ -141,7 +142,7 @@ impl SyncConfigWidget {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         if !self.active {
             return;
         }
@@ -153,11 +154,12 @@ impl SyncConfigWidget {
             .title("Configure Sync")
             .title_style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             )
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan));
+            .border_style(Style::default().fg(theme.primary))
+            .style(theme.base());
         f.render_widget(block, popup);
 
         let inner = popup.inner(ratatui::layout::Margin {
@@ -175,36 +177,52 @@ impl SyncConfigWidget {
             ])
             .split(inner);
 
-        self.render_field(f, chunks[0], Field::ServerUrl, &self.server_url, false);
-        self.render_field(f, chunks[1], Field::ClientId, &self.client_id, false);
+        self.render_field(
+            f,
+            chunks[0],
+            Field::ServerUrl,
+            &self.server_url,
+            false,
+            theme,
+        );
+        self.render_field(f, chunks[1], Field::ClientId, &self.client_id, false, theme);
         self.render_field(
             f,
             chunks[2],
             Field::EncryptionSecret,
             &self.encryption_secret,
             true,
+            theme,
         );
 
         let hint = Paragraph::new(Line::from(vec![
-            Span::styled("Tab", Style::default().fg(Color::Yellow)),
+            Span::styled("Tab", Style::default().fg(theme.accent)),
             Span::raw(" next  "),
-            Span::styled("Enter", Style::default().fg(Color::Green)),
+            Span::styled("Enter", Style::default().fg(theme.success)),
             Span::raw(" save  "),
-            Span::styled("Esc", Style::default().fg(Color::Red)),
+            Span::styled("Esc", Style::default().fg(theme.error)),
             Span::raw(" cancel"),
         ]))
         .alignment(Alignment::Center);
         f.render_widget(hint, chunks[3]);
     }
 
-    fn render_field(&self, f: &mut Frame, area: Rect, field: Field, value: &str, mask: bool) {
+    fn render_field(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        field: Field,
+        value: &str,
+        mask: bool,
+        theme: &Theme,
+    ) {
         let active = matches!(
             (field, self.field),
             (Field::ServerUrl, Field::ServerUrl)
                 | (Field::ClientId, Field::ClientId)
                 | (Field::EncryptionSecret, Field::EncryptionSecret)
         );
-        let border_color = if active { Color::Yellow } else { Color::Gray };
+        let border_color = if active { theme.accent } else { theme.muted };
         let display: String = if mask {
             "*".repeat(value.chars().count())
         } else {

@@ -4,7 +4,7 @@ use anyhow::Result;
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -12,6 +12,7 @@ use ratatui::{
 
 use crate::data::models::{Priority, Task};
 use crate::handlers::input::Action;
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone)]
 pub enum FormField {
@@ -496,7 +497,7 @@ impl TaskForm {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Responsive dialog sizing based on terminal size
         let (width_pct, height_pct) = if area.width < 80 {
             (90, 80) // Nearly full screen on very narrow terminals
@@ -518,12 +519,12 @@ impl TaskForm {
             .title("Task Details")
             .title_style(
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             )
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
+            .border_style(Style::default().fg(theme.primary))
+            .style(Style::default().bg(theme.background));
         f.render_widget(block, popup_area);
 
         // Split into form fields
@@ -564,6 +565,7 @@ impl TaskForm {
             "Description:",
             &self.description_input,
             matches!(self.active_field, FormField::Description),
+            theme,
         );
 
         // Project field
@@ -573,6 +575,7 @@ impl TaskForm {
             "Project:",
             &self.project_input,
             matches!(self.active_field, FormField::Project),
+            theme,
         );
 
         // Priority field
@@ -588,10 +591,11 @@ impl TaskForm {
             "Priority:",
             priority_text,
             matches!(self.active_field, FormField::Priority),
+            theme,
         );
 
         // Due field with hint
-        self.render_due_field(f, chunks[3]);
+        self.render_due_field(f, chunks[3], theme);
 
         // Tags field
         self.render_field(
@@ -600,6 +604,7 @@ impl TaskForm {
             "Tags:",
             &self.tags_input,
             matches!(self.active_field, FormField::Tags),
+            theme,
         );
 
         // Instructions with enhanced cursor movement capabilities
@@ -609,76 +614,78 @@ impl TaskForm {
                 Span::styled(
                     "↑↓",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" Navigate fields  ", Style::default().fg(Color::White)),
+                Span::styled(" Navigate fields  ", Style::default().fg(theme.foreground)),
                 Span::styled(
                     "←→",
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(theme.secondary)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" Move cursor  ", Style::default().fg(Color::White)),
+                Span::styled(" Move cursor  ", Style::default().fg(theme.foreground)),
                 Span::styled(
                     "Type",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" to edit  ", Style::default().fg(Color::White)),
+                Span::styled(" to edit  ", Style::default().fg(theme.foreground)),
             ]),
             Line::from(vec![
                 Span::styled(
                     "Enter",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" Save  ", Style::default().fg(Color::White)),
+                Span::styled(" Save  ", Style::default().fg(theme.foreground)),
                 Span::styled(
                     "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(theme.error)
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" Cancel  ", Style::default().fg(Color::White)),
+                Span::styled(" Cancel  ", Style::default().fg(theme.foreground)),
                 Span::styled(
                     "Backspace",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(theme.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" Delete", Style::default().fg(Color::White)),
+                Span::styled(" Delete", Style::default().fg(theme.foreground)),
             ]),
         ])
-        .style(Style::default().bg(Color::Black))
+        .style(Style::default().bg(theme.background))
         .alignment(Alignment::Center);
         f.render_widget(instructions, chunks[5]);
     }
 
-    fn render_due_field(&self, f: &mut Frame, area: Rect) {
+    fn render_due_field(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         let is_active = matches!(self.active_field, FormField::Due);
         let label = "Due:";
 
         let (style, border_color) = if is_active && self.is_editing {
             (
                 Style::default()
-                    .bg(Color::Black)
-                    .fg(Color::Green)
+                    .bg(theme.background)
+                    .fg(theme.success)
                     .add_modifier(Modifier::BOLD),
-                Color::Green,
+                theme.success,
             )
         } else if is_active {
             (
                 Style::default()
-                    .bg(Color::Black)
-                    .fg(Color::Yellow)
+                    .bg(theme.background)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
-                Color::Yellow,
+                theme.accent,
             )
         } else {
             (
-                Style::default().bg(Color::Black).fg(Color::White),
-                Color::Gray,
+                Style::default().bg(theme.background).fg(theme.foreground),
+                theme.muted,
             )
         };
 
@@ -714,7 +721,7 @@ impl TaskForm {
             f.render_widget(
                 Paragraph::new("█").style(
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ),
                 cursor_area,
@@ -722,27 +729,35 @@ impl TaskForm {
         }
     }
 
-    fn render_field(&self, f: &mut Frame, area: Rect, label: &str, value: &str, is_active: bool) {
+    fn render_field(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        label: &str,
+        value: &str,
+        is_active: bool,
+        theme: &Theme,
+    ) {
         let (style, border_color) = if is_active && self.is_editing {
             (
                 Style::default()
-                    .bg(Color::Black)
-                    .fg(Color::Green)
+                    .bg(theme.background)
+                    .fg(theme.success)
                     .add_modifier(Modifier::BOLD),
-                Color::Green,
+                theme.success,
             )
         } else if is_active {
             (
                 Style::default()
-                    .bg(Color::Black)
-                    .fg(Color::Yellow)
+                    .bg(theme.background)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
-                Color::Yellow,
+                theme.accent,
             )
         } else {
             (
-                Style::default().bg(Color::Black).fg(Color::White),
-                Color::Gray,
+                Style::default().bg(theme.background).fg(theme.foreground),
+                theme.muted,
             )
         };
 
@@ -769,7 +784,7 @@ impl TaskForm {
             f.render_widget(
                 Paragraph::new("█").style(
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ),
                 cursor_area,

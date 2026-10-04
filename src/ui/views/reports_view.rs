@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use crate::data::models::{Priority, Task, TaskStatus};
 use crate::ui::components::calendar_view::CalendarWidget;
 use crate::ui::components::report_panel::{DashboardWidget, ProjectStats, TaskSummaryCache};
+use crate::ui::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReportMode {
@@ -246,7 +247,7 @@ impl ReportsView {
         }
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         match self.mode {
             ReportMode::Dashboard => {
                 // Delegate dashboard rendering to DashboardWidget
@@ -255,15 +256,15 @@ impl ReportsView {
                     self.project_stats.clone(),
                     self.task_summary_cache.clone(),
                 );
-                dashboard.render(f, area);
+                dashboard.render(f, area, theme);
             }
-            ReportMode::Calendar => self.render_calendar(f, area),
+            ReportMode::Calendar => self.render_calendar(f, area, theme),
         }
     }
 
-    fn render_calendar(&self, f: &mut Frame, area: Rect) {
+    fn render_calendar(&self, f: &mut Frame, area: Rect, theme: &Theme) {
         // Use CalendarWidget component for clean separation
         let calendar_widget = CalendarWidget::new(self.selected_date, self.tasks.clone());
-        calendar_widget.render(f, area);
+        calendar_widget.render(f, area, theme);
     }
 }

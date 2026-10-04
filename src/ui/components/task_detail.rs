@@ -3,13 +3,14 @@
 use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
 use crate::data::models::{Priority, Task, TaskStatus};
+use crate::ui::theme::Theme;
 
 pub struct TaskDetailWidget;
 
@@ -18,18 +19,18 @@ impl TaskDetailWidget {
         TaskDetailWidget
     }
 
-    pub fn render(&self, f: &mut Frame, area: Rect, task: Option<&Task>) {
+    pub fn render(&self, f: &mut Frame, area: Rect, task: Option<&Task>, theme: &Theme) {
         if let Some(task) = task {
-            self.render_task_details(f, area, task);
+            self.render_task_details(f, area, task, theme);
         } else {
             let placeholder = Paragraph::new("Select a task to view details")
                 .block(Block::default().title("Task Details").borders(Borders::ALL))
-                .style(Style::default().fg(Color::Gray));
+                .style(Style::default().fg(theme.muted));
             f.render_widget(placeholder, area);
         }
     }
 
-    fn render_task_details(&self, f: &mut Frame, area: Rect, task: &Task) {
+    fn render_task_details(&self, f: &mut Frame, area: Rect, task: &Task, theme: &Theme) {
         // Split the area into sections
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -40,13 +41,13 @@ impl TaskDetailWidget {
             .split(area);
 
         // Render main details
-        self.render_main_details(f, chunks[0], task);
+        self.render_main_details(f, chunks[0], task, theme);
 
         // Render modification history
-        self.render_modification_history(f, chunks[1], task);
+        self.render_modification_history(f, chunks[1], task, theme);
     }
 
-    fn render_main_details(&self, f: &mut Frame, area: Rect, task: &Task) {
+    fn render_main_details(&self, f: &mut Frame, area: Rect, task: &Task, theme: &Theme) {
         let mut lines = Vec::new();
 
         // Header
@@ -54,14 +55,14 @@ impl TaskDetailWidget {
             Span::styled(
                 "Name",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("          "),
             Span::styled(
                 "Value",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
         ]));
@@ -69,36 +70,36 @@ impl TaskDetailWidget {
 
         // ID
         lines.push(Line::from(vec![
-            Span::styled("ID            ", Style::default().fg(Color::Cyan)),
+            Span::styled("ID            ", Style::default().fg(theme.primary)),
             Span::styled(
                 task.id
                     .map(|i| i.to_string())
                     .unwrap_or_else(|| "".to_string()),
-                Style::default().fg(Color::White),
+                Style::default().fg(theme.foreground),
             ),
         ]));
 
         // Description
         lines.push(Line::from(vec![
-            Span::styled("Description   ", Style::default().fg(Color::Cyan)),
+            Span::styled("Description   ", Style::default().fg(theme.primary)),
             Span::styled(
                 &task.description,
                 Style::default()
-                    .fg(Color::White)
+                    .fg(theme.foreground)
                     .add_modifier(Modifier::BOLD),
             ),
         ]));
 
         // Status
         let status_color = match task.status {
-            TaskStatus::Pending => Color::Yellow,
-            TaskStatus::Completed => Color::Green,
-            TaskStatus::Deleted => Color::Red,
-            TaskStatus::Waiting => Color::Magenta,
-            TaskStatus::Recurring => Color::Blue,
+            TaskStatus::Pending => theme.warning,
+            TaskStatus::Completed => theme.success,
+            TaskStatus::Deleted => theme.error,
+            TaskStatus::Waiting => theme.secondary,
+            TaskStatus::Recurring => theme.info,
         };
         lines.push(Line::from(vec![
-            Span::styled("Status        ", Style::default().fg(Color::Cyan)),
+            Span::styled("Status        ", Style::default().fg(theme.primary)),
             Span::styled(
                 task.status.label(),
                 Style::default()
@@ -110,11 +111,11 @@ impl TaskDetailWidget {
         // Project
         if let Some(ref project) = task.project {
             lines.push(Line::from(vec![
-                Span::styled("Project       ", Style::default().fg(Color::Cyan)),
+                Span::styled("Project       ", Style::default().fg(theme.primary)),
                 Span::styled(
                     project,
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -123,12 +124,12 @@ impl TaskDetailWidget {
         // Priority
         if let Some(ref priority) = task.priority {
             let (priority_str, priority_color) = match priority {
-                Priority::High => ("High", Color::Red),
-                Priority::Medium => ("Medium", Color::Yellow),
-                Priority::Low => ("Low", Color::Green),
+                Priority::High => ("High", theme.priority_high),
+                Priority::Medium => ("Medium", theme.priority_medium),
+                Priority::Low => ("Low", theme.priority_low),
             };
             lines.push(Line::from(vec![
-                Span::styled("Priority      ", Style::default().fg(Color::Cyan)),
+                Span::styled("Priority      ", Style::default().fg(theme.primary)),
                 Span::styled(
                     priority_str,
                     Style::default()
@@ -141,12 +142,12 @@ impl TaskDetailWidget {
         // Due date
         if let Some(due) = task.due {
             let due_color = if task.is_overdue() {
-                Color::Red
+                theme.error
             } else {
-                Color::Yellow
+                theme.warning
             };
             lines.push(Line::from(vec![
-                Span::styled("Due           ", Style::default().fg(Color::Cyan)),
+                Span::styled("Due           ", Style::default().fg(theme.primary)),
                 Span::styled(
                     due.format("%Y-%m-%d %H:%M:%S").to_string(),
                     Style::default().fg(due_color).add_modifier(Modifier::BOLD),
@@ -162,11 +163,11 @@ impl TaskDetailWidget {
             let start_duration = now - start;
             let start_relative = self.format_relative_time(start_duration);
             lines.push(Line::from(vec![
-                Span::styled("Start         ", Style::default().fg(Color::Cyan)),
+                Span::styled("Start         ", Style::default().fg(theme.primary)),
                 Span::styled(
                     format!("{} ({})", start.format("%Y-%m-%d %H:%M:%S"), start_relative),
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -176,14 +177,14 @@ impl TaskDetailWidget {
         let entry_duration = now - task.entry;
         let entry_relative = self.format_relative_time(entry_duration);
         lines.push(Line::from(vec![
-            Span::styled("Created       ", Style::default().fg(Color::Cyan)),
+            Span::styled("Created       ", Style::default().fg(theme.primary)),
             Span::styled(
                 format!(
                     "{} ({})",
                     task.entry.format("%Y-%m-%d %H:%M:%S"),
                     entry_relative
                 ),
-                Style::default().fg(Color::Gray),
+                Style::default().fg(theme.muted),
             ),
         ]));
 
@@ -192,14 +193,14 @@ impl TaskDetailWidget {
             let mod_duration = now - modified;
             let mod_relative = self.format_relative_time(mod_duration);
             lines.push(Line::from(vec![
-                Span::styled("Last modified ", Style::default().fg(Color::Cyan)),
+                Span::styled("Last modified ", Style::default().fg(theme.primary)),
                 Span::styled(
                     format!(
                         "{} ({})",
                         modified.format("%Y-%m-%d %H:%M:%S"),
                         mod_relative
                     ),
-                    Style::default().fg(Color::Gray),
+                    Style::default().fg(theme.muted),
                 ),
             ]));
         }
@@ -208,11 +209,11 @@ impl TaskDetailWidget {
         if !task.tags.is_empty() {
             let tags_str = task.tags.join(" ");
             lines.push(Line::from(vec![
-                Span::styled("Tags          ", Style::default().fg(Color::Cyan)),
+                Span::styled("Tags          ", Style::default().fg(theme.primary)),
                 Span::styled(
                     tags_str,
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(theme.secondary)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -220,20 +221,20 @@ impl TaskDetailWidget {
 
         // UUID
         lines.push(Line::from(vec![
-            Span::styled("UUID          ", Style::default().fg(Color::Cyan)),
-            Span::styled(&task.uuid, Style::default().fg(Color::DarkGray)),
+            Span::styled("UUID          ", Style::default().fg(theme.primary)),
+            Span::styled(&task.uuid, Style::default().fg(theme.muted)),
         ]));
 
         // Urgency
         let urgency_color = if task.urgency >= 10.0 {
-            Color::Red
+            theme.error
         } else if task.urgency >= 5.0 {
-            Color::Yellow
+            theme.warning
         } else {
-            Color::Green
+            theme.success
         };
         lines.push(Line::from(vec![
-            Span::styled("Urgency       ", Style::default().fg(Color::Cyan)),
+            Span::styled("Urgency       ", Style::default().fg(theme.primary)),
             Span::styled(
                 format!("{:.1}", task.urgency),
                 Style::default()
@@ -249,19 +250,19 @@ impl TaskDetailWidget {
         f.render_widget(detail, area);
     }
 
-    fn render_modification_history(&self, f: &mut Frame, area: Rect, task: &Task) {
+    fn render_modification_history(&self, f: &mut Frame, area: Rect, task: &Task, theme: &Theme) {
         let mut header = Vec::new();
         header.push(Line::from(vec![
             Span::styled(
                 "Date",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 "                Modification",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
         ]));
@@ -286,15 +287,15 @@ impl TaskDetailWidget {
                 task.entry.format("%Y-%m-%d %H:%M:%S").to_string()
             };
             modifications.push(Line::from(vec![
-                Span::styled(due_display_date, Style::default().fg(Color::Gray)),
-                Span::styled(" Due set to '", Style::default().fg(Color::Gray)),
+                Span::styled(due_display_date, Style::default().fg(theme.muted)),
+                Span::styled(" Due set to '", Style::default().fg(theme.muted)),
                 Span::styled(
                     due.format("%Y-%m-%d %H:%M:%S").to_string(),
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("'.", Style::default().fg(Color::Gray)),
+                Span::styled("'.", Style::default().fg(theme.muted)),
             ]));
         }
 
@@ -303,39 +304,39 @@ impl TaskDetailWidget {
             modifications.push(Line::from(vec![
                 Span::styled(
                     start.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    Style::default().fg(Color::Gray),
+                    Style::default().fg(theme.muted),
                 ),
-                Span::styled(" Start set to '", Style::default().fg(Color::Gray)),
+                Span::styled(" Start set to '", Style::default().fg(theme.muted)),
                 Span::styled(
                     start.format("%Y-%m-%d %H:%M:%S").to_string(),
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("'.", Style::default().fg(Color::Gray)),
+                Span::styled("'.", Style::default().fg(theme.muted)),
             ]));
         }
 
         // Tags (typically added during modifications)
         for tag in &task.tags {
             modifications.push(Line::from(vec![
-                Span::styled(display_date.clone(), Style::default().fg(Color::Gray)),
-                Span::styled(" Tag '", Style::default().fg(Color::Gray)),
+                Span::styled(display_date.clone(), Style::default().fg(theme.muted)),
+                Span::styled(" Tag '", Style::default().fg(theme.muted)),
                 Span::styled(
                     tag,
                     Style::default()
-                        .fg(Color::Magenta)
+                        .fg(theme.secondary)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("' added.", Style::default().fg(Color::Gray)),
+                Span::styled("' added.", Style::default().fg(theme.muted)),
             ]));
         }
 
         // Priority
         if let Some(ref priority) = task.priority {
             modifications.push(Line::from(vec![
-                Span::styled(display_date.clone(), Style::default().fg(Color::Gray)),
-                Span::styled(" Priority set to '", Style::default().fg(Color::Gray)),
+                Span::styled(display_date.clone(), Style::default().fg(theme.muted)),
+                Span::styled(" Priority set to '", Style::default().fg(theme.muted)),
                 Span::styled(
                     match priority {
                         Priority::High => "High",
@@ -344,20 +345,20 @@ impl TaskDetailWidget {
                     },
                     Style::default()
                         .fg(match priority {
-                            Priority::High => Color::Red,
-                            Priority::Medium => Color::Yellow,
-                            Priority::Low => Color::Green,
+                            Priority::High => theme.priority_high,
+                            Priority::Medium => theme.priority_medium,
+                            Priority::Low => theme.priority_low,
                         })
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("'.", Style::default().fg(Color::Gray)),
+                Span::styled("'.", Style::default().fg(theme.muted)),
             ]));
         }
 
         // Status
         modifications.push(Line::from(vec![
-            Span::styled(display_date.clone(), Style::default().fg(Color::Gray)),
-            Span::styled(" Status set to '", Style::default().fg(Color::Gray)),
+            Span::styled(display_date.clone(), Style::default().fg(theme.muted)),
+            Span::styled(" Status set to '", Style::default().fg(theme.muted)),
             Span::styled(
                 match task.status {
                     TaskStatus::Pending => "pending",
@@ -367,24 +368,24 @@ impl TaskDetailWidget {
                     TaskStatus::Recurring => "recurring",
                 },
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("'.", Style::default().fg(Color::Gray)),
+            Span::styled("'.", Style::default().fg(theme.muted)),
         ]));
 
         // Project
         if let Some(ref project) = task.project {
             modifications.push(Line::from(vec![
-                Span::styled(display_date.clone(), Style::default().fg(Color::Gray)),
-                Span::styled(" Project set to '", Style::default().fg(Color::Gray)),
+                Span::styled(display_date.clone(), Style::default().fg(theme.muted)),
+                Span::styled(" Project set to '", Style::default().fg(theme.muted)),
                 Span::styled(
                     project,
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(theme.success)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("'.", Style::default().fg(Color::Gray)),
+                Span::styled("'.", Style::default().fg(theme.muted)),
             ]));
         }
 
@@ -392,27 +393,27 @@ impl TaskDetailWidget {
         modifications.push(Line::from(vec![
             Span::styled(
                 task.entry.format("%Y-%m-%d %H:%M:%S").to_string(),
-                Style::default().fg(Color::Gray),
+                Style::default().fg(theme.muted),
             ),
-            Span::styled(" Description set to '", Style::default().fg(Color::Gray)),
+            Span::styled(" Description set to '", Style::default().fg(theme.muted)),
             Span::styled(
                 &task.description,
                 Style::default()
-                    .fg(Color::White)
+                    .fg(theme.foreground)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("'.", Style::default().fg(Color::Gray)),
+            Span::styled("'.", Style::default().fg(theme.muted)),
         ]));
         modifications.push(Line::from(vec![
             Span::styled(
                 "                    Entry set to '",
-                Style::default().fg(Color::Gray),
+                Style::default().fg(theme.muted),
             ),
             Span::styled(
                 task.entry.format("%Y-%m-%d %H:%M:%S").to_string(),
-                Style::default().fg(Color::White),
+                Style::default().fg(theme.foreground),
             ),
-            Span::styled("'.", Style::default().fg(Color::Gray)),
+            Span::styled("'.", Style::default().fg(theme.muted)),
         ]));
 
         // Combine header and modifications
