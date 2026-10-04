@@ -4,14 +4,16 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use lazytask::app::{App, LaunchEnv, Session};
+mod common;
+
+use common::Driver;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use lazytask::app::{LaunchEnv, Session};
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::{AwsCredentials, SyncSettings, TaskChampionIntegration};
 use lazytask::ui::app_ui::AppUI;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
-use tokio::sync::mpsc;
 
 struct Fixture {
     tmp: TempDir,
@@ -442,76 +444,14 @@ async fn cloud_and_server_sync_need_their_required_keys() -> Result<()> {
     Ok(())
 }
 
-/// The app as the binary runs it on a session opened from a taskrc, fed key
-/// presses through its input channel.
-struct Running {
-    app: App<TestBackend>,
-    keys: mpsc::UnboundedSender<Event>,
-}
-
 impl Fixture {
     /// Launches the app on `taskrc`, with automatic sync off.
-    async fn launch(&self, taskrc: &Path) -> Result<Running> {
+    async fn launch(&self, taskrc: &Path) -> Result<Driver> {
         let config = self.write("config.toml", "[sync]\nauto_sync_interval = 0\n")?;
         let session = self
             .open(taskrc, Some(&self.path("data")), Some(&config))
             .await?;
-        let (keys, input) = mpsc::unbounded_channel();
-        let terminal = Terminal::new(TestBackend::new(220, 40))?;
-        let app = App::with_terminal(terminal, session, input).await?;
-        Ok(Running { app, keys })
-    }
-}
-
-impl Running {
-    fn press(&self, code: KeyCode) {
-        self.keys
-            .send(Event::Key(KeyEvent::new(code, KeyModifiers::NONE)))
-            .expect("app input closed");
-    }
-
-    fn type_text(&self, text: &str) {
-        text.chars().for_each(|c| self.press(KeyCode::Char(c)));
-    }
-
-    /// Replaces the focused modal field's `old` text with `new`.
-    fn retype(&self, old: &str, new: &str) {
-        old.chars().for_each(|_| self.press(KeyCode::Backspace));
-        self.type_text(new);
-    }
-
-    fn open_sync_modal(&self) {
-        self.type_text("S");
-    }
-
-    /// Runs the event loop until the screen contains `needle`, returning the
-    /// screen. Fails when a step fails, or with the last screen after five
-    /// seconds.
-    async fn wait_for(&mut self, needle: &str) -> Result<String> {
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
-        loop {
-            let screen = self.screen();
-            if screen.contains(needle) {
-                return Ok(screen);
-            }
-            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            match tokio::time::timeout(remaining, self.app.step()).await {
-                Ok(stepped) => stepped?,
-                Err(_) => anyhow::bail!("{needle:?} never appeared:\n{screen}"),
-            }
-        }
-    }
-
-    fn screen(&self) -> String {
-        let buf = self.app.terminal.backend().buffer();
-        (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf[(x, y)].symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        Driver::new(session).await
     }
 }
 
@@ -699,7 +639,7 @@ async fn saving_updates_a_key_in_the_included_file_that_defines_it() -> Result<(
 
 /// Fills in the empty sync modal with a server, client and `secret`, and
 /// saves.
-fn save_new_server(app: &Running, secret: &str) {
+fn save_new_server(app: &Driver, secret: &str) {
     app.open_sync_modal();
     app.type_text("https://tw.example.com");
     app.press(KeyCode::Tab);
