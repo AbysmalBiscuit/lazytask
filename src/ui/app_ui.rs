@@ -402,7 +402,7 @@ impl AppUI {
                                 self.set_status_message(format!("✅ {}", msg));
                             }
                             Err(e) => {
-                                self.set_status_message(format!("❌ Sync config failed: {}", e));
+                                self.set_status_message(format!("❌ Sync config failed: {e:#}"));
                             }
                         }
                         self.sync_config_widget.deactivate();
