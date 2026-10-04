@@ -38,8 +38,8 @@ impl Driver {
         let session = Session::open(
             Some(path.to_str().unwrap()),
             LaunchEnv {
-                taskrc: Some(dir.path().join("no-taskrc").into()),
-                taskdata: Some(dir.path().join("data").into()),
+                taskrc_var: Some(dir.path().join("no-taskrc").into()),
+                taskdata_var: Some(dir.path().join("data").into()),
                 home: None,
             },
         )

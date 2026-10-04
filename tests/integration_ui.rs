@@ -141,8 +141,8 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     let mut session = Session::open(
         Some(config_path.to_str().unwrap()),
         LaunchEnv {
-            taskrc: Some(tmp.path().join("no-taskrc").into()),
-            taskdata: Some(tmp.path().join("data").into()),
+            taskrc_var: Some(tmp.path().join("no-taskrc").into()),
+            taskdata_var: Some(tmp.path().join("data").into()),
             home: None,
         },
     )

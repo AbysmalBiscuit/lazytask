@@ -33,15 +33,15 @@ impl Fixture {
         Ok(path)
     }
 
-    /// Opens a session with no lazytask config file, `taskrc` as `TASKRC`
-    /// and `taskdata` as `TASKDATA`.
-    async fn open(&self, taskrc: &Path, taskdata: Option<&Path>) -> Result<Session> {
+    /// Opens a session with no lazytask config file, `taskrc_var` as `TASKRC`
+    /// and `taskdata_var` as `TASKDATA`.
+    async fn open(&self, taskrc_var: &Path, taskdata_var: Option<&Path>) -> Result<Session> {
         let missing_config = self.path("no-config.toml");
         Session::open(
             Some(missing_config.to_str().unwrap()),
             LaunchEnv {
-                taskrc: Some(taskrc.into()),
-                taskdata: taskdata.map(Into::into),
+                taskrc_var: Some(taskrc_var.into()),
+                taskdata_var: taskdata_var.map(Into::into),
                 home: Some(self.path("home")),
             },
         )
@@ -155,8 +155,8 @@ async fn taskrc_data_location_applies_only_when_config_and_taskdata_are_unset() 
     let session = Session::open(
         Some(config.to_str().unwrap()),
         LaunchEnv {
-            taskrc: Some(taskrc.into()),
-            taskdata: Some(fx.path("from-taskdata").into()),
+            taskrc_var: Some(taskrc.into()),
+            taskdata_var: Some(fx.path("from-taskdata").into()),
             home: Some(fx.path("home")),
         },
     )

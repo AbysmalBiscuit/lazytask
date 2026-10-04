@@ -31,17 +31,17 @@ pub struct App {
 /// The parts of the process environment startup reads.
 pub struct LaunchEnv {
     /// `TASKRC`
-    pub taskrc: Option<OsString>,
+    pub taskrc_var: Option<OsString>,
     /// `TASKDATA`
-    pub taskdata: Option<OsString>,
+    pub taskdata_var: Option<OsString>,
     pub home: Option<PathBuf>,
 }
 
 impl LaunchEnv {
     pub fn from_process() -> Self {
         LaunchEnv {
-            taskrc: std::env::var_os("TASKRC"),
-            taskdata: std::env::var_os("TASKDATA"),
+            taskrc_var: std::env::var_os("TASKRC"),
+            taskdata_var: std::env::var_os("TASKDATA"),
             home: dirs::home_dir(),
         }
     }
@@ -64,13 +64,16 @@ impl Session {
             unknown_keys,
         } = Config::load(config_path)?;
         let home = env.home.as_deref();
-        let taskrc = match config.taskwarrior.resolve_taskrc_path(env.taskrc, home)? {
+        let taskrc = match config
+            .taskwarrior
+            .resolve_taskrc_path(env.taskrc_var, home)?
+        {
             Some(path) => Taskrc::load(&path, home)?,
             None => Taskrc::default(),
         };
         let data_dir = config
             .taskwarrior
-            .resolve_data_location(env.taskdata, &taskrc, home)?;
+            .resolve_data_location(env.taskdata_var, &taskrc, home)?;
         let mut taskchampion = TaskChampionIntegration::new(data_dir).await?;
 
         let mut warnings = Vec::new();

@@ -55,18 +55,18 @@ pub struct UIConfig {
 }
 
 impl TaskwarriorConfig {
-    /// The taskrc to read, first match wins: `taskrc_path`, then `taskrc`
+    /// The taskrc to read, first match wins: `taskrc_path`, then `taskrc_var`
     /// (the `TASKRC` variable), then `~/.taskrc`. `None` when nothing names
     /// one and there is no home directory.
     pub fn resolve_taskrc_path(
         &self,
-        taskrc: Option<OsString>,
+        taskrc_var: Option<OsString>,
         home: Option<&Path>,
     ) -> Result<Option<PathBuf>> {
         let named = self
             .taskrc_path
             .clone()
-            .or_else(|| taskrc.filter(|v| !v.is_empty()).map(PathBuf::from));
+            .or_else(|| taskrc_var.filter(|v| !v.is_empty()).map(PathBuf::from));
         match (named, home) {
             (Some(path), _) => expand_tilde(&path, home).map(Some),
             (None, Some(home)) => Ok(Some(home.join(".taskrc"))),
@@ -75,19 +75,19 @@ impl TaskwarriorConfig {
     }
 
     /// The TaskChampion data directory, first match wins: `data_location`,
-    /// then `taskdata` (the `TASKDATA` variable), then the taskrc's
+    /// then `taskdata_var` (the `TASKDATA` variable), then the taskrc's
     /// `data.location`, then `~/.task`. A leading `~` in the winning path
     /// expands to `home`, which is only required when that expansion happens.
     pub fn resolve_data_location(
         &self,
-        taskdata: Option<OsString>,
+        taskdata_var: Option<OsString>,
         taskrc: &Taskrc,
         home: Option<&Path>,
     ) -> Result<PathBuf> {
         let location = self
             .data_location
             .clone()
-            .or_else(|| taskdata.map(PathBuf::from))
+            .or_else(|| taskdata_var.map(PathBuf::from))
             .or_else(|| taskrc.data_location())
             .unwrap_or_else(|| PathBuf::from("~/.task"));
         expand_tilde(&location, home)
