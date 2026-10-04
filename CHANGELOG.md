@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1](https://github.com/AbysmalBiscuit/lazytask/compare/v0.1.0...v0.1.1) (2026-10-04)
+
+
+### Features
+
+* **cli:** add doctor command ([#29](https://github.com/AbysmalBiscuit/lazytask/issues/29)) ([12ac0a9](https://github.com/AbysmalBiscuit/lazytask/commit/12ac0a95d37500d3596a98910fd533d72c10ba60))
+
+
+### Bug Fixes
+
+* **config:** find the XDG taskrc as task does ([#30](https://github.com/AbysmalBiscuit/lazytask/issues/30)) ([1278779](https://github.com/AbysmalBiscuit/lazytask/commit/1278779732f573a85ce7fe1921b13a59c691a2f4))
+
 ## [0.1.0](https://github.com/AbysmalBiscuit/lazytask/compare/v0.1.0...v0.1.0) (2026-10-04)
 
 
