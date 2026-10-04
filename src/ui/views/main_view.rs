@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::data::models::{Task, TaskStatus};
 use crate::ui::components::task_detail::TaskDetailWidget;
-use crate::ui::components::task_list::TaskListWidget;
+use crate::ui::components::task_list::{Column, TaskListWidget};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FilterSection {
@@ -38,9 +38,9 @@ pub struct MainView {
 }
 
 impl MainView {
-    pub fn new() -> Self {
+    pub fn new(columns: Vec<Column>) -> Self {
         MainView {
-            task_list_widget: TaskListWidget::new(),
+            task_list_widget: TaskListWidget::new(columns),
             task_detail_widget: TaskDetailWidget::new(),
             filter_focused: false,
             active_filter_section: FilterSection::Status,

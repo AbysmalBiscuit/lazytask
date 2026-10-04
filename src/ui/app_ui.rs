@@ -7,6 +7,7 @@ use ratatui::{
     Frame,
 };
 
+use crate::config::UIConfig;
 use crate::data::models::Task;
 use crate::handlers::input::Action;
 use crate::handlers::sync::{SyncHandler, SyncPhase};
@@ -14,6 +15,7 @@ use crate::taskchampion::TaskChampionIntegration;
 use crate::ui::components::sync_config::{SyncConfigResult, SyncConfigWidget};
 use crate::ui::components::sync_status::SyncStatusWidget;
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
+use crate::ui::components::task_list::Column;
 use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::{DateNavigation, ReportsView};
 use crossterm::event::KeyEvent;
@@ -47,14 +49,24 @@ pub struct AppUI {
     preserve_selection_uuid: Option<String>,
     keymap: Keymap,
     keymap_warnings: Vec<String>,
+    show_help_bar: bool,
+    config_warnings: Vec<String>,
 }
 
 impl AppUI {
     pub fn new(config: &crate::config::Config) -> Result<Self> {
         let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
-        Ok(AppUI {
+        let (configured_columns, unknown_columns) = Column::resolve(&config.ui.task_list_columns);
+        let columns_fell_back = configured_columns.is_empty();
+        let columns = if columns_fell_back {
+            Column::resolve(&UIConfig::default().task_list_columns).0
+        } else {
+            configured_columns
+        };
+
+        let mut ui = AppUI {
             current_view: AppView::TaskList,
-            main_view: MainView::new(),
+            main_view: MainView::new(columns),
             reports_view: ReportsView::new(),
             sync_status_widget: SyncStatusWidget::new(),
             sync_config_widget: SyncConfigWidget::new(),
@@ -68,18 +80,74 @@ impl AppUI {
             preserve_selection_uuid: None,
             keymap,
             keymap_warnings,
-        })
+            show_help_bar: config.ui.show_help_bar,
+            config_warnings: Vec::new(),
+        };
+
+        match config.ui.default_view.as_str() {
+            "task_list" => {}
+            "reports" => ui.current_view = AppView::Reports,
+            "calendar" => {
+                ui.current_view = AppView::Reports;
+                ui.reports_view.open_calendar();
+            }
+            unknown => ui.config_warnings.push(format!(
+                "Unknown default_view \"{unknown}\", opening task_list"
+            )),
+        }
+
+        if !unknown_columns.is_empty() {
+            ui.config_warnings.push(format!(
+                "Unknown task_list_columns skipped: {}",
+                unknown_columns.join(", ")
+            ));
+        }
+        if columns_fell_back {
+            ui.config_warnings
+                .push("No usable task_list_columns, showing the default columns".to_string());
+        }
+
+        Ok(ui)
     }
 
     pub async fn load_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<()> {
         let mut tasks = taskchampion.list_tasks().await?;
-        tasks.sort_by(|a, b| b.entry.cmp(&a.entry));
+        // The replica returns tasks in no fixed order, so tie-break on uuid to
+        // keep rows from swapping places on every reload.
+        tasks.sort_by(|a, b| b.entry.cmp(&a.entry).then_with(|| a.uuid.cmp(&b.uuid)));
 
         self.tasks = tasks.clone();
         self.main_view.update_available_filters(&self.tasks);
         self.reports_view.update_tasks(tasks);
         self.apply_filters();
         Ok(())
+    }
+
+    /// Reloads tasks from the replica, keeping the selected task selected.
+    /// A failed reload shows in the footer.
+    pub async fn reload_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) {
+        self.preserve_selection_uuid = self.main_view.selected_task_uuid();
+        if let Err(e) = self.load_tasks(taskchampion).await {
+            self.preserve_selection_uuid = None;
+            self.set_status_message(format!("❌ Reload failed: {e}"));
+        }
+    }
+
+    /// Syncs with the configured server without the sync overlay, then
+    /// reloads. Does nothing when sync is not configured or a manual sync is
+    /// showing. A failed sync shows in the footer.
+    pub async fn auto_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+        sync_handler: &mut SyncHandler,
+    ) {
+        if self.show_sync_overlay || !sync_handler.is_sync_configured(taskchampion) {
+            return;
+        }
+        match sync_handler.start_sync(taskchampion).await {
+            Ok(_) => self.reload_tasks(taskchampion).await,
+            Err(e) => self.set_status_message(format!("❌ Auto-sync failed: {e}")),
+        }
     }
 
     fn apply_filters(&mut self) {
@@ -133,11 +201,12 @@ impl AppUI {
 
     /// Shows one warning naming every startup problem that did not stop
     /// lazytask: `startup_warnings` from loading the config and taskrc, then
-    /// unusable keybindings.
+    /// unusable keybindings and `[ui]` values.
     pub fn show_config_warnings(&mut self, startup_warnings: &[String]) {
         let warnings: Vec<&str> = startup_warnings
             .iter()
             .chain(&self.keymap_warnings)
+            .chain(&self.config_warnings)
             .map(String::as_str)
             .collect();
         if !warnings.is_empty() {
@@ -202,6 +271,11 @@ impl AppUI {
             (3, 3)
         };
 
+        // The footer also carries status messages, so it stays up for them
+        // even when the help bar is off.
+        let show_footer = self.show_help_bar || self.status_message.is_some();
+        let footer_size = if show_footer { footer_size } else { 0 };
+
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -223,7 +297,9 @@ impl AppUI {
             AppView::Help => self.draw_help(f, main_chunks[1]),
         }
 
-        self.draw_footer_panel(f, main_chunks[2]);
+        if show_footer {
+            self.draw_footer_panel(f, main_chunks[2]);
+        }
 
         if let Some(ref form) = self.task_form {
             form.render(f, size);
@@ -415,7 +491,7 @@ impl AppUI {
                 }
             }
             Action::Refresh => {
-                self.load_tasks(taskchampion).await?;
+                self.reload_tasks(taskchampion).await;
             }
             Action::Sync => {
                 if !sync_handler.is_sync_configured(taskchampion) {

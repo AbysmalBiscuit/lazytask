@@ -36,8 +36,7 @@ error = "#f38ba8"
 [ui]
 default_view = "task_list"           # Initial view: task_list, calendar, reports
 show_help_bar = true                 # Show keybinding hints at bottom
-refresh_interval = 1000              # Auto-refresh interval (milliseconds)
-task_list_columns = [                # Columns to show in task list
+task_list_columns = [                # Columns to show in task list, in this order
     "id",
     "project",
     "priority",
@@ -46,19 +45,34 @@ task_list_columns = [                # Columns to show in task list
 ]
 ```
 
+`default_view` falls back to `task_list` when the name is not one of the views above. With `show_help_bar = false` the footer still appears while it shows a status message or warning.
+
+LazyTask watches the task database and reloads whenever it changes, so tasks changed outside it, for example with `task add` or a sync, show up without a restart. The selected task stays selected across reloads. Where the system offers no file change events, LazyTask checks the database for changes every second instead. The `refresh` key (`F5` by default) reloads right away.
+
+Column names in `task_list_columns` ignore case. A column named twice shows once, where it is first listed. When no listed name is a known column, including an empty list, the task list shows the default columns and the footer says so.
+
 Available columns:
 
-- `id` - Task ID number
+- `id` - Task ID, the same one `task` shows; blank once `task` stops numbering the task, as it does for completed tasks
 - `uuid` - Task UUID (shortened)
 - `project` - Project name
-- `priority` - Priority (H/M/L)
+- `priority` - Priority (High/Medium/Low)
 - `due` - Due date
 - `description` - Task description
 - `tags` - Task tags
-- `urgency` - Calculated urgency
+- `urgency` - Urgency, computed as Taskwarrior 3 does with its default coefficients
 - `entry` - Creation date
 - `modified` - Last modified date
 - `status` - Task status
+
+### Sync Configuration
+
+```toml
+[sync]
+auto_sync_interval = 5               # Seconds between automatic syncs; 0 turns it off
+```
+
+Automatic sync runs only once sync is configured, from the taskrc or the sync config modal. It syncs quietly in the background and reports failures in the footer. The `sync` and `force_sync` keys (`s` by default) sync right away and restart the countdown.
 
 ### Taskwarrior Integration
 
@@ -145,7 +159,6 @@ name = "gruvbox"
 
 [ui]
 default_view = "calendar"
-refresh_interval = 5000
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
 
 # Vim-style navigation
@@ -163,6 +176,8 @@ last_task = "G"
 LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type.
 
 Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
+
+An unknown `default_view` or `task_list_columns` entry also only warns in the footer: the view falls back to `task_list`, and the column is skipped.
 
 ## Upgrading
 

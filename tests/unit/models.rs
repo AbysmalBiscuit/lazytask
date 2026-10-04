@@ -114,26 +114,120 @@ fn test_task_computed_properties() {
     assert!(blocked_task.is_blocked());
 }
 
-#[test]
-fn test_task_urgency_calculation() {
-    let task = Task::new("Test urgency".to_string());
+// Expected values follow Taskwarrior 3's urgency formula and default
+// coefficients (src/Task.cpp and src/Context.cpp in Taskwarrior).
+mod urgency {
+    use chrono::{DateTime, Duration, TimeZone, Utc};
+    use lazytask::data::models::{Annotation, Priority, Task, TaskStatus};
+    use lazytask::utils::helpers::calculate_urgency;
 
-    // Basic task should have some urgency
-    assert!(task.urgency >= 0.0);
+    fn now() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 6, 15, 12, 0, 0).unwrap()
+    }
 
-    // Test with different attributes to ensure urgency changes appropriately
-    let mut high_priority_task = task.clone();
-    high_priority_task.priority = Some(Priority::High);
+    fn fresh_task() -> Task {
+        let mut task = Task::new("t".to_string());
+        task.entry = now();
+        task
+    }
 
-    let mut project_task = task.clone();
-    project_task.project = Some("test".to_string());
+    fn urgency(task: &Task) -> f64 {
+        calculate_urgency(task, false, false, now())
+    }
 
-    // Tasks with more attributes should generally have higher urgency
-    // (This is a basic test - actual urgency calculation is complex)
-    println!(
-        "Task urgencies: basic={}, high_pri={}, with_project={}",
-        task.urgency, high_priority_task.urgency, project_task.urgency
-    );
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-4,
+            "urgency {actual}, expected {expected}"
+        );
+    }
+
+    #[test]
+    fn bare_new_task_is_zero() {
+        assert_close(urgency(&fresh_task()), 0.0);
+    }
+
+    #[test]
+    fn priority_project_and_tags_add_up() {
+        let mut task = fresh_task();
+        task.priority = Some(Priority::High);
+        task.project = Some("home".to_string());
+        task.tags = vec!["next".to_string(), "errand".to_string()];
+        // priority H 6.0 + project 1.0 + two tags 0.9 + next tag 15.0
+        assert_close(urgency(&task), 22.9);
+    }
+
+    #[test]
+    fn medium_and_low_priority_coefficients() {
+        let mut task = fresh_task();
+        task.priority = Some(Priority::Medium);
+        assert_close(urgency(&task), 3.9);
+        task.priority = Some(Priority::Low);
+        assert_close(urgency(&task), 1.8);
+    }
+
+    #[test]
+    fn due_scales_from_two_weeks_out_to_a_week_overdue() {
+        let mut task = fresh_task();
+        task.due = Some(now() - Duration::days(7));
+        assert_close(urgency(&task), 12.0);
+        task.due = Some(now());
+        assert_close(urgency(&task), 8.8);
+        task.due = Some(now() + Duration::days(14));
+        assert_close(urgency(&task), 2.4);
+        task.due = Some(now() + Duration::days(60));
+        assert_close(urgency(&task), 2.4);
+    }
+
+    #[test]
+    fn age_grows_to_its_cap_at_365_days() {
+        let mut task = fresh_task();
+        task.entry = now() - Duration::days(73);
+        assert_close(urgency(&task), 0.4);
+        task.entry = now() - Duration::days(73) + Duration::hours(1);
+        assert_close(urgency(&task), 2.0 * 72.0 / 365.0);
+        task.entry = now() - Duration::days(400);
+        assert_close(urgency(&task), 2.0);
+    }
+
+    #[test]
+    fn active_scheduled_and_waiting() {
+        let mut active = fresh_task();
+        active.start = Some(now() - Duration::hours(1));
+        assert_close(urgency(&active), 4.0);
+
+        let mut scheduled = fresh_task();
+        scheduled.scheduled = Some(now() - Duration::hours(1));
+        assert_close(urgency(&scheduled), 5.0);
+        scheduled.scheduled = Some(now() + Duration::hours(1));
+        assert_close(urgency(&scheduled), 0.0);
+
+        let mut waiting = fresh_task();
+        waiting.wait = Some(now() + Duration::days(1));
+        assert_close(urgency(&waiting), -3.0);
+        waiting.status = TaskStatus::Completed;
+        assert_close(urgency(&waiting), 0.0);
+    }
+
+    #[test]
+    fn annotations_count_up_to_three() {
+        let mut task = fresh_task();
+        let note = Annotation {
+            entry: now(),
+            description: "note".to_string(),
+        };
+        for (count, expected) in [(1, 0.8), (2, 0.9), (3, 1.0), (4, 1.0)] {
+            task.annotations = vec![note.clone(); count];
+            assert_close(urgency(&task), expected);
+        }
+    }
+
+    #[test]
+    fn blocked_and_blocking() {
+        let task = fresh_task();
+        assert_close(calculate_urgency(&task, true, false, now()), -5.0);
+        assert_close(calculate_urgency(&task, false, true, now()), 8.0);
+    }
 }
 
 #[test]

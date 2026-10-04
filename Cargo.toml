@@ -30,6 +30,7 @@ serde_json = "1.0"
 taskchampion = { version = "3", default-features = false, features = ["server-sync", "server-local", "server-gcp", "server-aws", "storage", "bundled", "tls-webpki-roots"] }
 strum = { version = "0.28", features = ["derive"] }
 enum_dispatch = "0.3"
+notify = "8.2"
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -70,6 +71,10 @@ path = "tests/integration_tui_input.rs"
 [[test]]
 name = "integration_taskrc"
 path = "tests/integration_taskrc.rs"
+
+[[test]]
+name = "integration_app"
+path = "tests/integration_app.rs"
 
 [profile.dist]
 inherits = "release"

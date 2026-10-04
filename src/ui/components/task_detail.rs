@@ -90,17 +90,17 @@ impl TaskDetailWidget {
         ]));
 
         // Status
-        let (status_str, status_color) = match task.status {
-            TaskStatus::Pending => ("Pending", Color::Yellow),
-            TaskStatus::Completed => ("Completed", Color::Green),
-            TaskStatus::Deleted => ("Deleted", Color::Red),
-            TaskStatus::Waiting => ("Waiting", Color::Magenta),
-            TaskStatus::Recurring => ("Recurring", Color::Blue),
+        let status_color = match task.status {
+            TaskStatus::Pending => Color::Yellow,
+            TaskStatus::Completed => Color::Green,
+            TaskStatus::Deleted => Color::Red,
+            TaskStatus::Waiting => Color::Magenta,
+            TaskStatus::Recurring => Color::Blue,
         };
         lines.push(Line::from(vec![
             Span::styled("Status        ", Style::default().fg(Color::Cyan)),
             Span::styled(
-                status_str,
+                task.status.label(),
                 Style::default()
                     .fg(status_color)
                     .add_modifier(Modifier::BOLD),

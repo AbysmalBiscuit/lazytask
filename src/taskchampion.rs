@@ -4,13 +4,15 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use taskchampion::server::AwsCredentials as TcAwsCredentials;
 use taskchampion::storage::AccessMode;
 use taskchampion::{Operations, Replica, ServerConfig, SqliteStorage, Status as TcStatus, Tag};
 use uuid::Uuid;
 
-use crate::data::models::{Priority, Task, TaskStatus};
+use crate::data::models::{Annotation, Priority, Task, TaskStatus};
+use crate::utils::helpers::calculate_urgency;
 
 /// Where a replica syncs to, one variant per TaskChampion backend.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,10 +94,21 @@ impl TaskChampionIntegration {
             .await
             .context("Failed to load tasks")?;
 
+        let working_set = self
+            .replica
+            .working_set()
+            .await
+            .context("Failed to load working set")?;
+
         let mut result = Vec::with_capacity(tasks.len());
         for (uuid, tc_task) in tasks {
-            result.push(map_task(uuid, &tc_task));
+            let mut task = map_task(uuid, &tc_task);
+            task.id = working_set
+                .by_uuid(uuid)
+                .and_then(|i| u32::try_from(i).ok());
+            result.push(task);
         }
+        apply_urgency(&mut result, Utc::now());
         Ok(result)
     }
 
@@ -422,13 +435,41 @@ fn map_task(uuid: Uuid, tc: &taskchampion::Task) -> Task {
         end,
         start,
         wait,
-        scheduled: None,
+        scheduled: tc.get_value("scheduled").and_then(parse_unix_or_rfc3339),
         until: None,
         depends: tc.get_dependencies().map(|u| u.to_string()).collect(),
         tags,
-        annotations: Vec::new(),
+        annotations: tc
+            .get_annotations()
+            .map(|a| Annotation {
+                entry: a.entry,
+                description: a.description,
+            })
+            .collect(),
         urgency: 0.0,
         udas: std::collections::HashMap::new(),
+    }
+}
+
+/// Sets each task's urgency. Blocking follows Taskwarrior: a dependency
+/// counts between working-set tasks when neither is completed or deleted.
+fn apply_urgency(tasks: &mut [Task], now: chrono::DateTime<Utc>) {
+    let is_open = |t: &Task| {
+        t.id.is_some() && !matches!(t.status, TaskStatus::Completed | TaskStatus::Deleted)
+    };
+    let open: HashSet<String> = tasks
+        .iter()
+        .filter(|t| is_open(t))
+        .map(|t| t.uuid.clone())
+        .collect();
+    let blocking: HashSet<String> = tasks
+        .iter()
+        .filter(|t| is_open(t))
+        .flat_map(|t| t.depends.iter().filter(|d| open.contains(*d)).cloned())
+        .collect();
+    for task in tasks.iter_mut() {
+        let blocked = is_open(task) && task.depends.iter().any(|d| open.contains(d));
+        task.urgency = calculate_urgency(task, blocked, blocking.contains(&task.uuid), now);
     }
 }
 

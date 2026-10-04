@@ -1,32 +1,45 @@
 use anyhow::Result;
 use crossterm::{
+    cursor::Show,
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{
+    backend::{Backend, CrosstermBackend},
+    Terminal,
+};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, Stdout};
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::time::{Instant, Interval, MissedTickBehavior};
 
 use crate::config::{Config, LoadedConfig};
 use crate::handlers::input::Action;
 use crate::handlers::sync::SyncHandler;
+use crate::handlers::watcher::ReplicaWatcher;
 use crate::taskchampion::TaskChampionIntegration;
 use crate::taskrc::Taskrc;
 use crate::ui::app_ui::AppUI;
 
 pub type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
 
-pub struct App {
+pub struct App<B: Backend> {
     pub config: Config,
-    pub terminal: AppTerminal,
+    pub terminal: Terminal<B>,
     pub ui: AppUI,
     pub taskchampion: TaskChampionIntegration,
     pub sync_handler: SyncHandler,
     pub should_quit: bool,
+    input: mpsc::UnboundedReceiver<Event>,
+    replica_watcher: Option<ReplicaWatcher>,
+    auto_sync: Option<Interval>,
+    needs_redraw: bool,
+    // Declared last so the terminal is restored after everything else drops.
+    _terminal_guard: Option<TerminalGuard>,
 }
 
 /// Where packaged Taskwarrior installs keep the rc files, such as themes,
@@ -120,89 +133,194 @@ impl Session {
     }
 }
 
-impl App {
+impl App<CrosstermBackend<Stdout>> {
+    /// Loads the config, taskrc and replica, then takes over the terminal.
     pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
+        let session = Session::open(config_path, LaunchEnv::from_process()).await?;
+        // Unusable keybindings fail here, before the terminal is taken over.
+        let ui = AppUI::new(&session.config)?;
+        let guard = TerminalGuard::enter()?;
+        let terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+
+        let (tx, input) = mpsc::unbounded_channel();
+        // crossterm's reader blocks, so it gets its own thread. It ends with
+        // the process.
+        std::thread::spawn(move || {
+            while let Ok(event) = event::read() {
+                if tx.send(event).is_err() {
+                    break;
+                }
+            }
+        });
+
+        let mut app = Self::assemble(terminal, session, ui, input).await?;
+        app._terminal_guard = Some(guard);
+        Ok(app)
+    }
+}
+
+impl<B: Backend> App<B>
+where
+    B::Error: Send + Sync + 'static,
+{
+    /// Builds the app for `session` on any ratatui backend, reading terminal
+    /// events from `input`, and draws the first frame.
+    pub async fn with_terminal(
+        terminal: Terminal<B>,
+        session: Session,
+        input: mpsc::UnboundedReceiver<Event>,
+    ) -> Result<Self> {
+        let ui = AppUI::new(&session.config)?;
+        Self::assemble(terminal, session, ui, input).await
+    }
+
+    async fn assemble(
+        terminal: Terminal<B>,
+        session: Session,
+        mut ui: AppUI,
+        input: mpsc::UnboundedReceiver<Event>,
+    ) -> Result<Self> {
         let Session {
             config,
-            warnings,
-            taskchampion,
-        } = Session::open(config_path, LaunchEnv::from_process()).await?;
-        let mut ui = AppUI::new(&config)?;
+            mut warnings,
+            mut taskchampion,
+        } = session;
+        let mut sync_handler = SyncHandler::new();
+        sync_handler.initialize(&taskchampion)?;
+        ui.load_tasks(&mut taskchampion).await?;
+
+        let replica_watcher = match ReplicaWatcher::new(taskchampion.data_dir()) {
+            Ok(watcher) => Some(watcher),
+            Err(e) => {
+                warnings.push(format!("Not watching the task data, reload with F5: {e}"));
+                None
+            }
+        };
         ui.show_config_warnings(&warnings);
-        let sync_handler = SyncHandler::new();
-
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
-
-        Ok(App {
+        let auto_sync = match config.sync.auto_sync_interval {
+            0 => None,
+            secs => {
+                let period = Duration::from_secs(secs);
+                let mut interval = tokio::time::interval_at(Instant::now() + period, period);
+                interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                Some(interval)
+            }
+        };
+        let mut app = App {
             config,
             terminal,
             ui,
             taskchampion,
             sync_handler,
             should_quit: false,
-        })
+            input,
+            replica_watcher,
+            auto_sync,
+            needs_redraw: true,
+            _terminal_guard: None,
+        };
+        app.draw()?;
+        Ok(app)
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        self.sync_handler.initialize(&self.taskchampion)?;
-        self.ui.load_tasks(&mut self.taskchampion).await?;
+        while !self.should_quit {
+            self.step().await?;
+        }
+        Ok(())
+    }
 
-        let mut needs_redraw = true;
-
-        loop {
-            if needs_redraw {
-                self.terminal
-                    .draw(|f| self.ui.render_with_sync(f, &self.sync_handler))?;
-                needs_redraw = false;
+    /// Waits for the next terminal event, replica change or auto-sync tick,
+    /// handles it, and redraws if needed.
+    pub async fn step(&mut self) -> Result<()> {
+        tokio::select! {
+            event = self.input.recv() => match event {
+                Some(event) => self.handle_event(event).await?,
+                None => self.should_quit = true,
+            },
+            () = replica_changed(&mut self.replica_watcher) => {
+                self.ui.reload_tasks(&mut self.taskchampion).await;
+                self.needs_redraw = true;
             }
-
-            if event::poll(Duration::from_millis(250))? {
-                match event::read()? {
-                    Event::Key(key) => {
-                        let action = self.ui.action(key);
-                        match action {
-                            Action::Quit => {
-                                self.should_quit = true;
-                            }
-                            _ => {
-                                self.ui
-                                    .handle_action(
-                                        action,
-                                        &mut self.taskchampion,
-                                        &mut self.sync_handler,
-                                    )
-                                    .await?;
-                                needs_redraw = true;
-                            }
-                        }
-                    }
-                    Event::Resize(_, _) => {
-                        needs_redraw = true;
-                    }
-                    _ => {}
-                }
-            }
-
-            if self.should_quit {
-                break;
+            () = auto_sync_due(&mut self.auto_sync) => {
+                self.ui
+                    .auto_sync(&mut self.taskchampion, &mut self.sync_handler)
+                    .await;
+                self.needs_redraw = true;
             }
         }
+        self.draw()
+    }
 
+    async fn handle_event(&mut self, event: Event) -> Result<()> {
+        match event {
+            Event::Key(key) => {
+                let action = self.ui.action(key);
+                if matches!(action, Action::Quit) {
+                    self.should_quit = true;
+                    return Ok(());
+                }
+                let is_sync = matches!(action, Action::Sync | Action::ForceSync);
+                self.ui
+                    .handle_action(action, &mut self.taskchampion, &mut self.sync_handler)
+                    .await?;
+                if let (true, Some(interval)) = (is_sync, self.auto_sync.as_mut()) {
+                    interval.reset();
+                }
+                self.needs_redraw = true;
+            }
+            Event::Resize(_, _) => self.needs_redraw = true,
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self) -> Result<()> {
+        if self.needs_redraw {
+            self.terminal
+                .draw(|f| self.ui.render_with_sync(f, &self.sync_handler))?;
+            self.needs_redraw = false;
+        }
         Ok(())
     }
 }
 
-impl Drop for App {
+async fn replica_changed(watcher: &mut Option<ReplicaWatcher>) {
+    match watcher {
+        Some(watcher) => watcher.changed().await,
+        None => std::future::pending().await,
+    }
+}
+
+async fn auto_sync_due(interval: &mut Option<Interval>) {
+    match interval {
+        Some(interval) => {
+            interval.tick().await;
+        }
+        None => std::future::pending().await,
+    }
+}
+
+/// Raw mode and the alternate screen, restored on drop.
+struct TerminalGuard;
+
+impl TerminalGuard {
+    fn enter() -> Result<Self> {
+        enable_raw_mode()?;
+        let guard = TerminalGuard;
+        execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+        Ok(guard)
+    }
+}
+
+impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
         let _ = execute!(
-            self.terminal.backend_mut(),
+            io::stdout(),
             LeaveAlternateScreen,
-            DisableMouseCapture
+            DisableMouseCapture,
+            Show
         );
-        let _ = self.terminal.show_cursor();
     }
 }

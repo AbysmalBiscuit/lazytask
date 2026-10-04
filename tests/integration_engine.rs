@@ -201,3 +201,47 @@ async fn invalid_uuid_modify_returns_error() {
         msg
     );
 }
+
+#[tokio::test]
+async fn pending_tasks_carry_their_working_set_id() {
+    let (mut engine, _tmp) = engine().await;
+    let first = engine.add_task("first", &[]).await.expect("add");
+    let second = engine.add_task("second", &[]).await.expect("add");
+
+    let tasks = engine.list_tasks().await.expect("list");
+    let id_of = |uuid: &str| tasks.iter().find(|t| t.uuid == uuid).and_then(|t| t.id);
+    assert_eq!(id_of(&first), Some(1));
+    assert_eq!(id_of(&second), Some(2));
+}
+
+#[tokio::test]
+async fn listed_tasks_carry_taskwarrior_urgency() {
+    let (mut engine, _tmp) = engine().await;
+    let blocker = engine.add_task("blocker", &[]).await.expect("add");
+    let blocked = engine
+        .add_task(
+            "blocked",
+            &[
+                ("priority", "H"),
+                ("project", "home"),
+                (&format!("dep_{blocker}"), "x"),
+            ],
+        )
+        .await
+        .expect("add");
+
+    let tasks = engine.list_tasks().await.expect("list");
+    let urgency_of = |uuid: &str| tasks.iter().find(|t| t.uuid == uuid).unwrap().urgency;
+    // priority H 6.0 + project 1.0 + blocked -5.0
+    assert!(
+        (urgency_of(&blocked) - 2.0).abs() < 1e-4,
+        "{}",
+        urgency_of(&blocked)
+    );
+    // blocking 8.0
+    assert!(
+        (urgency_of(&blocker) - 8.0).abs() < 1e-4,
+        "{}",
+        urgency_of(&blocker)
+    );
+}

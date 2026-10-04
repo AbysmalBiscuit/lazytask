@@ -10,16 +10,107 @@ use ratatui::{
 
 use crate::data::models::Task;
 
+/// A task list column, named in config by its `ui.task_list_columns` key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Column {
+    Id,
+    Uuid,
+    Project,
+    Priority,
+    Due,
+    Description,
+    Tags,
+    Urgency,
+    Entry,
+    Modified,
+    Status,
+}
+
+impl Column {
+    /// Resolves configured column names, ignoring case and keeping the
+    /// first of any repeats. Returns the columns and the names that match no
+    /// column.
+    pub fn resolve(names: &[String]) -> (Vec<Column>, Vec<&str>) {
+        let mut columns = Vec::new();
+        let mut unknown = Vec::new();
+        for name in names {
+            match Column::from_name(name) {
+                Some(column) if !columns.contains(&column) => columns.push(column),
+                Some(_) => {}
+                None => unknown.push(name.as_str()),
+            }
+        }
+        (columns, unknown)
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Some(match name.to_ascii_lowercase().as_str() {
+            "id" => Column::Id,
+            "uuid" => Column::Uuid,
+            "project" => Column::Project,
+            "priority" => Column::Priority,
+            "due" => Column::Due,
+            "description" => Column::Description,
+            "tags" => Column::Tags,
+            "urgency" => Column::Urgency,
+            "entry" => Column::Entry,
+            "modified" => Column::Modified,
+            "status" => Column::Status,
+            _ => return None,
+        })
+    }
+
+    fn header(self) -> &'static str {
+        match self {
+            Column::Id => "ID",
+            Column::Uuid => "UUID",
+            Column::Project => "Project",
+            Column::Priority => "Priority",
+            Column::Due => "Due",
+            Column::Description => "Description",
+            Column::Tags => "Tags",
+            Column::Urgency => "Urgency",
+            Column::Entry => "Entry",
+            Column::Modified => "Modified",
+            Column::Status => "Status",
+        }
+    }
+
+    /// Cell width in characters, or `None` for the description, which
+    /// takes the space the other columns leave.
+    fn fixed_width(self) -> Option<u16> {
+        match self {
+            Column::Id => Some(4),
+            Column::Uuid => Some(8),
+            Column::Project => Some(14),
+            Column::Priority => Some(8),
+            Column::Due => Some(6),
+            Column::Description => None,
+            Column::Tags => Some(16),
+            Column::Urgency => Some(7),
+            Column::Entry | Column::Modified => Some(10),
+            Column::Status => Some(9),
+        }
+    }
+
+    fn width(self) -> Constraint {
+        self.fixed_width()
+            .map_or(Constraint::Min(20), Constraint::Length)
+    }
+}
+
 pub struct TaskListWidget {
     pub state: TableState,
     tasks: Vec<Task>,
+    columns: Vec<Column>,
 }
 
 impl TaskListWidget {
-    pub fn new() -> Self {
+    pub fn new(columns: Vec<Column>) -> Self {
         TaskListWidget {
             state: TableState::default(),
             tasks: Vec::new(),
+            columns,
         }
     }
 
@@ -99,12 +190,11 @@ impl TaskListWidget {
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         let formatter = TaskTableFormatter::new();
 
-        // Create clean, minimal headers
-        let header_cells = formatter
-            .headers()
+        let header_cells = self
+            .columns
             .iter()
-            .map(|h| {
-                Cell::from(*h).style(
+            .map(|column| {
+                Cell::from(column.header()).style(
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -120,11 +210,10 @@ impl TaskListWidget {
         let rows: Vec<Row> = self
             .tasks
             .iter()
-            .map(|task| formatter.format_task_row(task))
+            .map(|task| formatter.format_task_row(task, &self.columns))
             .collect();
 
-        // Use responsive column widths based on terminal size
-        let column_widths = formatter.responsive_column_widths(area.width);
+        let column_widths: Vec<Constraint> = self.columns.iter().map(|c| c.width()).collect();
         let task_count = self.tasks.len();
         let title = format!(" Tasks ({}) ", task_count);
 
@@ -158,65 +247,38 @@ impl TaskTableFormatter {
         TaskTableFormatter
     }
 
-    // Define column headers - simplified, clean layout
-    fn headers(&self) -> [&'static str; 5] {
-        ["ID", "Project", "Priority", "Due", "Description"]
-    }
-
-    // Define responsive column widths that adapt to terminal size
-    fn responsive_column_widths(&self, terminal_width: u16) -> Vec<Constraint> {
-        if terminal_width < 80 {
-            // Very narrow terminal - minimize columns, focus on description
-            vec![
-                Constraint::Length(3), // ID - minimal
-                Constraint::Length(8), // Project - abbreviated
-                Constraint::Length(4), // Priority - single char (H/M/L)
-                Constraint::Length(8), // Due - short date
-                Constraint::Min(20),   // Description - rest of space
-            ]
-        } else if terminal_width < 120 {
-            // Narrow terminal - compact but readable
-            vec![
-                Constraint::Length(4),  // ID
-                Constraint::Length(12), // Project
-                Constraint::Length(8),  // Priority
-                Constraint::Length(10), // Due
-                Constraint::Min(30),    // Description - grows with available space
-            ]
-        } else if terminal_width < 160 {
-            // Medium terminal - balanced layout
-            vec![
-                Constraint::Length(4),  // ID
-                Constraint::Length(15), // Project
-                Constraint::Length(10), // Priority
-                Constraint::Length(12), // Due
-                Constraint::Min(40),    // Description
-            ]
-        } else {
-            // Wide terminal - generous spacing
-            vec![
-                Constraint::Length(5),  // ID
-                Constraint::Length(20), // Project - more space
-                Constraint::Length(10), // Priority
-                Constraint::Length(14), // Due - full datetime if needed
-                Constraint::Min(50),    // Description - maximum space
-            ]
-        }
-    }
-
     // Format a complete task row with intelligent row-level color coding
-    fn format_task_row(&self, task: &Task) -> Row<'static> {
+    fn format_task_row(&self, task: &Task, columns: &[Column]) -> Row<'static> {
         // Determine the most important styling factor for the entire row
         let row_style = self.get_row_style(task);
 
-        let cells = vec![
-            Cell::from(self.format_id(task.id)),
-            Cell::from(self.format_project(&task.project)),
-            Cell::from(self.format_priority_full(&task.priority)),
-            Cell::from(self.format_due(task.due)),
-            Cell::from(self.format_description(&task.description)),
-        ];
+        let cells = columns
+            .iter()
+            .map(|&column| Cell::from(self.format_cell(task, column)));
         Row::new(cells).height(1).style(row_style)
+    }
+
+    fn format_cell(&self, task: &Task, column: Column) -> String {
+        let text = match column {
+            Column::Id => self.format_id(task.id),
+            Column::Uuid => task.uuid.split('-').next().unwrap_or_default().to_string(),
+            Column::Project => task.project.clone().unwrap_or_default(),
+            Column::Priority => self.format_priority_full(&task.priority),
+            Column::Due => self.format_due(task.due),
+            Column::Description => task.description.clone(),
+            Column::Tags => task.tags.join(" "),
+            Column::Urgency => format!("{:.1}", task.urgency),
+            Column::Entry => task.entry.format("%Y-%m-%d").to_string(),
+            Column::Modified => task
+                .modified
+                .map(|m| m.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+            Column::Status => task.status.label().to_string(),
+        };
+        match column.fixed_width() {
+            Some(width) => crate::utils::formatting::truncate_chars(&text, width.into()),
+            None => text,
+        }
     }
 
     // ===== INTELLIGENT ROW-LEVEL COLOR CODING SYSTEM =====
@@ -333,13 +395,6 @@ impl TaskTableFormatter {
         }
     }
 
-    fn format_project(&self, project: &Option<String>) -> String {
-        project
-            .as_deref()
-            .map(|p| crate::utils::formatting::truncate_chars(p, 14))
-            .unwrap_or_default()
-    }
-
     fn format_due(&self, due: Option<chrono::DateTime<Utc>>) -> String {
         if let Some(due) = due {
             let now = Utc::now();
@@ -355,9 +410,5 @@ impl TaskTableFormatter {
         } else {
             "".to_string()
         }
-    }
-
-    fn format_description(&self, description: &str) -> String {
-        crate::utils::formatting::truncate_chars(description, 45)
     }
 }
