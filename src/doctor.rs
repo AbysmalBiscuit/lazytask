@@ -321,7 +321,6 @@ async fn count_tasks(data_dir: &Path) -> anyhow::Result<usize> {
 /// A sync target whose settings are valid.
 struct SyncTarget {
     description: String,
-    settings: SyncSettings,
     config: ServerConfig,
 }
 
@@ -349,7 +348,6 @@ fn check_sync_settings(taskrc: &Taskrc, data_dir: &Path) -> (Check, Option<SyncT
             check,
             Some(SyncTarget {
                 description,
-                settings,
                 config,
             }),
         ),
@@ -386,7 +384,7 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
         return check;
     };
     let mut check = Check::new(NAME, &target.description, "taskrc");
-    if let SyncSettings::Local { .. } = target.settings {
+    if let ServerConfig::Local { .. } = target.config {
         check.record(Status::Skip, "a local directory has no server to contact");
         return check;
     }
