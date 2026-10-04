@@ -21,6 +21,8 @@ install-updater = false
 create-release = false
 # Build every target on pull requests too, as the cross-compile check.
 pr-run-mode = "upload"
+# Attaches the config JSON schema to the Release alongside the binaries.
+global-artifacts-jobs = ["./config-schema"]
 
 # dist cross-compiles i686 MSVC from Linux with cargo-xwin by default; build it
 # natively instead, since the bundled SQLite and ring C builds target MSVC.

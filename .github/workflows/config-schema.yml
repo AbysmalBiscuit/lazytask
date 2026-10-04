@@ -1,0 +1,26 @@
+# Attaches schema/lazytask-config.json to the Release, where the schema's
+# `$id` (`releases/latest/download/lazytask-config.json`) points. dist runs
+# this as a global-artifacts job; its host job uploads every `artifacts-*`
+# artifact to the Release. The committed schema is current at the tag because
+# the config_schema test fails on drift.
+name: Config schema
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  upload:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-config-schema
+          path: schema/lazytask-config.json
+          if-no-files-found: error
