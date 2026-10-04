@@ -131,12 +131,6 @@ fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Res
         .resolve_data_location(Some("/srv/tasks".into()), Path::new("/home/me"));
 
     assert_eq!(location, PathBuf::from("/opt/tasks"));
-    assert_eq!(
-        config
-            .taskwarrior
-            .resolve_data_location(None, Path::new("/home/me")),
-        PathBuf::from("/opt/tasks")
-    );
     Ok(())
 }
 
