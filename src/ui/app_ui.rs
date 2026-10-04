@@ -587,7 +587,7 @@ impl AppUI {
         // Render the outer block, then split the inner area into two columns.
         let block = Block::default()
             .title(format!(
-                "Help— Keyboard Shortcuts ({} to close)",
+                "Help — Keyboard Shortcuts ({} to close)",
                 self.key_label(Section::Global, "back")
             ))
             .borders(Borders::ALL)
