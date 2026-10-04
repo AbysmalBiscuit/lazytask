@@ -397,15 +397,15 @@ impl AppUI {
             if let Some(result) = self.sync_config_widget.handle_input(action.clone())? {
                 match result {
                     SyncConfigResult::Save(config) => {
-                        match sync_handler.configure_sync(taskchampion, &config).await {
+                        match sync_handler.save_sync_config(taskchampion, &config).await {
                             Ok(msg) => {
                                 self.set_status_message(format!("✅ {}", msg));
+                                self.sync_config_widget.deactivate();
                             }
                             Err(e) => {
-                                self.set_status_message(format!("❌ Sync config failed: {}", e));
+                                self.set_status_message(format!("❌ Sync config failed: {e:#}"));
                             }
                         }
-                        self.sync_config_widget.deactivate();
                     }
                     SyncConfigResult::Cancel => {
                         self.sync_config_widget.deactivate();
@@ -528,16 +528,10 @@ impl AppUI {
                     }
                 }
             }
-            Action::SyncConfig => {
-                if sync_handler.is_sync_configured(taskchampion) {
-                    self.set_status_message(format!(
-                        "ℹ️ Sync already configured. Press {} to sync.",
-                        self.key_label(GlobalAction::Sync)
-                    ));
-                } else {
-                    self.sync_config_widget.activate();
-                }
-            }
+            Action::SyncConfig => match sync_handler.saved_config() {
+                Ok(saved) => self.sync_config_widget.activate(saved),
+                Err(e) => self.set_status_message(format!("❌ Cannot read the taskrc: {e:#}")),
+            },
             Action::Filter => {
                 if matches!(self.current_view, AppView::TaskList) {
                     self.main_view.toggle_filter_focus();

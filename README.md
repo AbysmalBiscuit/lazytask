@@ -210,10 +210,11 @@ echo "Use this client_id in LazyTask: $CLIENT_ID"
    - **Server URL**: `http://localhost:8810` (or your remote URL)
    - **Client ID**: the UUID from `$CLIENT_ID` above
    - **Encryption Secret**: any string — both replicas must use the same one
+   - Leave **Local server dir** empty. Filling it in syncs to that directory instead.
 4. Press **Enter** to save, **Esc** to close the modal.
 5. Press **`s`** to sync.
 
-Settings entered in the modal last only for the session. To keep them, put them in your taskrc, where `task` reads them too; lazytask configures sync from it at startup:
+Saving writes the settings to your taskrc, where `task` reads them too, and the modal opens with them next time. You can also put them in the taskrc yourself; lazytask configures sync from it at startup:
 
 ```ini
 sync.server.url=http://localhost:8810

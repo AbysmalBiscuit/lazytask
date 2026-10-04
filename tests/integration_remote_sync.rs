@@ -14,7 +14,7 @@
 //   cargo test --test integration_remote_sync -- --nocapture
 
 use lazytask::data::models::TaskStatus;
-use lazytask::taskchampion::{SyncSettings, TaskChampionIntegration};
+use lazytask::taskchampion::{ServerSettings, SyncSettings, TaskChampionIntegration};
 
 fn env_settings() -> Option<(String, String, String)> {
     let url = std::env::var("LAZYTASK_REMOTE_SYNC_URL").ok()?;
@@ -42,11 +42,11 @@ async fn remote_sync_round_trip() {
         .await
         .expect("replica B");
 
-    let settings = SyncSettings::Server {
+    let settings = SyncSettings::Server(ServerSettings {
         url: url.clone(),
         client_id: client_id.clone(),
         encryption_secret: secret.clone(),
-    };
+    });
     a.configure_sync(settings.clone()).expect("configure A");
     b.configure_sync(settings).expect("configure B");
 
@@ -105,11 +105,11 @@ async fn remote_sync_rejects_unauthorized_client_id() {
         .expect("engine");
 
     engine
-        .configure_sync(SyncSettings::Server {
+        .configure_sync(SyncSettings::Server(ServerSettings {
             url,
             client_id: bogus_id,
             encryption_secret: secret,
-        })
+        }))
         .expect("configure");
 
     engine
