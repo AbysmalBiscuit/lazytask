@@ -7,7 +7,7 @@ default-run = "lazytask"
 authors = ["LazyTask Contributors"]
 description = "Modern Terminal UI for TaskChampion (Taskwarrior-compatible task storage)"
 license = "MIT"
-repository = "https://github.com/osamamahmood/lazytask"
+repository = "https://github.com/AbysmalBiscuit/lazytask"
 
 [[bin]]
 name = "lazytask"
