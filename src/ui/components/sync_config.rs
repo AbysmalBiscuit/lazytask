@@ -117,15 +117,15 @@ impl SyncConfigWidget {
                 };
                 return Ok(Some(SyncConfigResult::Save(config)));
             }
-            Action::Tab | Action::MoveDown => self.field = self.field.next(),
+            Action::NextField | Action::MoveDown => self.field = self.field.next(),
             Action::MoveUp => self.field = self.field.prev(),
-            Action::Backspace => {
+            Action::Erase => {
                 self.current_input_mut().pop();
             }
             Action::Character(c) => {
                 self.current_input_mut().push(c);
             }
-            Action::Space => {
+            Action::Toggle => {
                 self.current_input_mut().push(' ');
             }
             _ => {}

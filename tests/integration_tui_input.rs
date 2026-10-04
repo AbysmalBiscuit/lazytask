@@ -224,7 +224,7 @@ async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
     d.key(KeyCode::Insert).await?;
     assert!(d.ui.has_active_form(), "Insert should open the add form");
     let form_keys = [
-        (KeyCode::BackTab, KeyModifiers::SHIFT, Action::Tab),
+        (KeyCode::BackTab, KeyModifiers::SHIFT, Action::NextField),
         (
             KeyCode::Char('X'),
             KeyModifiers::CONTROL | KeyModifiers::SHIFT,
@@ -500,7 +500,7 @@ async fn tab_in_filter_mode_routes_to_section_navigation() -> Result<()> {
 
     for _ in 0..6 {
         let action = d.key(KeyCode::Tab).await?;
-        assert!(matches!(action, Action::Tab));
+        assert!(matches!(action, Action::NextField));
         assert!(
             d.ui.has_active_form(),
             "Tab in filter mode must not exit filter mode"

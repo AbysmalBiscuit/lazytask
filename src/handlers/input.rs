@@ -23,8 +23,8 @@ pub enum Action {
     ForceSync,
     SyncConfig,
     Character(char),
-    Backspace,
+    Erase,
     None,
-    Space,
-    Tab,
+    Toggle,
+    NextField,
 }

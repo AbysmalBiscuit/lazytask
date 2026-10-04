@@ -459,7 +459,7 @@ impl AppUI {
                     }
                 }
             }
-            Action::Tab => {
+            Action::NextField => {
                 if matches!(self.current_view, AppView::TaskList)
                     && self.main_view.is_filter_focused()
                 {
@@ -472,7 +472,7 @@ impl AppUI {
                 {
                     match action {
                         Action::MoveUp | Action::MoveDown => {}
-                        Action::Space => {
+                        Action::Toggle => {
                             self.main_view.toggle_current_selection();
                             self.apply_filters();
                         }
@@ -480,7 +480,7 @@ impl AppUI {
                             self.main_view.handle_search_character(c);
                             self.apply_filters();
                         }
-                        Action::Backspace => {
+                        Action::Erase => {
                             self.main_view.handle_search_backspace();
                             self.apply_filters();
                         }
