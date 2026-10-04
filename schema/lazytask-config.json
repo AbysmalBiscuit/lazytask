@@ -1,13 +1,14 @@
 {
   "$defs": {
     "KeyBindingsConfig": {
-      "description": "Key overrides, action name to key such as `q`, `Ctrl+s`, `Shift+Tab` or `F1`. Actions left out keep their default keys.",
+      "description": "Key overrides, action name to a key such as `q`, `Ctrl+s`,\n`Shift+Tab` or `F1`. Actions left out keep their default keys.",
       "properties": {
         "form": {
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Keys for the `[keybindings.form]` actions.",
+          "default": {},
+          "description": "Actions while a form or the filter panel has focus.",
           "properties": {
             "cancel": {
               "default": "Esc",
@@ -66,7 +67,8 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Keys for the `[keybindings.global]` actions.",
+          "default": {},
+          "description": "Actions active in every view outside a form.",
           "properties": {
             "back": {
               "default": "Esc",
@@ -119,7 +121,8 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Keys for the `[keybindings.reports]` actions.",
+          "default": {},
+          "description": "Actions in the reports and calendar view.",
           "properties": {
             "next_day": {
               "default": "Right",
@@ -168,7 +171,8 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Keys for the `[keybindings.task_list]` actions.",
+          "default": {},
+          "description": "Actions in the task list.",
           "properties": {
             "add_task": {
               "default": "a",

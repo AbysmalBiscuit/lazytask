@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use schemars::{json_schema, JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Deserializer};
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
@@ -11,7 +10,9 @@ use strum::IntoEnumIterator;
 
 use crate::taskrc::Taskrc;
 use crate::utils::helpers::expand_tilde;
-use crate::utils::keybindings::{Bindable, Binding, Section};
+use crate::utils::keybindings::{
+    Bindable, FormAction, GlobalAction, ReportsAction, TaskListAction,
+};
 
 /// lazytask's `config.toml`. Every table and key is optional; a key left
 /// out keeps its default.
@@ -47,52 +48,41 @@ pub struct ThemeConfig {
     pub no_color: bool,
 }
 
-/// Key overrides per section, action name to key string. Actions left out
-/// keep their default keys; see [`crate::utils::keybindings::Binding`].
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+/// Key overrides, action name to a key such as `q`, `Ctrl+s`,
+/// `Shift+Tab` or `F1`. Actions left out keep their default keys.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct KeyBindingsConfig {
+    /// Actions active in every view outside a form.
+    #[schemars(schema_with = "action_keys::<GlobalAction>")]
     pub global: HashMap<String, String>,
+    /// Actions in the task list.
+    #[schemars(schema_with = "action_keys::<TaskListAction>")]
     pub task_list: HashMap<String, String>,
+    /// Actions in the reports and calendar view.
+    #[schemars(schema_with = "action_keys::<ReportsAction>")]
     pub reports: HashMap<String, String>,
+    /// Actions while a form or the filter panel has focus.
+    #[schemars(schema_with = "action_keys::<FormAction>")]
     pub form: HashMap<String, String>,
 }
 
-/// Lists every bindable action with its help text and default key, built
-/// from the actions themselves so a new action reaches the schema on its own.
-impl JsonSchema for KeyBindingsConfig {
-    fn schema_name() -> Cow<'static, str> {
-        "KeyBindingsConfig".into()
-    }
-
-    fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        let sections: serde_json::Map<String, serde_json::Value> = Section::iter()
-            .map(|section| (section.name().to_string(), section_schema(section)))
-            .collect();
-        json_schema!({
-            "description": "Key overrides, action name to key such as `q`, `Ctrl+s`, `Shift+Tab` or `F1`. Actions left out keep their default keys.",
-            "type": "object",
-            "properties": sections,
-        })
-    }
-}
-
-fn section_schema(section: Section) -> serde_json::Value {
-    let actions: serde_json::Map<String, serde_json::Value> = Binding::all()
-        .filter(|binding| binding.section() == section)
-        .map(|binding| {
-            let mut action = serde_json::json!({
+/// A keybindings section's schema: every action in `A` with its help text
+/// and default key, so a new action reaches the schema on its own.
+fn action_keys<A: Bindable + IntoEnumIterator>(_: &mut SchemaGenerator) -> Schema {
+    let actions: serde_json::Map<String, serde_json::Value> = A::iter()
+        .map(|action| {
+            let mut schema = serde_json::json!({
                 "type": "string",
-                "description": binding.description(),
+                "description": action.description(),
             });
-            if let Some(key) = binding.default_key() {
-                action["default"] = key.into();
+            if let Some(key) = action.default_key() {
+                schema["default"] = key.into();
             }
-            (binding.name().to_string(), action)
+            (action.name().to_string(), schema)
         })
         .collect();
-    serde_json::json!({
-        "description": format!("Keys for the `[keybindings.{}]` actions.", section.name()),
+    json_schema!({
         "type": "object",
         "properties": actions,
         "additionalProperties": { "type": "string" },
