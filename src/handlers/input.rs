@@ -1,8 +1,4 @@
-use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use std::time::Duration;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Quit,
     Refresh,
@@ -18,84 +14,17 @@ pub enum Action {
     Select,
     Back,
     Filter,
-    Context,
+    ToggleCalendar,
+    PrevMonth,
+    NextMonth,
+    Today,
     Reports,
     Sync,
     ForceSync,
     SyncConfig,
     Character(char),
-    Backspace,
+    Erase,
     None,
-    Space,
-    Tab,
-}
-
-pub struct InputHandler;
-
-impl InputHandler {
-    pub fn new(_config: &crate::config::Config) -> Self {
-        InputHandler
-    }
-
-    pub async fn handle_events(&self) -> Result<Option<Action>> {
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                return Ok(Some(self.handle_key_event(key)));
-            }
-        }
-        Ok(None)
-    }
-
-    fn handle_key_event(&self, key: KeyEvent) -> Action {
-        self.handle_key_event_with_context(key, false)
-    }
-
-    pub fn handle_key_event_with_context(&self, key: KeyEvent, in_form: bool) -> Action {
-        if in_form {
-            match key.code {
-                KeyCode::Esc => Action::Back,
-                KeyCode::Enter => Action::Select,
-                KeyCode::Up => Action::MoveUp,
-                KeyCode::Down => Action::MoveDown,
-                KeyCode::Left => Action::MoveLeft, // Enable cursor movement in forms
-                KeyCode::Right => Action::MoveRight, // Enable cursor movement in forms
-                KeyCode::Tab => Action::Tab,       // Tab for section navigation in filters
-                KeyCode::BackTab => Action::MoveUp, // Shift+Tab moves to previous field (same as up arrow)
-                KeyCode::Backspace => Action::Backspace,
-                KeyCode::Char(' ') => Action::Space, // Space for toggling filters
-                KeyCode::Char(c) => Action::Character(c),
-                _ => Action::None,
-            }
-        } else {
-            match key.code {
-                KeyCode::Char('q') => Action::Quit,
-                KeyCode::F(1) => Action::Help,
-                KeyCode::F(5) => Action::Refresh,
-                KeyCode::Char('a') => Action::AddTask,
-                KeyCode::Char('e') => Action::EditTask,
-                KeyCode::Char('d') => Action::DoneTask,
-                KeyCode::Delete => Action::DeleteTask,
-                KeyCode::Up => Action::MoveUp,
-                KeyCode::Down => Action::MoveDown,
-                KeyCode::Left => Action::MoveLeft,
-                KeyCode::Right => Action::MoveRight,
-                KeyCode::Enter => Action::Select,
-                KeyCode::Esc => Action::Back,
-                KeyCode::Char('/') => Action::Filter,
-                KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                    Action::ForceSync
-                }
-                KeyCode::Char('s') => Action::Sync,
-                KeyCode::Char('S') => Action::SyncConfig,
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
-                KeyCode::Char('c') => Action::Context,
-                KeyCode::Char('r') => Action::Reports,
-                KeyCode::Tab => Action::Tab,
-                KeyCode::Backspace => Action::Backspace,
-                KeyCode::Char(' ') => Action::Space,
-                KeyCode::Char(c) => Action::Character(c), // Catch-all for other characters (t, <, >, etc)
-                _ => Action::None,
-            }
-        }
-    }
+    Toggle,
+    NextField,
 }

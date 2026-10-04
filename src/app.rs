@@ -9,7 +9,7 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crate::config::{Config, LoadedConfig};
-use crate::handlers::input::{Action, InputHandler};
+use crate::handlers::input::Action;
 use crate::handlers::sync::SyncHandler;
 use crate::taskchampion::TaskChampionIntegration;
 use crate::ui::app_ui::AppUI;
@@ -20,7 +20,6 @@ pub struct App {
     pub config: Config,
     pub terminal: AppTerminal,
     pub ui: AppUI,
-    pub input_handler: InputHandler,
     pub taskchampion: TaskChampionIntegration,
     pub sync_handler: SyncHandler,
     pub should_quit: bool,
@@ -28,30 +27,27 @@ pub struct App {
 
 impl App {
     pub async fn new(config_path: Option<&str>, _verbose: bool) -> Result<Self> {
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
-
         let LoadedConfig {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
+        let mut ui = AppUI::new(&config)?;
+        ui.show_config_warnings(&unknown_keys);
         let data_dir = config
             .taskwarrior
             .resolve_data_location(std::env::var_os("TASKDATA"), dirs::home_dir().as_deref())?;
         let taskchampion = TaskChampionIntegration::new(data_dir).await?;
         let sync_handler = SyncHandler::new();
-        let mut ui = AppUI::new(&config)?;
-        ui.warn_unknown_config_keys(&unknown_keys);
-        let input_handler = InputHandler::new(&config);
+
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
         Ok(App {
             config,
             terminal,
             ui,
-            input_handler,
             taskchampion,
             sync_handler,
             should_quit: false,
@@ -74,10 +70,7 @@ impl App {
             if event::poll(Duration::from_millis(250))? {
                 match event::read()? {
                     Event::Key(key) => {
-                        let in_form = self.ui.has_active_form();
-                        let action = self
-                            .input_handler
-                            .handle_key_event_with_context(key, in_form);
+                        let action = self.ui.action(key);
                         match action {
                             Action::Quit => {
                                 self.should_quit = true;

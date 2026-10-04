@@ -66,7 +66,7 @@ src/
 │   └── themes.rs        # Color schemes
 │
 ├── handlers/            # Event and command processing
-│   ├── input.rs         # Key/mouse input processing
+│   ├── input.rs         # The Action enum
 │   ├── commands.rs      # Command validation/execution
 │   ├── navigation.rs    # View switching logic
 │   └── sync.rs          # Background sync operations
@@ -106,7 +106,6 @@ pub struct App {
     pub config: Config,
     pub terminal: AppTerminal,
     pub ui: AppUI,
-    pub input_handler: InputHandler,
     pub should_quit: bool,
 }
 ```
@@ -334,26 +333,29 @@ pub enum AppView {
 
 ### 3. Commands
 
-To add a new command:
+To add a new command, give it an `Action` variant, add a bindable action for it in the section enum where its key applies, and handle it:
 
 ```rust
-// Update Action enum in src/handlers/input.rs
-#[derive(Debug, Clone)]
+// src/handlers/input.rs
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     // ... existing actions
     NewAction,
 }
 
-// Update key handler
-fn handle_key_event(&self, key: KeyEvent) -> Action {
-    match key.code {
-        // ... existing mappings
-        KeyCode::Char('n') => Action::NewAction,
-        _ => Action::None,
-    }
+// src/utils/keybindings.rs: the variant's snake_case name is its config
+// name, `new_action`
+pub enum TaskListAction {
+    // ... existing actions
+    NewAction,
 }
 
-// Update command handler in src/ui/app_ui.rs
+impl Bindable for TaskListAction {
+    // Add an arm to each match: `action` returns `Action::NewAction`,
+    // `default_key` its default key string, `description` its help text.
+}
+
+// src/ui/app_ui.rs
 pub async fn handle_action(&mut self, action: Action) -> Result<()> {
     match action {
         // ... existing actions
@@ -365,6 +367,8 @@ pub async fn handle_action(&mut self, action: Action) -> Result<()> {
     Ok(())
 }
 ```
+
+The new variant makes the action rebindable as `[keybindings.task_list] new_action` and lists it in the help overlay, in declaration order. Add it to `docs/keybindings.md` and the `[keybindings]` tables in `config/default.toml` as well.
 
 ### 4. Configuration Options
 

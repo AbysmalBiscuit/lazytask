@@ -70,26 +70,17 @@ data_location = "~/path/to/data"     # Empty string or absent means unset: TASKD
 
 ### Keybindings
 
-Keybindings are organized by context:
+Keybindings are grouped into `global`, `task_list`, `reports` and `form` sections. Set only the actions you want to move; the rest keep their default keys.
 
 ```toml
 [keybindings.global]
-quit = "q"
-help = "F1"
-refresh = "F5"
-force_quit = "Ctrl+c"
+quit = "Ctrl+q"
 
 [keybindings.task_list]
-add_task = "a"
-edit_task = "e"
-done_task = "d"
-delete_task = "Delete"
-# ... more keybindings
+add_task = "Insert"
 
-[keybindings.task_detail]
-save = "Ctrl+s"
-cancel = "Esc"
-# ... more keybindings
+[keybindings.form]
+confirm = "Ctrl+s"
 ```
 
 See [keybindings.md](keybindings.md) for complete keybinding reference.

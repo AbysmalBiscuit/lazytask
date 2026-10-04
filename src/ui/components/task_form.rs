@@ -111,7 +111,7 @@ impl TaskForm {
                     }
                 }
             }
-            Action::MoveDown | Action::Tab => {
+            Action::MoveDown | Action::NextField => {
                 self.next_field();
                 self.is_editing = true; // Auto-enter editing mode
             }
@@ -151,7 +151,7 @@ impl TaskForm {
                     }
                 }
             }
-            Action::Backspace => {
+            Action::Erase => {
                 // Auto-enter editing mode if not already editing
                 self.is_editing = true;
                 match self.active_field {
@@ -246,7 +246,7 @@ impl TaskForm {
                     self.is_editing = true;
                 }
             }
-            Action::Space => {
+            Action::Toggle => {
                 // Handle space as a character in forms
                 if self.is_editing {
                     match self.active_field {

@@ -27,6 +27,8 @@ dirs = "6.0"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 serde_json = "1.0"
 taskchampion = { version = "3", default-features = false, features = ["server-sync", "server-local", "storage", "bundled", "tls-webpki-roots"] }
+strum = { version = "0.28", features = ["derive"] }
+enum_dispatch = "0.3"
 
 [dev-dependencies]
 tempfile = "3.8"

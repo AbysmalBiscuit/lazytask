@@ -1,184 +1,104 @@
 # LazyTask Keybindings
 
-LazyTask uses keyboard shortcuts for efficient task management. All keybindings are configurable through the `~/.config/lazytask/config.toml` file.
-
-## Global Keybindings
-
-These work in any view:
-
-| Key      | Action     | Description                   |
-| -------- | ---------- | ----------------------------- |
-| `q`      | Quit       | Exit the application          |
-| `Ctrl+C` | Force Quit | Force exit the application    |
-| `F1`     | Help       | Show context-sensitive help   |
-| `F5`     | Refresh    | Refresh data from Taskwarrior |
-
-## Task List View
-
-The main task management interface:
-
-### Navigation
-
-| Key         | Action     | Description             |
-| ----------- | ---------- | ----------------------- |
-| `↑`/`k`     | Move Up    | Select previous task    |
-| `↓`/`j`     | Move Down  | Select next task        |
-| `←`/`h`     | Move Left  | Navigate to left panel  |
-| `→`/`l`     | Move Right | Navigate to right panel |
-| `Home`      | First Task | Jump to first task      |
-| `End`       | Last Task  | Jump to last task       |
-| `Page Up`   | Page Up    | Scroll up one page      |
-| `Page Down` | Page Down  | Scroll down one page    |
-
-### Task Operations
-
-| Key      | Action      | Description              |
-| -------- | ----------- | ------------------------ |
-| `a`      | Add Task    | Create a new task        |
-| `e`      | Edit Task   | Edit the selected task   |
-| `d`      | Done Task   | Mark task as completed   |
-| `Delete` | Delete Task | Delete the selected task |
-| `s`      | Start Task  | Start working on task    |
-| `S`      | Stop Task   | Stop working on task     |
-| `n`      | Annotate    | Add annotation to task   |
-| `D`      | Duplicate   | Create copy of task      |
-
-### Selection and Interaction
-
-| Key      | Action        | Description              |
-| -------- | ------------- | ------------------------ |
-| `Enter`  | Select        | Open task detail view    |
-| `Space`  | Toggle Select | Toggle task selection    |
-| `Ctrl+A` | Select All    | Select all visible tasks |
-| `Esc`    | Back          | Return to previous view  |
-
-### Views and Filters
-
-| Key      | Action       | Description        |
-| -------- | ------------ | ------------------ |
-| `/`      | Filter       | Open filter dialog |
-| `Ctrl+/` | Clear Filter | Remove all filters |
-| `c`      | Context      | Switch context     |
-| `r`      | Reports      | Open reports view  |
-| `C`      | Calendar     | Open calendar view |
-| `p`      | Projects     | Browse projects    |
-| `t`      | Tags         | Browse tags        |
-
-### Sorting
-
-| Key | Action           | Description            |
-| --- | ---------------- | ---------------------- |
-| `1` | Sort by Due      | Sort tasks by due date |
-| `2` | Sort by Priority | Sort by task priority  |
-| `3` | Sort by Project  | Sort by project name   |
-| `4` | Sort by Urgency  | Sort by urgency value  |
-
-## Task Detail View
-
-When viewing or editing a specific task:
-
-### Navigation
-
-| Key         | Action         | Description                 |
-| ----------- | -------------- | --------------------------- |
-| `Tab`       | Next Field     | Move to next editable field |
-| `Shift+Tab` | Previous Field | Move to previous field      |
-| `Esc`       | Cancel         | Cancel changes and return   |
-| `Ctrl+S`    | Save           | Save changes                |
-
-### Field Editing
-
-| Key     | Action           | Description           |
-| ------- | ---------------- | --------------------- |
-| `Enter` | Edit Description | Edit task description |
-| `p`     | Edit Project     | Change task project   |
-| `P`     | Edit Priority    | Change task priority  |
-| `d`     | Edit Due Date    | Set due date          |
-| `t`     | Add Tag          | Add a tag             |
-| `T`     | Remove Tag       | Remove selected tag   |
-| `a`     | Add Annotation   | Add new annotation    |
-
-## Calendar View
-
-Interactive calendar for viewing tasks by date:
-
-| Key     | Action         | Description                   |
-| ------- | -------------- | ----------------------------- |
-| `←`     | Previous Month | Go to previous month          |
-| `→`     | Next Month     | Go to next month              |
-| `↑`     | Previous Year  | Go to previous year           |
-| `↓`     | Next Year      | Go to next year               |
-| `t`     | Today          | Jump to current date          |
-| `g`     | Go to Date     | Jump to specific date         |
-| `a`     | Add Task       | Create task for selected date |
-| `Enter` | View Day       | Show tasks for selected day   |
-| `Esc`   | Back           | Return to previous view       |
-
-## Reports View
-
-Navigate through various task reports:
-
-| Key   | Action          | Description               |
-| ----- | --------------- | ------------------------- |
-| `←`   | Previous Report | Switch to previous report |
-| `→`   | Next Report     | Switch to next report     |
-| `e`   | Export Report   | Export report data        |
-| `r`   | Refresh Data    | Refresh report data       |
-| `Esc` | Back            | Return to previous view   |
-
-## Filter Builder
-
-Build complex task filters interactively:
-
-| Key     | Action        | Description                |
-| ------- | ------------- | -------------------------- |
-| `a`     | Add Filter    | Add new filter criterion   |
-| `d`     | Remove Filter | Remove selected filter     |
-| `c`     | Clear All     | Clear all filters          |
-| `Enter` | Apply Filters | Apply filters to task list |
-| `s`     | Save Preset   | Save filter as preset      |
-| `l`     | Load Preset   | Load saved filter preset   |
-| `Esc`   | Cancel        | Cancel filter changes      |
-
-## Context Switcher
-
-Manage Taskwarrior contexts:
-
-| Key     | Action         | Description                     |
-| ------- | -------------- | ------------------------------- |
-| `Enter` | Select Context | Switch to selected context      |
-| `c`     | Create Context | Create new context              |
-| `e`     | Edit Context   | Edit context definition         |
-| `d`     | Delete Context | Delete selected context         |
-| `n`     | None Context   | Clear current context           |
-| `Esc`   | Back           | Return without changing context |
-
-## Customization
-
-You can customize any keybinding by editing `~/.config/lazytask/config.toml`:
+Every key LazyTask responds to is an action you can rebind in the `[keybindings]` sections of `~/.config/lazytask/config.toml`. A config file only needs the actions it changes; every other action keeps its default key. Press the `help` key, `F1` by default, to see the keys in effect.
 
 ```toml
-[keybindings.task_list]
-add_task = "Insert"      # Change from 'a' to 'Insert'
-done_task = "Enter"      # Change from 'd' to 'Enter'
-
 [keybindings.global]
-quit = "Ctrl+q"          # Change from 'q' to 'Ctrl+q'
+quit = "Ctrl+q"
+
+[keybindings.task_list]
+add_task = "Insert"
 ```
 
-### Key Notation
+## Key syntax
 
-- Single keys: `a`, `1`, `Enter`, `Esc`, `Space`
-- Arrow keys: `Up`, `Down`, `Left`, `Right`
-- Function keys: `F1`, `F2`, etc.
-- Modifier combinations: `Ctrl+c`, `Shift+Tab`, `Alt+Enter`
-- Special keys: `Home`, `End`, `PageUp`, `PageDown`, `Delete`
+A key string is an optional chain of modifiers joined by `+`, followed by one key.
 
-## Tips
+- Characters: any single character, such as `a`, `S`, `/`, `<` or `1`. Case matters: `S` is Shift+s.
+- Named keys: `Enter`, `Esc`, `Tab`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, `Up`, `Down`, `Left`, `Right`, `Space`.
+- Function keys: `F1` through `F12`.
+- Modifiers: `Ctrl+`, `Alt+` and `Shift+`, in any order, such as `Ctrl+s`, `Alt+Enter` or `Ctrl+Shift+x`.
+- `Shift+` on a letter is the same as its capital: `Shift+s` and `S` are one key. `Shift+Tab` is the back-tab key.
+- The `+` key itself is written `+`, or `Ctrl++` with a modifier.
 
-1. **Vim-style Navigation**: Use `hjkl` for navigation if you prefer Vim-style keys
-2. **Context Help**: Press `F1` in any view to see context-specific help
-3. **Quick Actions**: Most common actions have single-key shortcuts
-4. **Consistent Patterns**: Similar actions use similar keys across views
-5. **Escape to Safety**: `Esc` always takes you back or cancels the current action
+Key names and modifiers ignore case: `ctrl+PAGEUP` works. Single characters do not.
 
+## Sections
+
+Bindings are grouped by where they apply. The task list uses `task_list` and `global` bindings, the reports view uses `reports` and `global`, and other views such as help use `global` alone. While a form is open, such as the add/edit task form, the filter panel or sync setup, only `form` bindings apply, and any other printable key types itself.
+
+### `[keybindings.global]`
+
+Active in every view outside a form.
+
+| Action        | Default  | Description                     |
+| ------------- | -------- | ------------------------------- |
+| `quit`        | `q`      | Quit                            |
+| `force_quit`  | `Ctrl+c` | Quit                            |
+| `help`        | `F1`     | Show the help overlay           |
+| `refresh`     | `F5`     | Reload tasks from the replica   |
+| `back`        | `Esc`    | Return to the task list         |
+| `reports`     | `r`      | Open the reports view           |
+| `sync`        | `s`      | Sync, once sync is configured   |
+| `force_sync`  | none     | Force a full sync               |
+| `sync_config` | `S`      | Open the sync setup form        |
+
+### `[keybindings.task_list]`
+
+| Action        | Default  | Description                |
+| ------------- | -------- | -------------------------- |
+| `move_up`     | `Up`     | Select the previous task   |
+| `move_down`   | `Down`   | Select the next task       |
+| `add_task`    | `a`      | Add a task                 |
+| `edit_task`   | `e`      | Edit the selected task     |
+| `done_task`   | `d`      | Mark the selected task done |
+| `delete_task` | `Delete` | Delete the selected task   |
+| `filter`      | `/`      | Open the filter panel      |
+
+### `[keybindings.reports]`
+
+The day, week, month and today actions move the calendar, so they only act in calendar mode.
+
+| Action            | Default | Description                         |
+| ----------------- | ------- | ----------------------------------- |
+| `toggle_calendar` | `c`     | Switch between calendar and dashboard |
+| `prev_day`        | `Left`  | Previous day                        |
+| `next_day`        | `Right` | Next day                            |
+| `prev_week`       | `Up`    | Previous week                       |
+| `next_week`       | `Down`  | Next week                           |
+| `prev_month`      | `<`     | Previous month                      |
+| `next_month`      | `>`     | Next month                          |
+| `today`           | `t`     | Jump to today                       |
+
+### `[keybindings.form]`
+
+| Action       | Default     | Description                                   |
+| ------------ | ----------- | --------------------------------------------- |
+| `next_field` | `Tab`       | Next field, or next filter section            |
+| `prev_field` | `Shift+Tab` | Previous field                                |
+| `move_up`    | `Up`        | Previous field, or previous filter item       |
+| `move_down`  | `Down`      | Next field, or next filter item               |
+| `move_left`  | `Left`      | Move the cursor left                          |
+| `move_right` | `Right`     | Move the cursor right                         |
+| `toggle`     | `Space`     | Toggle the filter item, or type a space       |
+| `erase`      | `Backspace` | Erase a character                             |
+| `confirm`    | `Enter`     | Commit the field, then save                   |
+| `cancel`     | `Esc`       | Cancel and close the form                     |
+
+## Required actions
+
+Some actions must keep a key, or you could get stuck with no way out:
+
+- `quit` in `[keybindings.global]`
+- `back` in `[keybindings.global]`, to leave the help and reports views
+- `cancel` in `[keybindings.form]`, to leave a form or the filter panel
+
+If your config leaves one of these with no key, LazyTask does not start. It exits with an error that names the action and why it has no key, such as `keybindings.global.quit has no key: cannot parse key "Ctrl+Nope", and its default "q" is bound to keybindings.global.help`.
+
+## Conflicts and mistakes
+
+LazyTask warns at startup, naming the entry by its dotted path such as `keybindings.global.quit`, when an entry names an action it does not have, when a key string does not parse, or when two entries in one section bind the same key. The action in a rejected entry keeps its default key.
+
+A key you configure takes over every default on that key in the views where its section applies, including defaults from other sections. With `quit = "d"` in `[keybindings.global]` and nothing else, `d` quits everywhere, including the task list, and `done_task` has no key until you give it one. With `add_task = "q"` in `[keybindings.task_list]`, `q` adds a task in the task list and still quits in the other views.
+
+When two configured keys apply in the same view, the view's own section wins over `global`. Among defaults, the same rule holds, though the defaults never overlap. The help overlay lists only keys that do something in at least one view.

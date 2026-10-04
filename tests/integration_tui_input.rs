@@ -1,5 +1,5 @@
 // Headless TUI input tests. Drives the same pipeline the live binary uses
-// (InputHandler -> Action -> AppUI::handle_action) with synthetic crossterm
+// (AppUI::action -> Action -> AppUI::handle_action) with synthetic crossterm
 // KeyEvents, then renders into a TestBackend so we can assert both
 // state changes (engine contents, has_active_form, status messages) and
 // what the user actually sees on screen.
@@ -8,7 +8,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use lazytask::config::Config;
 use lazytask::data::models::TaskStatus;
-use lazytask::handlers::input::{Action, InputHandler};
+use lazytask::handlers::input::Action;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
@@ -19,7 +19,6 @@ struct Driver {
     ui: AppUI,
     engine: TaskChampionIntegration,
     sync_handler: SyncHandler,
-    input: InputHandler,
     terminal: Terminal<TestBackend>,
     quit: bool,
     _tmp: TempDir,
@@ -27,19 +26,35 @@ struct Driver {
 
 impl Driver {
     async fn new(width: u16, height: u16) -> Result<Self> {
+        Self::with_config(width, height, Config::default(), &[]).await
+    }
+
+    /// Loads `toml` as a config file, wired up the way `App::new` does.
+    async fn from_toml(width: u16, height: u16, toml: &str) -> Result<Self> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, toml)?;
+        let loaded = Config::load(Some(path.to_str().unwrap()))?;
+        Self::with_config(width, height, loaded.config, &loaded.unknown_keys).await
+    }
+
+    async fn with_config(
+        width: u16,
+        height: u16,
+        cfg: Config,
+        unknown_keys: &[String],
+    ) -> Result<Self> {
         let tmp = tempfile::tempdir()?;
-        let cfg = Config::default();
-        let ui = AppUI::new(&cfg)?;
+        let mut ui = AppUI::new(&cfg)?;
+        ui.show_config_warnings(unknown_keys);
         let mut sync_handler = SyncHandler::new();
         let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;
-        let input = InputHandler::new(&cfg);
         let terminal = Terminal::new(TestBackend::new(width, height))?;
         Ok(Driver {
             ui,
             engine,
             sync_handler,
-            input,
             terminal,
             quit: false,
             _tmp: tmp,
@@ -61,8 +76,7 @@ impl Driver {
     /// Drives one keystroke through the same pipeline as App::run.
     async fn press(&mut self, code: KeyCode, mods: KeyModifiers) -> Result<Action> {
         let event = KeyEvent::new(code, mods);
-        let in_form = self.ui.has_active_form();
-        let action = self.input.handle_key_event_with_context(event, in_form);
+        let action = self.ui.action(event);
         match action {
             Action::Quit => {
                 self.quit = true;
@@ -147,6 +161,125 @@ async fn ctrl_c_emits_quit_action() -> Result<()> {
         action
     );
     assert!(d.quit);
+    Ok(())
+}
+
+#[tokio::test]
+async fn rebinding_quit_to_ctrl_q_moves_quit_off_q() -> Result<()> {
+    let mut d = Driver::from_toml(120, 40, "[keybindings.global]\nquit = \"Ctrl+q\"\n").await?;
+    d.load().await?;
+
+    let action = d.ch('q').await?;
+    assert!(!matches!(action, Action::Quit), "q still quits");
+    assert!(!d.quit);
+
+    d.press(KeyCode::Char('q'), KeyModifiers::CONTROL).await?;
+    assert!(d.quit, "Ctrl+q should quit");
+    Ok(())
+}
+
+#[tokio::test]
+async fn unusable_keybindings_warn_and_keep_the_default() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        40,
+        "[keybindings.global]\nquit = \"Ctrl+Nope\"\nfrobnicate = \"x\"\n",
+    )
+    .await?;
+    d.load().await?;
+
+    d.assert_screen_has("keybindings.global.quit");
+    d.assert_screen_has("Ctrl+Nope");
+    d.assert_screen_has("keybindings.global.frobnicate");
+
+    d.ch('q').await?;
+    assert!(d.quit, "q should still quit");
+    Ok(())
+}
+
+#[tokio::test]
+async fn configured_key_takes_over_other_sections_defaults() -> Result<()> {
+    let mut d = Driver::from_toml(160, 50, "[keybindings.global]\nquit = \"d\"\n").await?;
+    d.engine.add_task("stays pending", &[]).await?;
+    d.load().await?;
+
+    d.key(KeyCode::F(1)).await?;
+    assert!(
+        !d.screen_contains("Mark task done"),
+        "done_task lost its key, so help should not list it:\n{}",
+        d.screen()
+    );
+    d.key(KeyCode::Esc).await?;
+
+    d.ch('d').await?;
+    assert!(d.quit, "d should quit from the task list");
+    let task = &d.engine.list_tasks().await?[0];
+    assert_eq!(task.status, TaskStatus::Pending);
+    Ok(())
+}
+
+#[tokio::test]
+async fn header_and_footer_hints_show_rebound_keys() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        40,
+        "[keybindings.global]\nhelp = \"F2\"\nquit = \"Ctrl+q\"\n\n\
+         [keybindings.task_list]\nadd_task = \"Insert\"\n",
+    )
+    .await?;
+    d.load().await?;
+
+    for hint in ["[F2]", "[Insert]", "[Ctrl+q]"] {
+        d.assert_screen_has(hint);
+    }
+    for stale in ["[F1]", "[a]", "[q]"] {
+        assert!(
+            !d.screen_contains(stale),
+            "{stale} still shown:\n{}",
+            d.screen()
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
+    let mut d = Driver::from_toml(
+        120,
+        40,
+        "[keybindings.global]\nhelp = \"f2\"\nrefresh = \"Ctrl++\"\nreports = \"Alt+Home\"\n\n\
+         [keybindings.task_list]\nadd_task = \"Insert\"\ndone_task = \"Space\"\n\n\
+         [keybindings.form]\nnext_field = \"Shift+Tab\"\nprev_field = \"Ctrl+Shift+x\"\n",
+    )
+    .await?;
+    d.load().await?;
+
+    let task_list_keys = [
+        (KeyCode::F(2), KeyModifiers::NONE, Action::Help),
+        (KeyCode::Char('+'), KeyModifiers::CONTROL, Action::Refresh),
+        (KeyCode::Home, KeyModifiers::ALT, Action::Reports),
+        (KeyCode::Char(' '), KeyModifiers::NONE, Action::DoneTask),
+        (KeyCode::Insert, KeyModifiers::NONE, Action::AddTask),
+    ];
+    for (code, mods, expected) in task_list_keys {
+        let action = d.ui.action(KeyEvent::new(code, mods));
+        assert_eq!(action, expected, "{code:?} with {mods:?}");
+    }
+
+    d.key(KeyCode::Insert).await?;
+    assert!(d.ui.has_active_form(), "Insert should open the add form");
+    let form_keys = [
+        (KeyCode::BackTab, KeyModifiers::SHIFT, Action::NextField),
+        (
+            KeyCode::Char('X'),
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+            Action::MoveUp,
+        ),
+    ];
+    for (code, mods, expected) in form_keys {
+        let action = d.ui.action(KeyEvent::new(code, mods));
+        assert_eq!(action, expected, "{code:?} with {mods:?}");
+    }
     Ok(())
 }
 
@@ -308,43 +441,34 @@ async fn f1_shows_help_then_esc_returns_to_task_list() -> Result<()> {
 }
 
 #[tokio::test]
-async fn help_screen_lists_all_major_shortcuts() -> Result<()> {
-    // Regression test: the original help screen only listed q / F1 / a / e / d / Del
-    // and was missing F5, /, r, s, Shift+S, Tab, Space, arrows, Calendar nav, etc.
-    let mut d = Driver::new(160, 50).await?;
+async fn help_lists_the_configured_keys() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        50,
+        "[keybindings.global]\nhelp = \"F2\"\n\n[keybindings.task_list]\nadd_task = \"Insert\"\n",
+    )
+    .await?;
     d.load().await?;
-    d.key(KeyCode::F(1)).await?;
+    d.key(KeyCode::F(2)).await?;
 
-    // Section headers
-    for marker in ["Global", "Task list", "Filter mode", "Reports", "Form"] {
-        assert!(
-            d.screen_contains(marker),
-            "help missing section header {:?}\n{}",
-            marker,
-            d.screen()
-        );
-    }
-
-    // Key bindings that the original screen didn't show
-    for key_label in [
-        "Ctrl+C",
-        "F5",
-        "/",
-        "r",
-        "s",
-        "Shift+S",
-        "Tab",
-        "Space",
-        "Backspace",
-        "Esc",
-        "Enter",
-    ] {
-        assert!(
-            d.screen_contains(key_label),
-            "help should list shortcut {:?}",
-            key_label,
-        );
-    }
+    let screen = d.screen();
+    let row = |description: &str| {
+        screen
+            .lines()
+            .find(|line| line.contains(description))
+            .unwrap_or_else(|| panic!("help has no {description:?} row:\n{screen}"))
+            .to_string()
+    };
+    assert!(
+        row("Add new task").contains("Insert"),
+        "{}",
+        row("Add new task")
+    );
+    assert!(
+        row("Show this help").contains("F2"),
+        "{}",
+        row("Show this help")
+    );
     Ok(())
 }
 
@@ -398,7 +522,7 @@ async fn tab_in_filter_mode_routes_to_section_navigation() -> Result<()> {
 
     for _ in 0..6 {
         let action = d.key(KeyCode::Tab).await?;
-        assert!(matches!(action, Action::Tab));
+        assert!(matches!(action, Action::NextField));
         assert!(
             d.ui.has_active_form(),
             "Tab in filter mode must not exit filter mode"
@@ -570,44 +694,23 @@ async fn d_then_d_advances_selection_to_next_task() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------
-// Known-bug regression test: ForceSync (Shift+s) is currently unreachable
+// Shifted letters: terminals differ in how they report Shift+s
 // ---------------------------------------------------------------------
 
 #[tokio::test]
-async fn shift_lowercase_s_does_not_emit_force_sync() -> Result<()> {
-    // crossterm reports Shift+'s' as Char('S'), not Char('s')+SHIFT modifier.
-    // The current handler checks `Char('s') if SHIFT` which is unreachable.
-    // This documents that and locks it down so a future "fix" doesn't
-    // silently re-introduce a wrong path.
+async fn shift_s_maps_to_sync_config_however_the_terminal_reports_it() -> Result<()> {
     let d = Driver::new(120, 40).await?;
-    let action = d.input.handle_key_event_with_context(
-        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::SHIFT),
-        false,
-    );
-    // The current implementation does match the SHIFT guard for Char('s'),
-    // so it returns ForceSync. But in reality crossterm never emits this
-    // event. So we just assert the binding is the one we expect.
-    assert!(
-        matches!(action, Action::ForceSync) || matches!(action, Action::Sync),
-        "Char('s')+SHIFT should map to ForceSync per current code (even if unreachable in practice). got {:?}",
-        action
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn capital_s_maps_to_sync_config_not_force_sync() -> Result<()> {
-    // What the user actually types when holding Shift: Char('S').
-    let d = Driver::new(120, 40).await?;
-    let action = d.input.handle_key_event_with_context(
-        KeyEvent::new(KeyCode::Char('S'), KeyModifiers::SHIFT),
-        false,
-    );
-    assert!(
-        matches!(action, Action::SyncConfig),
-        "User pressing Shift+S sees Char('S') and should get SyncConfig. got {:?}",
-        action
-    );
+    for (code, mods) in [
+        (KeyCode::Char('S'), KeyModifiers::SHIFT),
+        (KeyCode::Char('S'), KeyModifiers::NONE),
+        (KeyCode::Char('s'), KeyModifiers::SHIFT),
+    ] {
+        let action = d.ui.action(KeyEvent::new(code, mods));
+        assert!(
+            matches!(action, Action::SyncConfig),
+            "{code:?} with {mods:?} should map to SyncConfig, got {action:?}"
+        );
+    }
     Ok(())
 }
 

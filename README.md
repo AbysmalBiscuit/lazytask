@@ -88,6 +88,8 @@ lazytask --config /custom/path/config.toml
 
 ## Keyboard interface
 
+These are the default keys. Every one can be rebound through `[keybindings]`; see [docs/keybindings.md](docs/keybindings.md).
+
 ### Global
 
 | Key | Action |
@@ -251,7 +253,7 @@ src/
     └── validation.rs
 ```
 
-The data flow is simple: `App::run` polls crossterm events, `InputHandler` maps each `KeyEvent` to an `Action`, and `AppUI::handle_action` mutates the engine and view state. The engine (`TaskChampionIntegration`) builds `Operations` and commits them to the replica via TaskChampion's API. There is **no CLI shim, no JSON IPC, no `task` invocation** — every read and write goes through the embedded SQLite-backed replica.
+The data flow is simple: `App::run` polls crossterm events, `AppUI::action` maps each `KeyEvent` to an `Action` through the keymap, and `AppUI::handle_action` mutates the engine and view state. The engine (`TaskChampionIntegration`) builds `Operations` and commits them to the replica via TaskChampion's API. There is **no CLI shim, no JSON IPC, no `task` invocation** — every read and write goes through the embedded SQLite-backed replica.
 
 ## Configuration
 
@@ -274,12 +276,12 @@ task_list_columns = ["id", "project", "priority", "due", "description"]
 refresh_interval  = 1000
 
 [keybindings.global]
-quit    = "q"               # reserved; live keymap is currently hard-coded
+quit    = "q"               # every key is rebindable, see docs/keybindings.md
 help    = "F1"
 refresh = "F5"
 ```
 
-> ℹ️ The `[theme]`, `[keybindings.*]`, and `[taskwarrior]` sections are accepted by the parser but not all fields are wired up yet. The active keymap is the one documented in [Keyboard interface](#keyboard-interface).
+> ℹ️ The `[theme]` and `[taskwarrior]` sections are accepted by the parser but not all fields are wired up yet.
 
 ## Data location
 
@@ -343,7 +345,7 @@ podman rm -f lazytask-sync-test
 ## Known limitations
 
 - **Sync settings aren't persisted.** They live in memory; re-enter them each session.
-- **`Action::ForceSync` is unreachable** in the current keymap. Crossterm reports Shift+s as `Char('S')` (not `Char('s')+SHIFT`), so the SHIFT-guarded branch never fires. `Char('S')` is bound to Sync Config. Either branch can be retargeted to a producible key (e.g. `Ctrl+S`) — open issue.
+- **Force sync has no default key.** Bind `force_sync` in `[keybindings.global]` to use it; see [docs/keybindings.md](docs/keybindings.md).
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
 - **The Catppuccin theme is configured but unused.** Live colors are bare named-color terminals defaults.
