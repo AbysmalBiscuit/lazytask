@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::data::models::{Task, TaskStatus};
+use crate::data::models::Task;
 
 /// A task list column, named in config by its `ui.task_list_columns` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,14 +250,7 @@ impl TaskTableFormatter {
                 .modified
                 .map(|m| m.format("%Y-%m-%d").to_string())
                 .unwrap_or_default(),
-            Column::Status => match task.status {
-                TaskStatus::Pending => "Pending",
-                TaskStatus::Completed => "Completed",
-                TaskStatus::Deleted => "Deleted",
-                TaskStatus::Waiting => "Waiting",
-                TaskStatus::Recurring => "Recurring",
-            }
-            .to_string(),
+            Column::Status => task.status.label().to_string(),
         }
     }
 

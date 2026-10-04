@@ -282,6 +282,17 @@ impl TaskStatus {
             TaskStatus::Recurring => "recurring",
         }
     }
+
+    /// Capitalized name for display.
+    pub fn label(&self) -> &'static str {
+        match self {
+            TaskStatus::Pending => "Pending",
+            TaskStatus::Completed => "Completed",
+            TaskStatus::Deleted => "Deleted",
+            TaskStatus::Waiting => "Waiting",
+            TaskStatus::Recurring => "Recurring",
+        }
+    }
 }
 
 impl Priority {
