@@ -2,7 +2,7 @@ use crossterm::event::KeyEvent;
 
 use crate::utils::keybindings::{InputContext, Keymap};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Quit,
     Refresh,

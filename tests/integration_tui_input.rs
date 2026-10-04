@@ -219,49 +219,49 @@ async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
             KeyCode::F(2),
             KeyModifiers::NONE,
             InputContext::TaskList,
-            "Help",
+            Action::Help,
         ),
         (
             KeyCode::Char('+'),
             KeyModifiers::CONTROL,
             InputContext::TaskList,
-            "Refresh",
+            Action::Refresh,
         ),
         (
             KeyCode::Home,
             KeyModifiers::ALT,
             InputContext::TaskList,
-            "Reports",
+            Action::Reports,
         ),
         (
             KeyCode::Insert,
             KeyModifiers::NONE,
             InputContext::TaskList,
-            "AddTask",
+            Action::AddTask,
         ),
         (
             KeyCode::Char(' '),
             KeyModifiers::NONE,
             InputContext::TaskList,
-            "DoneTask",
+            Action::DoneTask,
         ),
         (
             KeyCode::BackTab,
             KeyModifiers::SHIFT,
             InputContext::Form,
-            "Tab",
+            Action::Tab,
         ),
         (
             KeyCode::Char('X'),
             KeyModifiers::CONTROL | KeyModifiers::SHIFT,
             InputContext::Form,
-            "MoveUp",
+            Action::MoveUp,
         ),
     ] {
         let action = d
             .input
             .handle_key_event_with_context(KeyEvent::new(code, mods), context);
-        assert_eq!(format!("{action:?}"), expected, "{code:?} with {mods:?}");
+        assert_eq!(action, expected, "{code:?} with {mods:?}");
     }
     Ok(())
 }
