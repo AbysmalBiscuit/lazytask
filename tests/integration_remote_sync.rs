@@ -35,10 +35,10 @@ async fn remote_sync_round_trip() {
     };
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut a = TaskChampionIntegration::new(Some(tmp.path().join("a")))
+    let mut a = TaskChampionIntegration::new(tmp.path().join("a"))
         .await
         .expect("replica A");
-    let mut b = TaskChampionIntegration::new(Some(tmp.path().join("b")))
+    let mut b = TaskChampionIntegration::new(tmp.path().join("b"))
         .await
         .expect("replica B");
 
@@ -101,7 +101,7 @@ async fn remote_sync_rejects_unauthorized_client_id() {
     let bogus_id = uuid::Uuid::new_v4().to_string();
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut engine = TaskChampionIntegration::new(Some(tmp.path().to_path_buf()))
+    let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
         .await
         .expect("engine");
 

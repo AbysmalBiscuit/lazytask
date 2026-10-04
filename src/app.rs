@@ -38,7 +38,10 @@ impl App {
             config,
             unknown_keys,
         } = Config::load(config_path)?;
-        let taskchampion = TaskChampionIntegration::new(None).await?;
+        let data_dir = config
+            .taskwarrior
+            .resolve_data_location(std::env::var_os("TASKDATA"), dirs::home_dir().as_deref())?;
+        let taskchampion = TaskChampionIntegration::new(data_dir).await?;
         let sync_handler = SyncHandler::new();
         let mut ui = AppUI::new(&config)?;
         ui.warn_unknown_config_keys(&unknown_keys);

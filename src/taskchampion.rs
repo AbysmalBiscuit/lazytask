@@ -36,13 +36,7 @@ pub struct SyncResult {
 }
 
 impl TaskChampionIntegration {
-    pub async fn new(data_dir: Option<PathBuf>) -> Result<Self> {
-        let data_dir = data_dir.unwrap_or_else(|| {
-            dirs::data_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("lazytask")
-        });
-
+    pub async fn new(data_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&data_dir).context("Failed to create data directory")?;
 
         let storage = SqliteStorage::new(&data_dir, AccessMode::ReadWrite, true)

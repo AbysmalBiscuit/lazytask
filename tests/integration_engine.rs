@@ -8,7 +8,7 @@ use tempfile::TempDir;
 
 async fn engine() -> (TaskChampionIntegration, TempDir) {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let engine = TaskChampionIntegration::new(Some(tmp.path().to_path_buf()))
+    let engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
         .await
         .expect("engine");
     (engine, tmp)

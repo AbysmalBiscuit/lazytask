@@ -3,23 +3,6 @@
 use std::env;
 use std::path::PathBuf;
 
-pub fn get_taskwarrior_data_dir() -> Option<PathBuf> {
-    // Check environment variable first
-    if let Ok(data_dir) = env::var("TASKDATA") {
-        return Some(PathBuf::from(data_dir));
-    }
-
-    // Check home directory
-    if let Some(home) = dirs::home_dir() {
-        let task_dir = home.join(".task");
-        if task_dir.exists() {
-            return Some(task_dir);
-        }
-    }
-
-    None
-}
-
 pub fn get_taskrc_path() -> Option<PathBuf> {
     // Check environment variable first
     if let Ok(taskrc) = env::var("TASKRC") {

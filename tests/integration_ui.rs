@@ -31,7 +31,7 @@ async fn make_ui() -> (
     let cfg = Config::default();
     let ui = AppUI::new(&cfg).expect("AppUI::new");
     let sync_handler = SyncHandler::new();
-    let engine = TaskChampionIntegration::new(Some(tmp.path().to_path_buf()))
+    let engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
         .await
         .expect("engine");
     (ui, sync_handler, engine, tmp)
@@ -143,7 +143,7 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     let mut ui = AppUI::new(&loaded.config).expect("AppUI::new");
     ui.warn_unknown_config_keys(&loaded.unknown_keys);
     let sync_handler = SyncHandler::new();
-    let mut engine = TaskChampionIntegration::new(Some(tmp.path().join("data")))
+    let mut engine = TaskChampionIntegration::new(tmp.path().join("data"))
         .await
         .expect("engine");
     ui.load_tasks(&mut engine).await.expect("load_tasks");

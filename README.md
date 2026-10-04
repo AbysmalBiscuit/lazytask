@@ -2,7 +2,7 @@
 
 A keyboard-driven Terminal User Interface for personal task management, built in Rust with [Ratatui](https://ratatui.rs/). LazyTask uses [TaskChampion](https://github.com/GothenburgBitFactory/taskchampion) — the same embeddable task engine that powers Taskwarrior 3.x — as its data layer, so it can sync with the official [`taskchampion-sync-server`](https://github.com/GothenburgBitFactory/taskchampion-sync-server) and stays storage-compatible with Taskwarrior.
 
-LazyTask is **standalone**: you do **not** need the `task` binary installed. The replica lives entirely inside the application's data directory.
+LazyTask is **standalone**: you do **not** need the `task` binary installed. It opens the same replica as Taskwarrior (see [Data location](#data-location)), so tasks added in either tool show up in the other.
 
 <img width="1561" height="977" alt="image" src="https://github.com/user-attachments/assets/0441da8f-e2ea-483d-ba4f-2ec61ad75fd9" />
 <img width="1561" height="977" alt="image" src="https://github.com/user-attachments/assets/761e174a-fe67-4987-aab4-3d5821b42b73" />
@@ -58,7 +58,7 @@ cargo build --release
 ./target/release/lazytask
 ```
 
-The binary is `target/release/lazytask`. On first launch it creates a SQLite database under the platform's standard data directory (see [Data location](#data-location)).
+The binary is `target/release/lazytask`. It opens the same TaskChampion database as Taskwarrior, creating it if absent (see [Data location](#data-location)).
 
 ## Usage
 
@@ -283,15 +283,13 @@ refresh = "F5"
 
 ## Data location
 
-The TaskChampion SQLite database is stored in the OS-conventional data directory under a `lazytask/` subdirectory (resolved via the [`dirs` crate](https://docs.rs/dirs)):
+lazytask shares Taskwarrior's TaskChampion database. The data directory resolves in this order, first match wins:
 
-| OS | Path |
-|---|---|
-| macOS | `~/Library/Application Support/lazytask/` |
-| Linux | `~/.local/share/lazytask/` |
-| Windows | `%APPDATA%\lazytask\` |
+1. `[taskwarrior] data_location` in the lazytask config
+2. The `TASKDATA` environment variable
+3. `~/.task`, Taskwarrior's default
 
-Override the data dir is currently only possible at the API level (`TaskChampionIntegration::new(Some(path))`) — a CLI flag for this is on the roadmap.
+A leading `~` in the chosen path expands to the home directory.
 
 ## Development
 
@@ -345,7 +343,6 @@ podman rm -f lazytask-sync-test
 ## Known limitations
 
 - **Sync settings aren't persisted.** They live in memory; re-enter them each session.
-- **No CLI flag for the data directory.** Override is API-level only.
 - **`Action::ForceSync` is unreachable** in the current keymap. Crossterm reports Shift+s as `Char('S')` (not `Char('s')+SHIFT`), so the SHIFT-guarded branch never fires. `Char('S')` is bound to Sync Config. Either branch can be retargeted to a producible key (e.g. `Ctrl+S`) — open issue.
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
