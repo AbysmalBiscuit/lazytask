@@ -83,14 +83,22 @@ pub enum InitOutcome {
     WroteStarter,
 }
 
+/// Whether `body` opens with a `#:schema` directive among its leading blank
+/// and comment lines, the only place taplo reads one.
+fn has_schema_header(body: &str) -> bool {
+    body.lines()
+        .map(str::trim_start)
+        .take_while(|line| line.is_empty() || line.starts_with('#'))
+        .any(|line| line.starts_with("#:schema"))
+}
+
 /// Points the config at `path` to the published schema with a `#:schema`
-/// header, which taplo honors only before any TOML. A file that already has
-/// a directive is left exactly as it is, so running this again changes
-/// nothing.
+/// header. A file whose header already has a directive is left exactly as it
+/// is, so running this again changes nothing.
 pub fn init(path: &Path) -> Result<InitOutcome> {
     let header = format!("#:schema {ID}\n");
     let (contents, outcome) = match std::fs::read_to_string(path) {
-        Ok(body) if body.contains("#:schema") => return Ok(InitOutcome::AlreadyLinked),
+        Ok(body) if has_schema_header(&body) => return Ok(InitOutcome::AlreadyLinked),
         Ok(body) => (header + &body, InitOutcome::AddedHeader),
         Err(err) if err.kind() == ErrorKind::NotFound => {
             (header + &starter(), InitOutcome::WroteStarter)
