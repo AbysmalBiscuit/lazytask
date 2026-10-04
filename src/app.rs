@@ -96,7 +96,7 @@ pub struct Session {
     pub taskchampion: TaskChampionIntegration,
     /// Where the sync config modal saves; `None` when nothing names a
     /// taskrc and there is no home directory.
-    pub taskrc: Option<TaskrcFile>,
+    pub taskrc_file: Option<TaskrcFile>,
 }
 
 impl Session {
@@ -139,7 +139,7 @@ impl Session {
             config,
             warnings,
             taskchampion,
-            taskrc: taskrc_file,
+            taskrc_file,
         })
     }
 }
@@ -195,9 +195,9 @@ where
             config,
             mut warnings,
             mut taskchampion,
-            taskrc,
+            taskrc_file,
         } = session;
-        let mut sync_handler = SyncHandler::new(taskrc);
+        let mut sync_handler = SyncHandler::new(taskrc_file);
         sync_handler.initialize(&taskchampion)?;
         ui.load_tasks(&mut taskchampion).await?;
 

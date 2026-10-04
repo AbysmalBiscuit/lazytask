@@ -221,7 +221,7 @@ async fn render_with_config(config: Config) -> Terminal<TestBackend> {
         config,
         warnings: Vec::new(),
         taskchampion,
-        taskrc: None,
+        taskrc_file: None,
     })
     .await
 }
