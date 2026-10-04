@@ -10,13 +10,13 @@ use ratatui::{
 };
 
 use crate::handlers::input::Action;
+use crate::taskchampion::ServerSettings;
 use crate::ui::theme::Theme;
 
+/// What the modal edits.
 #[derive(Debug, Clone, Default)]
 pub struct SyncConfig {
-    pub server_url: String,
-    pub client_id: String,
-    pub encryption_secret: String,
+    pub server: ServerSettings,
 }
 
 #[derive(Debug, Clone)]
@@ -61,9 +61,7 @@ impl Field {
 pub struct SyncConfigWidget {
     active: bool,
     field: Field,
-    server_url: String,
-    client_id: String,
-    encryption_secret: String,
+    values: SyncConfig,
 }
 
 impl SyncConfigWidget {
@@ -71,9 +69,7 @@ impl SyncConfigWidget {
         SyncConfigWidget {
             active: false,
             field: Field::ServerUrl,
-            server_url: String::new(),
-            client_id: String::new(),
-            encryption_secret: String::new(),
+            values: SyncConfig::default(),
         }
     }
 
@@ -84,17 +80,13 @@ impl SyncConfigWidget {
     /// Opens the modal with its fields filled in from `saved`.
     pub fn activate(&mut self, saved: SyncConfig) {
         self.active = true;
-        self.server_url = saved.server_url;
-        self.client_id = saved.client_id;
-        self.encryption_secret = saved.encryption_secret;
+        self.values = saved;
     }
 
     pub fn deactivate(&mut self) {
         self.active = false;
         self.field = Field::ServerUrl;
-        self.server_url.clear();
-        self.client_id.clear();
-        self.encryption_secret.clear();
+        self.values = SyncConfig::default();
     }
 
     pub fn handle_input(&mut self, action: Action) -> Result<Option<SyncConfigResult>> {
@@ -105,10 +97,13 @@ impl SyncConfigWidget {
         match action {
             Action::Back => return Ok(Some(SyncConfigResult::Cancel)),
             Action::Select => {
+                let server = &self.values.server;
                 let config = SyncConfig {
-                    server_url: self.server_url.trim().to_string(),
-                    client_id: self.client_id.trim().to_string(),
-                    encryption_secret: self.encryption_secret.clone(),
+                    server: ServerSettings {
+                        url: server.url.trim().to_string(),
+                        client_id: server.client_id.trim().to_string(),
+                        encryption_secret: server.encryption_secret.clone(),
+                    },
                 };
                 return Ok(Some(SyncConfigResult::Save(config)));
             }
@@ -130,9 +125,9 @@ impl SyncConfigWidget {
 
     fn current_input_mut(&mut self) -> &mut String {
         match self.field {
-            Field::ServerUrl => &mut self.server_url,
-            Field::ClientId => &mut self.client_id,
-            Field::EncryptionSecret => &mut self.encryption_secret,
+            Field::ServerUrl => &mut self.values.server.url,
+            Field::ClientId => &mut self.values.server.client_id,
+            Field::EncryptionSecret => &mut self.values.server.encryption_secret,
         }
     }
 
@@ -171,20 +166,14 @@ impl SyncConfigWidget {
             ])
             .split(inner);
 
-        self.render_field(
-            f,
-            chunks[0],
-            Field::ServerUrl,
-            &self.server_url,
-            false,
-            theme,
-        );
-        self.render_field(f, chunks[1], Field::ClientId, &self.client_id, false, theme);
+        let server = &self.values.server;
+        self.render_field(f, chunks[0], Field::ServerUrl, &server.url, false, theme);
+        self.render_field(f, chunks[1], Field::ClientId, &server.client_id, false, theme);
         self.render_field(
             f,
             chunks[2],
             Field::EncryptionSecret,
-            &self.encryption_secret,
+            &server.encryption_secret,
             true,
             theme,
         );

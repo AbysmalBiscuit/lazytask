@@ -10,7 +10,9 @@ use common::Driver;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use lazytask::app::{LaunchEnv, Session};
 use lazytask::handlers::sync::SyncHandler;
-use lazytask::taskchampion::{AwsCredentials, SyncSettings, TaskChampionIntegration};
+use lazytask::taskchampion::{
+    AwsCredentials, ServerSettings, SyncSettings, TaskChampionIntegration,
+};
 use lazytask::ui::app_ui::AppUI;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
@@ -367,11 +369,11 @@ async fn sync_backend_precedence_is_local_then_aws_then_gcp_then_server() -> Res
     );
     assert_eq!(
         sync_target(&server).await?,
-        Ok(SyncSettings::Server {
+        Ok(SyncSettings::Server(ServerSettings {
             url: "https://tw.example.com".into(),
             client_id: CLIENT_ID.into(),
             encryption_secret: "s3cret".into(),
-        })
+        }))
     );
     Ok(())
 }

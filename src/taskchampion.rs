@@ -19,12 +19,8 @@ use crate::utils::helpers::calculate_urgency;
 pub enum SyncSettings {
     /// A local sync-server directory, `<data_dir>/sync-server` when `None`.
     Local { server_dir: Option<PathBuf> },
-    /// A taskchampion-sync-server; `client_id` must be a UUID.
-    Server {
-        url: String,
-        client_id: String,
-        encryption_secret: String,
-    },
+    /// A taskchampion-sync-server.
+    Server(ServerSettings),
     /// A Google Cloud Storage bucket, with Application Default Credentials
     /// when `credential_path` is `None`.
     Gcp {
@@ -39,6 +35,15 @@ pub enum SyncSettings {
         credentials: AwsCredentials,
         encryption_secret: String,
     },
+}
+
+/// A taskchampion-sync-server and the keys to sync with it; `client_id`
+/// must be a UUID.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ServerSettings {
+    pub url: String,
+    pub client_id: String,
+    pub encryption_secret: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -255,11 +260,11 @@ fn build_server_config(settings: &SyncSettings, data_dir: &Path) -> Result<Serve
                 .with_context(|| format!("Failed to create sync server dir: {:?}", server_dir))?;
             ServerConfig::Local { server_dir }
         }
-        SyncSettings::Server {
+        SyncSettings::Server(ServerSettings {
             url,
             client_id,
             encryption_secret,
-        } => ServerConfig::Remote {
+        }) => ServerConfig::Remote {
             url,
             client_id: client_id
                 .parse::<Uuid>()

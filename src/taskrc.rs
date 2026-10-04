@@ -7,7 +7,7 @@ use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use crate::app::LaunchEnv;
-use crate::taskchampion::{AwsCredentials, SyncSettings};
+use crate::taskchampion::{AwsCredentials, ServerSettings, SyncSettings};
 use crate::utils::helpers::expand_tilde;
 
 /// Taskwarrior refuses a chain of more files than this, which also stops
@@ -213,11 +213,11 @@ impl Taskrc {
         else {
             bail!("sync.server.client_id and {ENCRYPTION_SECRET} are required");
         };
-        Ok(Some(SyncSettings::Server {
+        Ok(Some(SyncSettings::Server(ServerSettings {
             url,
             client_id,
             encryption_secret,
-        }))
+        })))
     }
 }
 

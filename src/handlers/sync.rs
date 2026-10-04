@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use crate::taskchampion::{SyncSettings, TaskChampionIntegration};
+use crate::taskchampion::{ServerSettings, SyncSettings, TaskChampionIntegration};
 use crate::taskrc::{TaskrcFile, ENCRYPTION_SECRET};
 use crate::ui::components::sync_config::SyncConfig;
 
@@ -155,9 +155,11 @@ impl SyncHandler {
                 .to_string()
         };
         Ok(SyncConfig {
-            server_url: value(&["sync.server.url", "sync.server.origin"]),
-            client_id: value(&["sync.server.client_id"]),
-            encryption_secret: value(&[ENCRYPTION_SECRET]),
+            server: ServerSettings {
+                url: value(&["sync.server.url", "sync.server.origin"]),
+                client_id: value(&["sync.server.client_id"]),
+                encryption_secret: value(&[ENCRYPTION_SECRET]),
+            },
         })
     }
 
@@ -169,14 +171,15 @@ impl SyncHandler {
         taskchampion: &mut TaskChampionIntegration,
         config: &SyncConfig,
     ) -> Result<String> {
+        let server = &config.server;
         for (label, value) in [
-            ("Server URL", &config.server_url),
-            ("Client ID", &config.client_id),
-            ("Encryption secret", &config.encryption_secret),
+            ("Server URL", &server.url),
+            ("Client ID", &server.client_id),
+            ("Encryption secret", &server.encryption_secret),
         ] {
             ensure!(!value.is_empty(), "{label} is required");
         }
-        config
+        server
             .client_id
             .parse::<Uuid>()
             .context("Client ID must be a UUID")?;
@@ -185,9 +188,9 @@ impl SyncHandler {
             .as_ref()
             .context("No taskrc to save to: set TASKRC or [taskwarrior] taskrc_path")?;
         taskrc.set(&[
-            ("sync.server.url", &config.server_url),
-            ("sync.server.client_id", &config.client_id),
-            (ENCRYPTION_SECRET, &config.encryption_secret),
+            ("sync.server.url", &server.url),
+            ("sync.server.client_id", &server.client_id),
+            (ENCRYPTION_SECRET, &server.encryption_secret),
         ])?;
 
         let path = taskrc.path().display();
