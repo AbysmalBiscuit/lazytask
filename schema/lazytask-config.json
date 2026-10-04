@@ -260,7 +260,7 @@
           "type": "string"
         },
         "taskrc_path": {
-          "description": "The taskrc to read. Empty or absent means the `TASKRC` variable, then\n`~/.taskrc`, or `$XDG_CONFIG_HOME/task/taskrc` (`~/.config/task/taskrc`\nwhen that variable is unset) when only that file exists.",
+          "description": "The taskrc to read. Empty or absent means the `TASKRC` variable, then\n`~/.taskrc`, or `$XDG_CONFIG_HOME/task/taskrc` (`~/.config/task/taskrc`\nwhen that variable is unset or empty) when only that file exists.",
           "type": "string"
         }
       },

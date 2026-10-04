@@ -95,7 +95,7 @@ fn action_keys<A: Bindable + IntoEnumIterator>(_: &mut SchemaGenerator) -> Schem
 pub struct TaskwarriorConfig {
     /// The taskrc to read. Empty or absent means the `TASKRC` variable, then
     /// `~/.taskrc`, or `$XDG_CONFIG_HOME/task/taskrc` (`~/.config/task/taskrc`
-    /// when that variable is unset) when only that file exists.
+    /// when that variable is unset or empty) when only that file exists.
     #[serde(deserialize_with = "empty_path_as_none")]
     pub taskrc_path: Option<PathBuf>,
     /// The task data directory. Empty or absent means the `TASKDATA`
