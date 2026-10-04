@@ -1,0 +1,57 @@
+#:schema https://github.com/AbysmalBiscuit/devkit/releases/latest/download/devkit-config.json
+
+# No relative `worktree_root`/`baseline_dir`: they anchor to the layer's own
+# directory, which misplaces them inside a worktree. The defaults are correct.
+[defaults]
+branch_prefix = ""
+baseline_ref = "origin/master"
+pr_base = "master"
+
+[github]
+issues_repo = "AbysmalBiscuit/lazytask"
+
+# A globally exported LINEAR_API_KEY would otherwise make `issue` resolve bare
+# numbers as Linear ids.
+[tracker]
+kind = "github"
+
+[tasks.build]
+description = "Build the crate"
+run = ["cargo", "build", "--locked"]
+guard = true
+
+[tasks.build-release]
+description = "Build the crate with release optimizations"
+run = ["cargo", "build", "--release", "--locked"]
+guard = true
+
+[tasks.check]
+description = "Check all targets"
+run = ["cargo", "check", "--all-targets", "--locked"]
+guard = true
+
+[tasks.clippy]
+description = "Run clippy on all targets, warnings reported but not denied"
+run = ["cargo", "clippy", "--all-targets", "--locked", "--", "-W", "warnings"]
+guard = true
+# zccache's path remapping hands clippy-driver the rustc path as an input file.
+env = { ZCCACHE_PATH_REMAP = "off" }
+
+[tasks.fmt]
+description = "Format the crate with nightly rustfmt"
+run = ["cargo", "+nightly", "fmt", "--all"]
+guard = true
+
+[tasks.fmt-check]
+description = "Check formatting with nightly rustfmt"
+run = ["cargo", "+nightly", "fmt", "--all", "--", "--check"]
+guard = true
+
+[tasks.test]
+description = "Run all tests"
+run = ["cargo", "test", "--all-targets", "--locked", "--no-fail-fast"]
+guard = true
+
+[tasks.run]
+description = "Run the lazytask TUI"
+run = ["cargo", "run", "--locked"]
