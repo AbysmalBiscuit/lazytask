@@ -84,7 +84,7 @@ pub enum InitOutcome {
 
 /// Whether `body` opens with a `#:schema` directive among its leading blank
 /// and comment lines, the only place taplo reads one.
-fn has_schema_header(body: &str) -> bool {
+pub fn has_schema_header(body: &str) -> bool {
     body.lines()
         .map(str::trim_start)
         .take_while(|line| line.is_empty() || line.starts_with('#'))

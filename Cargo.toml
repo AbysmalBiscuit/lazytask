@@ -81,6 +81,10 @@ path = "tests/integration_app.rs"
 name = "config_schema"
 path = "tests/config_schema.rs"
 
+[[test]]
+name = "doctor"
+path = "tests/doctor.rs"
+
 [profile.dist]
 inherits = "release"
 lto = "thin"
