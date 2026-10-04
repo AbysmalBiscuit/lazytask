@@ -219,6 +219,30 @@ async fn configured_key_takes_over_other_sections_defaults() -> Result<()> {
 }
 
 #[tokio::test]
+async fn header_and_footer_hints_show_rebound_keys() -> Result<()> {
+    let mut d = Driver::from_toml(
+        160,
+        40,
+        "[keybindings.global]\nhelp = \"F2\"\nquit = \"Ctrl+q\"\n\n\
+         [keybindings.task_list]\nadd_task = \"Insert\"\n",
+    )
+    .await?;
+    d.load().await?;
+
+    for hint in ["[F2]", "[Insert]", "[Ctrl+q]"] {
+        d.assert_screen_has(hint);
+    }
+    for stale in ["[F1]", "[a]", "[q]"] {
+        assert!(
+            !d.screen_contains(stale),
+            "{stale} still shown:\n{}",
+            d.screen()
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
     let mut d = Driver::from_toml(
         120,

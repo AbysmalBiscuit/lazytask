@@ -19,7 +19,8 @@ use crate::ui::views::reports_view::{DateNavigation, ReportsView};
 use crossterm::event::KeyEvent;
 
 use crate::utils::keybindings::{
-    Bindable, Binding, FormAction, GlobalAction, InputContext, Keymap, Section,
+    Bindable, Binding, FormAction, GlobalAction, InputContext, Keymap, ReportsAction, Section,
+    TaskListAction,
 };
 
 pub enum AppView {
@@ -500,8 +501,34 @@ impl AppUI {
         Ok(())
     }
 
+    /// `[key] label` hints for the bound actions, skipping actions with no
+    /// key. Each hint lists one or more actions whose keys share a label.
+    fn hints(&self, hints: &[(&[Binding], &str, Color)]) -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        for &(bindings, label, color) in hints {
+            let keys: Vec<String> = bindings
+                .iter()
+                .filter_map(|&binding| self.keymap.key(binding))
+                .map(|key| key.to_string())
+                .collect();
+            if keys.is_empty() {
+                continue;
+            }
+            if !spans.is_empty() {
+                spans.push(Span::raw("  "));
+            }
+            spans.push(Span::styled(
+                format!("[{}]", keys.join("/")),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw(format!(" {label}")));
+        }
+        spans
+    }
+
     fn draw_header(&self, f: &mut Frame, area: Rect) {
-        let header_content = Line::from(vec![
+        use GlobalAction as G;
+        let mut spans = vec![
             Span::styled(
                 "LazyTask v0.1",
                 Style::default()
@@ -509,54 +536,16 @@ impl AppUI {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("                    "),
-            Span::styled(
-                "[F1]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Help", Style::default().fg(Color::White)),
-            Span::raw("    "),
-            Span::styled(
-                "[F5]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Refresh", Style::default().fg(Color::White)),
-            Span::raw("    "),
-            Span::styled(
-                "[/]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Filter", Style::default().fg(Color::White)),
-            Span::raw("    "),
-            Span::styled(
-                "[r]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Reports", Style::default().fg(Color::White)),
-            Span::raw("    "),
-            Span::styled(
-                "[s]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Sync", Style::default().fg(Color::White)),
-            Span::raw("    "),
-            Span::styled(
-                "[S]",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" Config", Style::default().fg(Color::White)),
-        ]);
+        ];
+        spans.extend(self.hints(&[
+            (&[G::Help.into()], "Help", Color::Yellow),
+            (&[G::Refresh.into()], "Refresh", Color::Yellow),
+            (&[TaskListAction::Filter.into()], "Filter", Color::Yellow),
+            (&[G::Reports.into()], "Reports", Color::Yellow),
+            (&[G::Sync.into()], "Sync", Color::Yellow),
+            (&[G::SyncConfig.into()], "Config", Color::Yellow),
+        ]));
+        let header_content = Line::from(spans);
 
         let header = Paragraph::new(header_content)
             .block(
@@ -709,58 +698,37 @@ impl AppUI {
             return;
         }
 
-        let help_content = if self.task_form.is_some() {
-            Line::from(vec![
-                Span::styled(
-                    "↑↓",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
+        use FormAction as F;
+        use GlobalAction as G;
+        use ReportsAction as R;
+        use TaskListAction as T;
+        let hints = if self.task_form.is_some() {
+            self.hints(&[
+                (
+                    &[F::MoveUp.into(), F::MoveDown.into()],
+                    "Navigate fields",
+                    Color::Cyan,
                 ),
-                Span::raw(" Navigate fields  "),
-                Span::styled(
-                    "←→",
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::BOLD),
+                (
+                    &[F::MoveLeft.into(), F::MoveRight.into()],
+                    "Move cursor",
+                    Color::Magenta,
                 ),
-                Span::raw(" Move cursor  "),
-                Span::styled(
-                    "Enter",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" Save  "),
-                Span::styled(
-                    "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" Cancel"),
+                (&[F::Confirm.into()], "Save", Color::Green),
+                (&[F::Cancel.into()], "Cancel", Color::Red),
             ])
         } else if self.main_view.is_filter_focused() {
-            Line::from(vec![
-                Span::styled(
-                    "Tab",
-                    Style::default()
-                        .fg(Color::Magenta)
-                        .add_modifier(Modifier::BOLD),
+            let mut spans = self.hints(&[
+                (&[F::NextField.into()], "Next section", Color::Magenta),
+                (
+                    &[F::MoveUp.into(), F::MoveDown.into()],
+                    "Navigate",
+                    Color::Cyan,
                 ),
-                Span::raw(" Next section  "),
-                Span::styled(
-                    "↑↓",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" Navigate  "),
-                Span::styled(
-                    "Space",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" Toggle  "),
+                (&[F::Toggle.into()], "Toggle", Color::Green),
+            ]);
+            spans.extend([
+                Span::raw("  "),
                 Span::styled(
                     "Type",
                     Style::default()
@@ -768,157 +736,50 @@ impl AppUI {
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" Search  "),
-                Span::styled(
-                    "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" Exit"),
-            ])
+            ]);
+            spans.extend(self.hints(&[(&[F::Cancel.into()], "Exit", Color::Red)]));
+            spans
         } else {
             match self.current_view {
-                AppView::TaskList => Line::from(vec![
-                    Span::styled(
-                        "[a]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("dd  "),
-                    Span::styled(
-                        "[e]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("dit  "),
-                    Span::styled(
-                        "[d]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("one  "),
-                    Span::styled(
-                        "[Del]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("ete  "),
-                    Span::styled(
-                        "[/]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("filter  "),
-                    Span::styled(
-                        "[r]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("eports  "),
-                    Span::styled(
-                        "[s]",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("ync  "),
-                    Span::styled(
-                        "[q]",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("uit"),
+                AppView::TaskList => self.hints(&[
+                    (&[T::AddTask.into()], "add", Color::Yellow),
+                    (&[T::EditTask.into()], "edit", Color::Yellow),
+                    (&[T::DoneTask.into()], "done", Color::Yellow),
+                    (&[T::DeleteTask.into()], "delete", Color::Yellow),
+                    (&[T::Filter.into()], "filter", Color::Yellow),
+                    (&[G::Reports.into()], "reports", Color::Yellow),
+                    (&[G::Sync.into()], "sync", Color::Yellow),
+                    (&[G::Quit.into()], "quit", Color::Red),
                 ]),
-                AppView::Reports => {
-                    if self.reports_view.is_calendar_mode() {
-                        Line::from(vec![
-                            Span::styled(
-                                "[←→]",
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" day  "),
-                            Span::styled(
-                                "[↑↓]",
-                                Style::default()
-                                    .fg(Color::Cyan)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" week  "),
-                            Span::styled(
-                                "[< >]",
-                                Style::default()
-                                    .fg(Color::Magenta)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" month  "),
-                            Span::styled(
-                                "[t]",
-                                Style::default()
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw("oday  "),
-                            Span::styled(
-                                "[c]",
-                                Style::default()
-                                    .fg(Color::Green)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" dashboard  "),
-                            Span::styled(
-                                "[ESC]",
-                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" back"),
-                        ])
-                    } else {
-                        Line::from(vec![
-                            Span::styled(
-                                "[c]",
-                                Style::default()
-                                    .fg(Color::Yellow)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw("alendar  "),
-                            Span::styled(
-                                "[ESC]",
-                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(" back  "),
-                            Span::styled(
-                                "[q]",
-                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw("uit"),
-                        ])
-                    }
-                }
-                AppView::Help => Line::from(vec![
-                    Span::styled(
-                        "[ESC]",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                AppView::Reports if self.reports_view.is_calendar_mode() => self.hints(&[
+                    (&[R::PrevDay.into(), R::NextDay.into()], "day", Color::Cyan),
+                    (
+                        &[R::PrevWeek.into(), R::NextWeek.into()],
+                        "week",
+                        Color::Cyan,
                     ),
-                    Span::raw(" back"),
+                    (
+                        &[R::PrevMonth.into(), R::NextMonth.into()],
+                        "month",
+                        Color::Magenta,
+                    ),
+                    (&[R::Today.into()], "today", Color::Yellow),
+                    (&[R::ToggleCalendar.into()], "dashboard", Color::Green),
+                    (&[G::Back.into()], "back", Color::Red),
                 ]),
-                _ => Line::from(vec![
-                    Span::styled(
-                        "[ESC]",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw(" back  "),
-                    Span::styled(
-                        "[q]",
-                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw("uit"),
+                AppView::Reports => self.hints(&[
+                    (&[R::ToggleCalendar.into()], "calendar", Color::Yellow),
+                    (&[G::Back.into()], "back", Color::Red),
+                    (&[G::Quit.into()], "quit", Color::Red),
+                ]),
+                AppView::Help => self.hints(&[(&[G::Back.into()], "back", Color::Red)]),
+                _ => self.hints(&[
+                    (&[G::Back.into()], "back", Color::Red),
+                    (&[G::Quit.into()], "quit", Color::Red),
                 ]),
             }
         };
+        let help_content = Line::from(hints);
 
         let footer_panel = Paragraph::new(help_content)
             .block(
