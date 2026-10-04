@@ -325,6 +325,33 @@ async fn unknown_task_list_column_warns_and_is_skipped() {
     assert!(buffer_contains(&terminal, "bogus"), "warning missing");
 }
 
+#[tokio::test]
+async fn task_list_columns_match_case_insensitively_and_drop_duplicates() {
+    let mut cfg = Config::default();
+    cfg.ui.task_list_columns = ["Description", "ID", "description"]
+        .map(String::from)
+        .to_vec();
+    let terminal = render_with_config(cfg).await;
+    assert_eq!(task_list_headers(&terminal), ["Description", "ID"]);
+}
+
+#[tokio::test]
+async fn empty_task_list_columns_warn_and_fall_back_to_defaults() {
+    for columns in [vec![], vec!["bogus".to_string()]] {
+        let mut cfg = Config::default();
+        cfg.ui.task_list_columns = columns;
+        let terminal = render_with_config(cfg).await;
+        assert_eq!(
+            task_list_headers(&terminal),
+            ["ID", "Project", "Priority", "Due", "Description"]
+        );
+        assert!(
+            buffer_contains(&terminal, "default columns"),
+            "fallback warning missing"
+        );
+    }
+}
+
 struct RefreshFixture {
     ui: AppUI,
     engine: TaskChampionIntegration,

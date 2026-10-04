@@ -48,6 +48,8 @@ task_list_columns = [                # Columns to show in task list, in this ord
 
 `default_view` falls back to `task_list` when the name is not one of the views above. With `show_help_bar = false` the footer still appears while it shows a status message or warning. `refresh_interval` picks up tasks changed outside lazytask, for example with `task add`, without a restart; the selected task stays selected across reloads.
 
+Column names in `task_list_columns` ignore case. A column named twice shows once, where it is first listed. When no listed name is a known column, including an empty list, the task list shows the default columns and the footer says so.
+
 Available columns:
 
 - `id` - Task ID number

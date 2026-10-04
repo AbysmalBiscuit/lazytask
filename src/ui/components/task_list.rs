@@ -27,8 +27,24 @@ pub enum Column {
 }
 
 impl Column {
-    pub fn from_name(name: &str) -> Option<Self> {
-        Some(match name {
+    /// Resolves configured column names, ignoring case and keeping the
+    /// first of any repeats. Returns the columns and the names that match no
+    /// column.
+    pub fn resolve<'a>(names: &'a [String]) -> (Vec<Column>, Vec<&'a str>) {
+        let mut columns = Vec::new();
+        let mut unknown = Vec::new();
+        for name in names {
+            match Column::from_name(name) {
+                Some(column) if !columns.contains(&column) => columns.push(column),
+                Some(_) => {}
+                None => unknown.push(name.as_str()),
+            }
+        }
+        (columns, unknown)
+    }
+
+    fn from_name(name: &str) -> Option<Self> {
+        Some(match name.to_ascii_lowercase().as_str() {
             "id" => Column::Id,
             "uuid" => Column::Uuid,
             "project" => Column::Project,

@@ -8,6 +8,7 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
+use crate::config::UIConfig;
 use crate::data::models::Task;
 use crate::handlers::input::Action;
 use crate::handlers::sync::{SyncHandler, SyncPhase};
@@ -58,14 +59,13 @@ pub struct AppUI {
 impl AppUI {
     pub fn new(config: &crate::config::Config) -> Result<Self> {
         let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
-        let mut columns = Vec::new();
-        let mut unknown_columns = Vec::new();
-        for name in &config.ui.task_list_columns {
-            match Column::from_name(name) {
-                Some(column) => columns.push(column),
-                None => unknown_columns.push(name.as_str()),
-            }
-        }
+        let (configured_columns, unknown_columns) = Column::resolve(&config.ui.task_list_columns);
+        let columns_fell_back = configured_columns.is_empty();
+        let columns = if columns_fell_back {
+            Column::resolve(&UIConfig::default().task_list_columns).0
+        } else {
+            configured_columns
+        };
 
         let mut ui = AppUI {
             current_view: AppView::TaskList,
@@ -109,6 +109,10 @@ impl AppUI {
                 "Unknown task_list_columns skipped: {}",
                 unknown_columns.join(", ")
             ));
+        }
+        if columns_fell_back {
+            ui.config_warnings
+                .push("No usable task_list_columns, showing the default columns".to_string());
         }
 
         Ok(ui)
