@@ -2,7 +2,7 @@
 
 A keyboard-driven Terminal User Interface for personal task management, built in Rust with [Ratatui](https://ratatui.rs/). LazyTask uses [TaskChampion](https://github.com/GothenburgBitFactory/taskchampion) — the same embeddable task engine that powers Taskwarrior 3.x — as its data layer, so it can sync with the official [`taskchampion-sync-server`](https://github.com/GothenburgBitFactory/taskchampion-sync-server) and stays storage-compatible with Taskwarrior.
 
-LazyTask is **standalone**: you do **not** need the `task` binary installed. The replica lives entirely inside the application's data directory.
+LazyTask is **standalone**: you do **not** need the `task` binary installed. It opens the same replica as Taskwarrior (see [Data location](#data-location)), so tasks added in either tool show up in the other.
 
 <img width="1561" height="977" alt="image" src="https://github.com/user-attachments/assets/0441da8f-e2ea-483d-ba4f-2ec61ad75fd9" />
 <img width="1561" height="977" alt="image" src="https://github.com/user-attachments/assets/761e174a-fe67-4987-aab4-3d5821b42b73" />
@@ -341,7 +341,6 @@ podman rm -f lazytask-sync-test
 ## Known limitations
 
 - **Sync settings aren't persisted.** They live in memory; re-enter them each session.
-- **No CLI flag for the data directory.** Override is API-level only.
 - **`Action::ForceSync` is unreachable** in the current keymap. Crossterm reports Shift+s as `Char('S')` (not `Char('s')+SHIFT`), so the SHIFT-guarded branch never fires. `Char('S')` is bound to Sync Config. Either branch can be retargeted to a producible key (e.g. `Ctrl+S`) — open issue.
 - **`Settings` view is a placeholder.** It renders "Coming Soon".
 - **Soft-deleted tasks accumulate forever.** A `purge_task` API exists but isn't wired to a keystroke. TaskChampion's automatic 180-day expiry isn't called yet.
