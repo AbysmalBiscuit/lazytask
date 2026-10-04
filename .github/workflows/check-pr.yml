@@ -10,12 +10,17 @@ on:
       - unlabeled
   merge_group:
 
+concurrency:
+  group: check-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   pull-requests: write
 
 jobs:
   check-title:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check PR title
         if: github.event_name == 'pull_request_target'
@@ -46,6 +51,7 @@ jobs:
 
   check-breaking-change-label:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       # use an environment variable to pass untrusted input to the script
       # see https://securitylab.github.com/research/github-actions-untrusted-input/
@@ -78,6 +84,7 @@ jobs:
     if: ${{ contains(github.event.*.labels.*.name, 'do not merge') }}
     name: Prevent Merging
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check for label
         run: |
