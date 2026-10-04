@@ -574,6 +574,56 @@ async fn saving_the_sync_modal_changes_only_the_sync_lines() -> Result<()> {
 }
 
 #[tokio::test]
+async fn saving_keeps_the_indentation_of_a_changed_line() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "  sync.server.url=https://old.example.com\n\tsync.server.client_id={CLIENT_ID}\n\
+             \x20 sync.encryption_secret=s3cret\n"
+        ),
+    )?;
+    #[cfg(unix)]
+    set_mode(&taskrc, 0o600)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.retype("https://old.example.com", "https://new.example.com");
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "  sync.server.url=https://new.example.com\n\tsync.server.client_id={CLIENT_ID}\n\
+             \x20 sync.encryption_secret=s3cret\n"
+        )
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_appends_with_the_taskrc_line_ending() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.write("taskrc", "# windows taskrc\r\ncolor=on")?;
+    #[cfg(unix)]
+    set_mode(&taskrc, 0o600)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    save_new_server(&app, "s3cret");
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "# windows taskrc\r\ncolor=on\r\nsync.server.url=https://tw.example.com\r\n\
+             sync.server.client_id={CLIENT_ID}\r\nsync.encryption_secret=s3cret\r\n"
+        )
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn sync_modal_opens_prefilled_with_the_taskrc_sync_server() -> Result<()> {
     let fx = Fixture::new()?;
     let taskrc = fx.write(

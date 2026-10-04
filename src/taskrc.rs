@@ -37,19 +37,14 @@ impl TaskrcFile {
         Taskrc::load(&self.path, &self.env)
     }
 
-    /// Sets each key to its value. A key already assigned is changed on the
-    /// line of the assignment in effect, in whichever file holds it, keeping
-    /// that line's comment; a key assigned nowhere is appended to this file,
-    /// which is created readable only by its owner when missing. A key that
-    /// already reads as its value is left alone.
-    ///
-    /// Nothing is written when a value would not read back as given, or
-    /// when `sync.encryption_secret` would go into a file other users can
-    /// read.
+    /// Sets each changed key on the line that assigns it, in whichever file
+    /// holds it, or appends it to this file, created mode 0600 when missing.
+    /// Writes nothing when a value would not read back as given, or when
+    /// `sync.encryption_secret` would go into a file others can read.
     pub fn set(&self, assignments: &[(&str, &str)]) -> Result<()> {
         let taskrc = self.load()?;
         let mut edits: BTreeMap<&Path, Vec<(usize, String)>> = BTreeMap::new();
-        let mut appended = String::new();
+        let mut appended = Vec::new();
         for &(key, value) in assignments {
             ensure_reads_back(key, value, &self.env)?;
             let current = taskrc.values.get(key);
@@ -64,7 +59,7 @@ impl TaskrcFile {
                     .entry(&assigned.file)
                     .or_default()
                     .push((assigned.line, format!("{key}={value}"))),
-                None => appended.push_str(&format!("{key}={value}\n")),
+                None => appended.push(format!("{key}={value}")),
             }
         }
         for (file, lines) in edits {
@@ -266,7 +261,7 @@ fn ensure_private(_path: &Path) -> Result<()> {
 }
 
 /// Replaces each numbered line of `file` with its new text, keeping the
-/// line's comment and line ending.
+/// line's indentation, comment and line ending.
 fn replace_lines(file: &Path, lines: &[(usize, String)]) -> Result<()> {
     let contents =
         fs::read_to_string(file).with_context(|| format!("Failed to read {}", file.display()))?;
@@ -277,12 +272,14 @@ fn replace_lines(file: &Path, lines: &[(usize, String)]) -> Result<()> {
             continue;
         };
         let body = raw.trim_end_matches(['\n', '\r']);
+        let indent = &body[..body.len() - body.trim_start().len()];
         let code = body.split('#').next().unwrap_or_default();
         let comment = if code.len() == body.len() {
             ""
         } else {
             &body[code.trim_end().len()..]
         };
+        out.push_str(indent);
         out.push_str(text);
         out.push_str(comment);
         out.push_str(&raw[body.len()..]);
@@ -290,14 +287,28 @@ fn replace_lines(file: &Path, lines: &[(usize, String)]) -> Result<()> {
     fs::write(file, out).with_context(|| format!("Failed to write {}", file.display()))
 }
 
-/// Appends `lines` to `file`, first ending its last line when it has no
-/// line ending. A missing file is created readable only by its owner.
-fn append(file: &Path, lines: &str) -> Result<()> {
-    let ends_mid_line = match fs::read(file) {
-        Ok(contents) => contents.last().is_some_and(|&byte| byte != b'\n'),
-        Err(err) if err.kind() == ErrorKind::NotFound => false,
+/// Appends `lines` to `file`, each ended with the file's line ending, after
+/// ending its last line when it has none. A missing file is created
+/// readable only by its owner.
+fn append(file: &Path, lines: &[String]) -> Result<()> {
+    let existing = match fs::read_to_string(file) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
         Err(err) => return Err(err).with_context(|| format!("Failed to read {}", file.display())),
     };
+    let eol = if existing.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let mut text = String::new();
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        text.push_str(eol);
+    }
+    for line in lines {
+        text.push_str(line);
+        text.push_str(eol);
+    }
     let mut options = OpenOptions::new();
     options.create(true).append(true);
     #[cfg(unix)]
@@ -305,8 +316,8 @@ fn append(file: &Path, lines: &str) -> Result<()> {
     let mut handle = options
         .open(file)
         .with_context(|| format!("Failed to open {}", file.display()))?;
-    let separator = if ends_mid_line { "\n" } else { "" };
-    write!(handle, "{separator}{lines}")
+    handle
+        .write_all(text.as_bytes())
         .with_context(|| format!("Failed to write {}", file.display()))
 }
 
