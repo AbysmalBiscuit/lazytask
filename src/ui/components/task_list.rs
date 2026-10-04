@@ -60,19 +60,26 @@ impl Column {
         }
     }
 
-    fn width(self) -> Constraint {
+    /// Cell width in characters, or `None` for the description, which
+    /// takes the space the other columns leave.
+    fn fixed_width(self) -> Option<u16> {
         match self {
-            Column::Id => Constraint::Length(4),
-            Column::Uuid => Constraint::Length(8),
-            Column::Project => Constraint::Length(14),
-            Column::Priority => Constraint::Length(8),
-            Column::Due => Constraint::Length(6),
-            Column::Description => Constraint::Min(20),
-            Column::Tags => Constraint::Length(16),
-            Column::Urgency => Constraint::Length(7),
-            Column::Entry | Column::Modified => Constraint::Length(10),
-            Column::Status => Constraint::Length(9),
+            Column::Id => Some(4),
+            Column::Uuid => Some(8),
+            Column::Project => Some(14),
+            Column::Priority => Some(8),
+            Column::Due => Some(6),
+            Column::Description => None,
+            Column::Tags => Some(16),
+            Column::Urgency => Some(7),
+            Column::Entry | Column::Modified => Some(10),
+            Column::Status => Some(9),
         }
+    }
+
+    fn width(self) -> Constraint {
+        self.fixed_width()
+            .map_or(Constraint::Min(20), Constraint::Length)
     }
 }
 
@@ -236,14 +243,14 @@ impl TaskTableFormatter {
     }
 
     fn format_cell(&self, task: &Task, column: Column) -> String {
-        match column {
+        let text = match column {
             Column::Id => self.format_id(task.id),
-            Column::Uuid => task.uuid.chars().take(8).collect(),
-            Column::Project => self.format_project(&task.project),
+            Column::Uuid => task.uuid.split('-').next().unwrap_or_default().to_string(),
+            Column::Project => task.project.clone().unwrap_or_default(),
             Column::Priority => self.format_priority_full(&task.priority),
             Column::Due => self.format_due(task.due),
-            Column::Description => self.format_description(&task.description),
-            Column::Tags => crate::utils::formatting::truncate_chars(&task.tags.join(" "), 16),
+            Column::Description => task.description.clone(),
+            Column::Tags => task.tags.join(" "),
             Column::Urgency => format!("{:.1}", task.urgency),
             Column::Entry => task.entry.format("%Y-%m-%d").to_string(),
             Column::Modified => task
@@ -251,6 +258,10 @@ impl TaskTableFormatter {
                 .map(|m| m.format("%Y-%m-%d").to_string())
                 .unwrap_or_default(),
             Column::Status => task.status.label().to_string(),
+        };
+        match column.fixed_width() {
+            Some(width) => crate::utils::formatting::truncate_chars(&text, width.into()),
+            None => text,
         }
     }
 
@@ -368,13 +379,6 @@ impl TaskTableFormatter {
         }
     }
 
-    fn format_project(&self, project: &Option<String>) -> String {
-        project
-            .as_deref()
-            .map(|p| crate::utils::formatting::truncate_chars(p, 14))
-            .unwrap_or_default()
-    }
-
     fn format_due(&self, due: Option<chrono::DateTime<Utc>>) -> String {
         if let Some(due) = due {
             let now = Utc::now();
@@ -390,9 +394,5 @@ impl TaskTableFormatter {
         } else {
             "".to_string()
         }
-    }
-
-    fn format_description(&self, description: &str) -> String {
-        crate::utils::formatting::truncate_chars(description, 45)
     }
 }
