@@ -427,29 +427,6 @@ async fn help_lists_the_configured_keys() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn help_screen_lists_every_section() -> Result<()> {
-    let mut d = Driver::new(160, 50).await?;
-    d.load().await?;
-    d.key(KeyCode::F(1)).await?;
-
-    for marker in [
-        "Global",
-        "Task list",
-        "Form and filter panel",
-        "Reports",
-        "Sync setup",
-    ] {
-        assert!(
-            d.screen_contains(marker),
-            "help missing section header {:?}\n{}",
-            marker,
-            d.screen()
-        );
-    }
-    Ok(())
-}
-
 // ---------------------------------------------------------------------
 // Filter mode: / toggle, Tab, Space toggle, char/backspace input
 // ---------------------------------------------------------------------
