@@ -42,7 +42,7 @@ Every color in the UI comes from one of these roles:
 
 [`config/default.toml`](../config/default.toml) lists each role's `catppuccin-mocha` color. A color is a hex `#rrggbb`, a terminal color name such as `red`, `light-blue` or `dark-gray`, an ANSI color index from `0` to `255`, or `reset` for the terminal's own color.
 
-When `NO_COLOR` is set to a non-empty value, LazyTask draws with the terminal's default colors only and marks the selected row with reverse video.
+When `NO_COLOR` is set to a non-empty value, LazyTask draws with the terminal's default colors only and marks the selected row with reverse video. Setting `selection = "reset"` also marks the selected row and calendar day with reverse video.
 
 ### UI Configuration
 
