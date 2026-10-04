@@ -693,7 +693,7 @@ async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Res
 }
 
 #[tokio::test]
-async fn saving_refuses_an_empty_url_and_a_secret_the_taskrc_cannot_hold() -> Result<()> {
+async fn saving_refuses_an_empty_server_url() -> Result<()> {
     let fx = Fixture::new()?;
     let taskrc = fx.path("taskrc");
     let mut app = fx.launch(&taskrc).await?;
@@ -705,6 +705,16 @@ async fn saving_refuses_an_empty_url_and_a_secret_the_taskrc_cannot_hold() -> Re
     app.type_text("s3cret");
     app.press(KeyCode::Enter);
     app.wait_for("Server URL is required").await?;
+
+    assert!(!taskrc.exists(), "a refused save wrote the taskrc");
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_refuses_a_secret_the_taskrc_reads_as_a_comment() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.path("taskrc");
+    let mut app = fx.launch(&taskrc).await?;
 
     save_new_server(&app, "has#hash");
     app.wait_for("sync.encryption_secret cannot be saved")
