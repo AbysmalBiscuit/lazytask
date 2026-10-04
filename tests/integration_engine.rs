@@ -201,3 +201,15 @@ async fn invalid_uuid_modify_returns_error() {
         msg
     );
 }
+
+#[tokio::test]
+async fn pending_tasks_carry_their_working_set_id() {
+    let (mut engine, _tmp) = engine().await;
+    let first = engine.add_task("first", &[]).await.expect("add");
+    let second = engine.add_task("second", &[]).await.expect("add");
+
+    let tasks = engine.list_tasks().await.expect("list");
+    let id_of = |uuid: &str| tasks.iter().find(|t| t.uuid == uuid).and_then(|t| t.id);
+    assert_eq!(id_of(&first), Some(1));
+    assert_eq!(id_of(&second), Some(2));
+}

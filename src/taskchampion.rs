@@ -92,9 +92,19 @@ impl TaskChampionIntegration {
             .await
             .context("Failed to load tasks")?;
 
+        let working_set = self
+            .replica
+            .working_set()
+            .await
+            .context("Failed to load working set")?;
+
         let mut result = Vec::with_capacity(tasks.len());
         for (uuid, tc_task) in tasks {
-            result.push(map_task(uuid, &tc_task));
+            let mut task = map_task(uuid, &tc_task);
+            task.id = working_set
+                .by_uuid(uuid)
+                .and_then(|i| u32::try_from(i).ok());
+            result.push(task);
         }
         Ok(result)
     }
