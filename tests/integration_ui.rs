@@ -209,6 +209,7 @@ async fn render_with_config(cfg: Config, tasks: &[&str]) -> Terminal<TestBackend
         engine.add_task(description, &[]).await.expect("add_task");
     }
     let mut ui = AppUI::new(&cfg).expect("AppUI::new");
+    ui.show_config_warnings(&[]);
     ui.load_tasks(&mut engine).await.expect("load_tasks");
     let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
     terminal
@@ -229,4 +230,61 @@ async fn show_help_bar_false_hides_keybinding_hints() {
     cfg.ui.show_help_bar = false;
     let hidden = render_with_config(cfg, &[]).await;
     assert!(!buffer_contains(&hidden, "[a] add"), "help bar still shown");
+}
+
+fn with_default_view(view: &str) -> Config {
+    let mut cfg = Config::default();
+    cfg.ui.default_view = view.to_string();
+    cfg
+}
+
+#[tokio::test]
+async fn default_view_picks_the_view_lazytask_opens_on() {
+    let task_list = render_with_config(with_default_view("task_list"), &[]).await;
+    assert!(
+        buffer_contains(&task_list, " Tasks ("),
+        "task list not shown"
+    );
+
+    let reports = render_with_config(with_default_view("reports"), &[]).await;
+    assert!(buffer_contains(&reports, "Burndown"), "reports not shown");
+    assert!(!buffer_contains(&reports, " Tasks ("), "task list shown");
+
+    let calendar = render_with_config(with_default_view("calendar"), &[]).await;
+    assert!(
+        buffer_contains(&calendar, "Daily Details"),
+        "calendar not shown"
+    );
+    assert!(!buffer_contains(&calendar, " Tasks ("), "task list shown");
+}
+
+#[tokio::test]
+async fn unknown_default_view_warns_and_opens_task_list() {
+    let terminal = render_with_config(with_default_view("kanban"), &[]).await;
+    assert!(
+        buffer_contains(&terminal, " Tasks ("),
+        "task list not shown"
+    );
+    assert!(buffer_contains(&terminal, "kanban"), "warning missing");
+}
+
+#[tokio::test]
+async fn config_warnings_and_unknown_keys_show_together() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let mut ui = AppUI::new(&with_default_view("kanban")).expect("AppUI::new");
+    ui.show_config_warnings(&["Unknown config keys: ui.colour".to_string()]);
+    let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
+        .await
+        .expect("engine");
+    ui.load_tasks(&mut engine).await.expect("load_tasks");
+    let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
+    terminal
+        .draw(|f| ui.render_with_sync(f, &SyncHandler::new()))
+        .expect("draw");
+
+    assert!(buffer_contains(&terminal, "kanban"), "view warning missing");
+    assert!(
+        buffer_contains(&terminal, "ui.colour"),
+        "key warning missing"
+    );
 }

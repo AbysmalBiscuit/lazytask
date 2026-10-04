@@ -178,6 +178,10 @@ impl ReportsView {
         };
     }
 
+    pub fn open_calendar(&mut self) {
+        self.mode = ReportMode::Calendar;
+    }
+
     pub fn is_calendar_mode(&self) -> bool {
         self.mode == ReportMode::Calendar
     }

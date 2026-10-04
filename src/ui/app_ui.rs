@@ -48,12 +48,13 @@ pub struct AppUI {
     keymap: Keymap,
     keymap_warnings: Vec<String>,
     show_help_bar: bool,
+    config_warnings: Vec<String>,
 }
 
 impl AppUI {
     pub fn new(config: &crate::config::Config) -> Result<Self> {
         let (keymap, keymap_warnings) = Keymap::from_config(&config.keybindings)?;
-        Ok(AppUI {
+        let mut ui = AppUI {
             current_view: AppView::TaskList,
             main_view: MainView::new(),
             reports_view: ReportsView::new(),
@@ -70,7 +71,22 @@ impl AppUI {
             keymap,
             keymap_warnings,
             show_help_bar: config.ui.show_help_bar,
-        })
+            config_warnings: Vec::new(),
+        };
+
+        match config.ui.default_view.as_str() {
+            "task_list" => {}
+            "reports" => ui.current_view = AppView::Reports,
+            "calendar" => {
+                ui.current_view = AppView::Reports;
+                ui.reports_view.open_calendar();
+            }
+            unknown => ui.config_warnings.push(format!(
+                "Unknown default_view \"{unknown}\", opening task_list"
+            )),
+        }
+
+        Ok(ui)
     }
 
     pub async fn load_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<()> {
@@ -135,11 +151,12 @@ impl AppUI {
 
     /// Shows one warning naming every startup problem that did not stop
     /// lazytask: `startup_warnings` from loading the config and taskrc, then
-    /// unusable keybindings.
+    /// unusable keybindings and `[ui]` values.
     pub fn show_config_warnings(&mut self, startup_warnings: &[String]) {
         let warnings: Vec<&str> = startup_warnings
             .iter()
             .chain(&self.keymap_warnings)
+            .chain(&self.config_warnings)
             .map(String::as_str)
             .collect();
         if !warnings.is_empty() {
