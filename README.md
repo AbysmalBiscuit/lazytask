@@ -63,7 +63,7 @@ cargo build --release
 ./target/release/lazytask
 ```
 
-The binary is `target/release/lazytask`. On first launch it creates a config file at `~/.config/lazytask/config.toml` and a SQLite database under the platform's standard data directory (see [Data location](#data-location)).
+The binary is `target/release/lazytask`. On first launch it creates a SQLite database under the platform's standard data directory (see [Data location](#data-location)).
 
 ## Usage
 
@@ -260,7 +260,7 @@ The data flow is simple: `App::run` polls crossterm events, `InputHandler` maps 
 
 ## Configuration
 
-Config lives at `~/.config/lazytask/config.toml` and is auto-created on first launch with sensible defaults:
+Config lives at `~/.config/lazytask/config.toml`. The file is optional and lazytask never writes it. Set only the keys you want to change; every other key keeps its built-in default, and an empty path string means unset. Unknown keys load with a warning in the footer naming each one. The defaults are:
 
 ```toml
 [theme]
@@ -277,9 +277,6 @@ default_view      = "task_list"
 show_help_bar     = true
 task_list_columns = ["id", "project", "priority", "due", "description"]
 refresh_interval  = 1000
-
-[taskwarrior]
-sync_enabled = false        # reserved for future use; not currently read
 
 [keybindings.global]
 quit    = "q"               # reserved; live keymap is currently hard-coded

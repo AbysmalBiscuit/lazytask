@@ -1,6 +1,6 @@
 # LazyTask Configuration
 
-LazyTask is highly configurable through TOML configuration files. The main configuration is stored at `~/.config/lazytask/config.toml` and will be created with sensible defaults on first run.
+LazyTask is highly configurable through TOML configuration files. The main configuration is read from `~/.config/lazytask/config.toml`. The file is optional and LazyTask never writes it: without one, LazyTask runs on built-in defaults. A config file may set any subset of keys; every key it leaves out keeps its default. [`config/default.toml`](../config/default.toml) lists the defaults.
 
 ## Configuration File Locations
 
@@ -64,10 +64,8 @@ Available columns:
 
 ```toml
 [taskwarrior]
-taskrc_path = "/path/to/.taskrc"     # Leave empty for auto-detection
-data_location = "/path/to/data"      # Leave empty for auto-detection
-sync_enabled = false                 # Enable automatic synchronization
-sync_interval = 300                  # Sync interval in seconds (when enabled)
+taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset (auto-detect)
+data_location = "/path/to/data"      # Empty string or absent means unset (auto-detect)
 ```
 
 ### Keybindings
@@ -95,120 +93,6 @@ cancel = "Esc"
 ```
 
 See [keybindings.md](keybindings.md) for complete keybinding reference.
-
-## Advanced Configuration
-
-### Custom Themes
-
-You can define custom themes in the configuration:
-
-```toml
-[theme.custom]
-name = "My Custom Theme"
-
-[theme.custom.colors]
-background = "#000000"
-foreground = "#ffffff"
-primary = "#0066cc"
-secondary = "#cc6600"
-success = "#00cc66"
-warning = "#cccc00"
-error = "#cc0000"
-border = "#666666"
-selected = "#333333"
-highlight = "#444444"
-inactive = "#777777"
-
-# Priority colors
-priority_high = "#ff0000"
-priority_medium = "#ffaa00"
-priority_low = "#00aa00"
-
-# Project colors (cycling through for different projects)
-project_1 = "#ff6666"
-project_2 = "#66ff66"
-project_3 = "#6666ff"
-project_4 = "#ffff66"
-project_5 = "#ff66ff"
-project_6 = "#66ffff"
-project_7 = "#ffffff"
-project_8 = "#aaaaaa"
-```
-
-### Filter Presets
-
-Define commonly used filters:
-
-```toml
-[filters.work]
-name = "Work Tasks"
-status = "pending"
-project = "work"
-
-[filters.urgent]
-name = "Urgent Tasks"
-status = "pending"
-priority = "H"
-due_before = "eow"  # End of week
-
-[filters.today]
-name = "Today's Tasks"
-status = "pending"
-due = "today"
-
-[filters.overdue]
-name = "Overdue Tasks"
-status = "pending"
-due_before = "now"
-```
-
-### Report Configuration
-
-Customize built-in reports or define new ones:
-
-```toml
-[reports.next]
-description = "Next tasks to work on"
-columns = ["id", "project", "priority", "due", "description"]
-filter = "status:pending limit:10"
-sort = "urgency-"
-
-[reports.weekly]
-description = "This week's tasks"
-columns = ["id", "project", "due", "description"]
-filter = "status:pending due.before:eow"
-sort = "due"
-
-[reports.projects]
-description = "Tasks by project"
-columns = ["project", "count", "pending", "completed"]
-filter = ""
-sort = "project"
-```
-
-### Context Configuration
-
-Define Taskwarrior contexts within LazyTask:
-
-```toml
-[contexts.work]
-name = "Work"
-read_filter = "project:work"
-write_filter = "project:work"
-description = "Work-related tasks"
-
-[contexts.home]
-name = "Home"
-read_filter = "project:home"
-write_filter = "project:home"
-description = "Personal tasks"
-
-[contexts.urgent]
-name = "Urgent"
-read_filter = "+urgent"
-write_filter = ""
-description = "Urgent tasks only"
-```
 
 ## Environment Variables
 
@@ -245,10 +129,6 @@ default_view = "calendar"
 refresh_interval = 5000
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
 
-[taskwarrior]
-sync_enabled = true
-sync_interval = 600
-
 # Vim-style navigation
 [keybindings.task_list]
 move_up = "k"
@@ -257,43 +137,17 @@ move_left = "h"
 move_right = "l"
 first_task = "gg"
 last_task = "G"
-
-# Custom filters
-[filters.critical]
-name = "Critical Tasks"
-status = "pending"
-priority = "H"
-due_before = "tomorrow"
-
-[filters.waiting]
-name = "Waiting Tasks"
-status = "waiting"
-
-# Custom reports
-[reports.burndown]
-description = "Completion rate over time"
-columns = ["date", "completed", "added", "net"]
-filter = "end.after:30days"
 ```
 
 ## Validation and Errors
 
-LazyTask validates configuration on startup and will show helpful error messages for:
+LazyTask refuses to start when the config file has invalid TOML syntax or a value of the wrong type.
 
-- Invalid TOML syntax
-- Unknown configuration keys
-- Invalid color values
-- Invalid keybinding syntax
-- Missing required values
+Unknown keys do not stop LazyTask. It loads the rest of the file and shows a warning in the footer naming each unknown key by its dotted path, for example `ui.colour` or `taskwarrior.sync_enabled`.
 
-## Configuration Migration
+## Upgrading
 
-When upgrading LazyTask, configuration files are automatically migrated:
-
-1. Backup of old config is created
-2. New fields are added with defaults
-3. Deprecated fields are marked but preserved
-4. Migration summary is shown
+LazyTask never rewrites your config file. Keys you leave out pick up the current built-in defaults, so new settings and changed defaults reach you without editing the file. Keys a newer version no longer reads show up in the unknown-key warning.
 
 ## Troubleshooting
 

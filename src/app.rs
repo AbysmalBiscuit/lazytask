@@ -8,7 +8,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::{self, Stdout};
 use std::time::Duration;
 
-use crate::config::Config;
+use crate::config::{Config, LoadedConfig};
 use crate::handlers::input::{Action, InputHandler};
 use crate::handlers::sync::SyncHandler;
 use crate::taskchampion::TaskChampionIntegration;
@@ -34,10 +34,14 @@ impl App {
         let backend = CrosstermBackend::new(stdout);
         let terminal = Terminal::new(backend)?;
 
-        let config = Config::load(config_path)?;
+        let LoadedConfig {
+            config,
+            unknown_keys,
+        } = Config::load(config_path)?;
         let taskchampion = TaskChampionIntegration::new(None).await?;
         let sync_handler = SyncHandler::new();
-        let ui = AppUI::new(&config)?;
+        let mut ui = AppUI::new(&config)?;
+        ui.warn_unknown_config_keys(&unknown_keys);
         let input_handler = InputHandler::new(&config);
 
         Ok(App {
