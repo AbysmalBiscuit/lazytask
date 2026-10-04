@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use lazytask::config::{Config, LoadedConfig};
-use lazytask::utils::keybindings::Keymap;
+use lazytask::config::{Config, KeyBindingsConfig, LoadedConfig};
+use lazytask::utils::keybindings::{Keymap, Section};
+use strum::IntoEnumIterator;
 use tempfile::tempdir;
 
 fn load_toml(contents: &str) -> anyhow::Result<LoadedConfig> {
@@ -94,8 +95,17 @@ fn shipped_example_config_loads_without_unknown_keys() -> anyhow::Result<()> {
     let loaded = load_toml(include_str!("../../config/default.toml"))?;
 
     assert_eq!(loaded.unknown_keys, Vec::<String>::new());
-    let (_, keymap_warnings) = Keymap::from_config(&loaded.config.keybindings)?;
+    let (shipped, keymap_warnings) = Keymap::from_config(&loaded.config.keybindings)?;
     assert_eq!(keymap_warnings, Vec::<String>::new());
+    let (defaults, _) = Keymap::from_config(&KeyBindingsConfig::default())?;
+    for section in Section::iter() {
+        assert_eq!(
+            shipped.bindings(section).collect::<Vec<_>>(),
+            defaults.bindings(section).collect::<Vec<_>>(),
+            "[keybindings.{}] in config/default.toml differs from the built-in defaults",
+            section.name()
+        );
+    }
     assert_eq!(loaded.config.taskwarrior.taskrc_path, None);
     assert_eq!(loaded.config.taskwarrior.data_location, None);
     Ok(())
