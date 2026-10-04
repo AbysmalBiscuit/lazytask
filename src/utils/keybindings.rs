@@ -355,9 +355,3 @@ impl Keymap {
             .copied()
     }
 }
-
-impl Default for Keymap {
-    fn default() -> Self {
-        Keymap::from_config(&KeyBindingsConfig::default()).0
-    }
-}
