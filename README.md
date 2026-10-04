@@ -88,6 +88,8 @@ lazytask --config /custom/path/config.toml
 
 ## Keyboard interface
 
+These are the default keys. Every one can be rebound through `[keybindings]`; see [docs/keybindings.md](docs/keybindings.md).
+
 ### Global
 
 | Key | Action |
@@ -274,12 +276,12 @@ task_list_columns = ["id", "project", "priority", "due", "description"]
 refresh_interval  = 1000
 
 [keybindings.global]
-quit    = "q"               # reserved; live keymap is currently hard-coded
+quit    = "q"               # every key is rebindable, see docs/keybindings.md
 help    = "F1"
 refresh = "F5"
 ```
 
-> ℹ️ The `[theme]`, `[keybindings.*]`, and `[taskwarrior]` sections are accepted by the parser but not all fields are wired up yet. The active keymap is the one documented in [Keyboard interface](#keyboard-interface).
+> ℹ️ The `[theme]` and `[taskwarrior]` sections are accepted by the parser but not all fields are wired up yet.
 
 ## Data location
 
