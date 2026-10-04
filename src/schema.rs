@@ -50,7 +50,6 @@ fn strip_null(value: &mut Value) {
     }
 }
 
-/// The shipped defaults, every line kept.
 const DEFAULTS: &str = include_str!("../config/default.toml");
 
 /// `config/default.toml` with every setting commented out, so nothing is
