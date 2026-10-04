@@ -344,6 +344,7 @@ podman rm -f lazytask-sync-test
 | Suite | Scope |
 |---|---|
 | `tests/unit/config.rs` | Config loading and data-location resolution |
+| `tests/config_schema.rs` | The committed `schema/lazytask-config.json` matches `lazytask schema` |
 | `tests/unit/filters.rs` | `TaskFilter` predicate matrix |
 | `tests/unit/models.rs` | `Task` JSON parsing (RFC3339, Taskwarrior-compact, Unix timestamps) |
 | `tests/integration_engine.rs` | CRUD on a real TaskChampion replica in a temp dir |
