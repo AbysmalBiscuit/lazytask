@@ -40,7 +40,8 @@ enum Command {
     /// when a check fails.
     Doctor {
         /// Also contact the sync server to check it is reachable and the
-        /// credentials work
+        /// credentials work. On an empty GCP or AWS bucket this creates the
+        /// `salt` object TaskChampion needs, as the first sync would.
         #[arg(long)]
         sync: bool,
     },

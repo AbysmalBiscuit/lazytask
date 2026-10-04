@@ -1,7 +1,8 @@
 //! `lazytask doctor`: how lazytask resolves its config, taskrc, data
 //! directory and sync settings, where each value came from, and whether it
 //! works. Every check runs, whatever an earlier one found, and none of them
-//! writes anything.
+//! writes anything, except that contacting an empty GCP or AWS bucket
+//! creates the `salt` object TaskChampion needs.
 
 use std::fmt;
 use std::fs;
@@ -440,7 +441,8 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
 }
 
 /// Asks the server for its first version, which reads without changing
-/// anything and makes it decrypt with the configured secret.
+/// the history and makes it decrypt with the configured secret. Connecting
+/// to an empty GCP or AWS bucket creates its `salt` object.
 async fn first_version(config: ServerConfig) -> anyhow::Result<GetVersionResult> {
     let mut server = config.into_server().await?;
     Ok(server.get_child_version(Uuid::nil()).await?)

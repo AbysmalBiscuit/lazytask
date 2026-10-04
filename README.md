@@ -77,7 +77,7 @@ lazytask doctor
 lazytask doctor --sync   # also contacts the sync server
 ```
 
-`lazytask doctor` prints each setting with its resolved value, where that value came from, and a `pass`, `warn`, `fail` or `skip` status; `skip` marks a check that did not run, such as the sync server without `--sync`. It changes nothing and makes no network calls unless given `--sync`. It exits non-zero when any check fails; warnings alone exit zero.
+`lazytask doctor` prints each setting with its resolved value, where that value came from, and a `pass`, `warn`, `fail` or `skip` status; `skip` marks a check that did not run, such as the sync server without `--sync`. It changes nothing and makes no network calls unless given `--sync`. The one exception: on an empty GCP or AWS bucket, `--sync` creates the `salt` object TaskChampion needs, as the first sync would. It exits non-zero when any check fails; warnings alone exit zero.
 
 ### Application modes
 
