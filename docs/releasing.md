@@ -38,10 +38,9 @@ The `release-please` workflow authenticates with the `RELEASE_PLEASE_TOKEN` repo
 
 The secret is not created by any workflow. A maintainer creates it, and the `release-please` workflow fails until it exists:
 
-1. On GitHub, open Settings, then Developer settings, then Personal access tokens, then Fine-grained tokens, and generate a new token.
-2. Set the resource owner to `AbysmalBiscuit` and repository access to only `AbysmalBiscuit/lazytask`.
-3. Under repository permissions, set Contents and Pull requests to Read and write.
-4. Store the token as the repository secret. `gh` prompts for the value:
+1. Open the [prefilled fine-grained token form](https://github.com/settings/personal-access-tokens/new?name=lazytask-release-please&description=release-please%20for%20AbysmalBiscuit%2Flazytask&target_name=AbysmalBiscuit&expires_in=366&contents=write&pull_requests=write). It sets the name, the `AbysmalBiscuit` owner, the expiry, and Read and write access to Contents and Pull requests.
+2. Under repository access, choose "Only select repositories", then `lazytask`. GitHub cannot prefill this choice. Then generate the token.
+3. Store the token as the repository secret. `gh` prompts for the value:
 
 ```bash
 gh secret set RELEASE_PLEASE_TOKEN -R AbysmalBiscuit/lazytask
