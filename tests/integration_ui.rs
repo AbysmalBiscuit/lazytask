@@ -5,12 +5,10 @@
 
 use lazytask::app::{LaunchEnv, Session};
 use lazytask::config::Config;
-use lazytask::handlers::input::Action;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
 use ratatui::{backend::TestBackend, buffer::Buffer, Terminal};
-use std::time::{Duration, Instant};
 
 fn buffer_contains(terminal: &Terminal<TestBackend>, needle: &str) -> bool {
     let buf = terminal.backend().buffer();
@@ -350,111 +348,4 @@ async fn empty_task_list_columns_warn_and_fall_back_to_defaults() {
             "fallback warning missing"
         );
     }
-}
-
-struct RefreshFixture {
-    ui: AppUI,
-    engine: TaskChampionIntegration,
-    data_dir: tempfile::TempDir,
-    terminal: Terminal<TestBackend>,
-}
-
-impl RefreshFixture {
-    async fn new(refresh_interval: u64) -> Self {
-        let data_dir = tempfile::tempdir().expect("tempdir");
-        let mut cfg = Config::default();
-        cfg.ui.refresh_interval = refresh_interval;
-        let engine = TaskChampionIntegration::new(data_dir.path().to_path_buf())
-            .await
-            .expect("engine");
-        RefreshFixture {
-            ui: AppUI::new(&cfg).expect("AppUI::new"),
-            engine,
-            data_dir,
-            terminal: Terminal::new(TestBackend::new(160, 40)).expect("terminal"),
-        }
-    }
-
-    /// Adds a task through a second handle on the replica, the way `task add`
-    /// writes while lazytask is open.
-    async fn add_task_externally(&self, description: &str) {
-        let mut other = TaskChampionIntegration::new(self.data_dir.path().to_path_buf())
-            .await
-            .expect("second handle");
-        other.add_task(description, &[]).await.expect("add_task");
-    }
-
-    async fn refresh_at(&mut self, now: Instant) -> bool {
-        self.ui.refresh_if_due(now, &mut self.engine).await
-    }
-
-    /// The description shown in the task detail panel.
-    fn selected_description(&self) -> String {
-        let buf = self.terminal.backend().buffer();
-        (0..buf.area.height)
-            .map(|y| buffer_line(buf, y))
-            .find_map(|line| {
-                let (_, rest) = line.split_once("│Description   ")?;
-                Some(rest.split('│').next()?.trim().to_string())
-            })
-            .expect("task detail panel missing")
-    }
-
-    fn draw(&mut self) {
-        self.terminal
-            .draw(|f| self.ui.render_with_sync(f, &SyncHandler::new()))
-            .expect("draw");
-    }
-}
-
-#[tokio::test]
-async fn task_added_externally_appears_within_one_refresh_interval() {
-    let mut fx = RefreshFixture::new(1000).await;
-    fx.ui.load_tasks(&mut fx.engine).await.expect("load_tasks");
-    let loaded_at = Instant::now();
-
-    fx.add_task_externally("added with task add").await;
-
-    assert!(
-        !fx.refresh_at(loaded_at).await,
-        "refreshed before the interval"
-    );
-    fx.draw();
-    assert!(!buffer_contains(&fx.terminal, "added with task add"));
-
-    assert!(fx.refresh_at(loaded_at + Duration::from_millis(1000)).await);
-    fx.draw();
-    assert!(
-        buffer_contains(&fx.terminal, "added with task add"),
-        "external task missing after one refresh interval"
-    );
-}
-
-#[tokio::test]
-async fn refresh_keeps_the_selected_task_selected() {
-    let mut fx = RefreshFixture::new(1000).await;
-    fx.engine.add_task("older task", &[]).await.expect("add");
-    fx.engine.add_task("newer task", &[]).await.expect("add");
-    fx.ui.load_tasks(&mut fx.engine).await.expect("load_tasks");
-    fx.ui
-        .handle_action(Action::MoveDown, &mut fx.engine, &mut SyncHandler::new())
-        .await
-        .expect("move down");
-    let loaded_at = Instant::now();
-    fx.draw();
-    let selected_before = fx.selected_description();
-
-    assert!(fx.refresh_at(loaded_at + Duration::from_millis(1000)).await);
-    fx.draw();
-    assert_eq!(fx.selected_description(), selected_before);
-}
-
-#[tokio::test]
-async fn zero_refresh_interval_never_refreshes() {
-    let mut fx = RefreshFixture::new(0).await;
-    fx.ui.load_tasks(&mut fx.engine).await.expect("load_tasks");
-    assert!(
-        !fx.refresh_at(Instant::now() + Duration::from_secs(3600))
-            .await
-    );
 }

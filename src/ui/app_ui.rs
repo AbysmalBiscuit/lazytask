@@ -6,7 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use std::time::{Duration, Instant};
 
 use crate::config::UIConfig;
 use crate::data::models::Task;
@@ -52,8 +51,6 @@ pub struct AppUI {
     keymap_warnings: Vec<String>,
     show_help_bar: bool,
     config_warnings: Vec<String>,
-    refresh_interval: Option<Duration>,
-    last_refresh: Instant,
 }
 
 impl AppUI {
@@ -85,11 +82,6 @@ impl AppUI {
             keymap_warnings,
             show_help_bar: config.ui.show_help_bar,
             config_warnings: Vec::new(),
-            refresh_interval: match config.ui.refresh_interval {
-                0 => None,
-                ms => Some(Duration::from_millis(ms)),
-            },
-            last_refresh: Instant::now(),
         };
 
         match config.ui.default_view.as_str() {
@@ -121,10 +113,9 @@ impl AppUI {
     pub async fn load_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) -> Result<()> {
         let mut tasks = taskchampion.list_tasks().await?;
         // The replica returns tasks in no fixed order, so tie-break on uuid to
-        // keep rows from swapping places on every refresh.
+        // keep rows from swapping places on every reload.
         tasks.sort_by(|a, b| b.entry.cmp(&a.entry).then_with(|| a.uuid.cmp(&b.uuid)));
 
-        self.last_refresh = Instant::now();
         self.tasks = tasks.clone();
         self.main_view.update_available_filters(&self.tasks);
         self.reports_view.update_tasks(tasks);
@@ -132,32 +123,31 @@ impl AppUI {
         Ok(())
     }
 
-    /// Reloads tasks from the replica once `ui.refresh_interval` has passed
-    /// since the last load, keeping the selected task selected. A failed
-    /// reload shows in the footer and is retried an interval later. Returns
-    /// whether the screen needs a redraw.
-    pub async fn refresh_if_due(
-        &mut self,
-        now: Instant,
-        taskchampion: &mut TaskChampionIntegration,
-    ) -> bool {
-        if self.time_until_refresh(now) != Some(Duration::ZERO) {
-            return false;
-        }
+    /// Reloads tasks from the replica, keeping the selected task selected.
+    /// A failed reload shows in the footer.
+    pub async fn reload_tasks(&mut self, taskchampion: &mut TaskChampionIntegration) {
         self.preserve_selection_uuid = self.main_view.selected_task_uuid();
         if let Err(e) = self.load_tasks(taskchampion).await {
-            self.last_refresh = now;
             self.preserve_selection_uuid = None;
-            self.set_status_message(format!("❌ Refresh failed: {e}"));
+            self.set_status_message(format!("❌ Reload failed: {e}"));
         }
-        true
     }
 
-    /// Time left until `refresh_if_due` reloads, or `None` when
-    /// auto-refresh is off.
-    pub fn time_until_refresh(&self, now: Instant) -> Option<Duration> {
-        let interval = self.refresh_interval?;
-        Some(interval.saturating_sub(now.saturating_duration_since(self.last_refresh)))
+    /// Syncs with the configured server without the sync overlay, then
+    /// reloads. Does nothing when sync is not configured or a manual sync is
+    /// showing. A failed sync shows in the footer.
+    pub async fn auto_sync(
+        &mut self,
+        taskchampion: &mut TaskChampionIntegration,
+        sync_handler: &mut SyncHandler,
+    ) {
+        if self.show_sync_overlay || !sync_handler.is_sync_configured(taskchampion) {
+            return;
+        }
+        match sync_handler.start_sync(taskchampion).await {
+            Ok(_) => self.reload_tasks(taskchampion).await,
+            Err(e) => self.set_status_message(format!("❌ Auto-sync failed: {e}")),
+        }
     }
 
     fn apply_filters(&mut self) {
@@ -501,7 +491,7 @@ impl AppUI {
                 }
             }
             Action::Refresh => {
-                self.load_tasks(taskchampion).await?;
+                self.reload_tasks(taskchampion).await;
             }
             Action::Sync => {
                 if !sync_handler.is_sync_configured(taskchampion) {

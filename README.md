@@ -281,7 +281,9 @@ secondary  = "#f38ba8"
 default_view      = "task_list"
 show_help_bar     = true
 task_list_columns = ["id", "project", "priority", "due", "description"]
-refresh_interval  = 1000
+
+[sync]
+auto_sync_interval = 5      # seconds; 0 turns automatic sync off
 
 [keybindings.global]
 quit    = "q"               # every key is rebindable, see docs/keybindings.md

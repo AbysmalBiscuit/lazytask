@@ -36,7 +36,6 @@ error = "#f38ba8"
 [ui]
 default_view = "task_list"           # Initial view: task_list, calendar, reports
 show_help_bar = true                 # Show keybinding hints at bottom
-refresh_interval = 1000              # Reload tasks from the replica every N milliseconds; 0 turns it off
 task_list_columns = [                # Columns to show in task list, in this order
     "id",
     "project",
@@ -46,7 +45,9 @@ task_list_columns = [                # Columns to show in task list, in this ord
 ]
 ```
 
-`default_view` falls back to `task_list` when the name is not one of the views above. With `show_help_bar = false` the footer still appears while it shows a status message or warning. `refresh_interval` picks up tasks changed outside lazytask, for example with `task add`, without a restart; the selected task stays selected across reloads.
+`default_view` falls back to `task_list` when the name is not one of the views above. With `show_help_bar = false` the footer still appears while it shows a status message or warning.
+
+LazyTask watches the task database and reloads whenever it changes, so tasks changed outside it, for example with `task add` or a sync, show up without a restart. The selected task stays selected across reloads. Where the system offers no file change events, LazyTask checks the database for changes every second instead. `F5` reloads right away.
 
 Column names in `task_list_columns` ignore case. A column named twice shows once, where it is first listed. When no listed name is a known column, including an empty list, the task list shows the default columns and the footer says so.
 
@@ -63,6 +64,15 @@ Available columns:
 - `entry` - Creation date
 - `modified` - Last modified date
 - `status` - Task status
+
+### Sync Configuration
+
+```toml
+[sync]
+auto_sync_interval = 5               # Seconds between automatic syncs; 0 turns it off
+```
+
+Automatic sync runs only once sync is configured. It syncs quietly in the background and reports failures in the footer. Pressing `s` syncs right away and restarts the countdown.
 
 ### Taskwarrior Integration
 
@@ -149,7 +159,6 @@ name = "gruvbox"
 
 [ui]
 default_view = "calendar"
-refresh_interval = 5000
 task_list_columns = ["id", "project", "priority", "due", "urgency", "description", "tags"]
 
 # Vim-style navigation

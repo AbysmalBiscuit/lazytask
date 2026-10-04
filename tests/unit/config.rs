@@ -81,13 +81,13 @@ fn unknown_keys_load_and_are_reported_by_dotted_path() -> anyhow::Result<()> {
     let loaded = load_toml(
         "[ui]\nshow_help_bar = false\ncolour = \"red\"\n\n\
          [taskwarrior]\nsync_enabled = true\n\n\
-         [sync]\nurl = \"https://example.com\"\n",
+         [server]\nurl = \"https://example.com\"\n",
     )?;
 
     assert!(!loaded.config.ui.show_help_bar);
     let mut unknown = loaded.unknown_keys;
     unknown.sort();
-    assert_eq!(unknown, ["sync", "taskwarrior.sync_enabled", "ui.colour"]);
+    assert_eq!(unknown, ["server", "taskwarrior.sync_enabled", "ui.colour"]);
     Ok(())
 }
 

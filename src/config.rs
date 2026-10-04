@@ -16,6 +16,7 @@ pub struct Config {
     pub keybindings: KeyBindingsConfig,
     pub taskwarrior: TaskwarriorConfig,
     pub ui: UIConfig,
+    pub sync: SyncConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -51,7 +52,21 @@ pub struct UIConfig {
     pub default_view: String,
     pub show_help_bar: bool,
     pub task_list_columns: Vec<String>,
-    pub refresh_interval: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct SyncConfig {
+    /// Seconds between automatic syncs with the sync server; 0 turns it off.
+    pub auto_sync_interval: u64,
+}
+
+impl Default for SyncConfig {
+    fn default() -> Self {
+        SyncConfig {
+            auto_sync_interval: 5,
+        }
+    }
 }
 
 impl TaskwarriorConfig {
@@ -130,7 +145,6 @@ impl Default for UIConfig {
             task_list_columns: ["id", "project", "priority", "due", "description"]
                 .map(String::from)
                 .to_vec(),
-            refresh_interval: 1000,
         }
     }
 }
