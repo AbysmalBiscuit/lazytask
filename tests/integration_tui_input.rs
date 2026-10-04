@@ -198,6 +198,27 @@ async fn unusable_keybindings_warn_and_keep_the_default() -> Result<()> {
 }
 
 #[tokio::test]
+async fn configured_key_takes_over_other_sections_defaults() -> Result<()> {
+    let mut d = Driver::from_toml(160, 50, "[keybindings.global]\nquit = \"d\"\n").await?;
+    d.engine.add_task("stays pending", &[]).await?;
+    d.load().await?;
+
+    d.key(KeyCode::F(1)).await?;
+    assert!(
+        !d.screen_contains("Mark task done"),
+        "done_task lost its key, so help should not list it:\n{}",
+        d.screen()
+    );
+    d.key(KeyCode::Esc).await?;
+
+    d.ch('d').await?;
+    assert!(d.quit, "d should quit from the task list");
+    let task = &d.engine.list_tasks().await?[0];
+    assert_eq!(task.status, TaskStatus::Pending);
+    Ok(())
+}
+
+#[tokio::test]
 async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
     let mut d = Driver::from_toml(
         120,

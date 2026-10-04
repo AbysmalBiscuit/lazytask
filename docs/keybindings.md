@@ -25,7 +25,7 @@ Key names and modifiers ignore case: `ctrl+PAGEUP` works. Single characters do n
 
 ## Sections
 
-Bindings are grouped by where they apply. In the task list, a `task_list` binding is checked before a `global` one, so a task-list key can reuse a global key there without affecting other views. The reports view works the same way with `reports`. While a form is open, such as the add/edit task form, the filter panel or sync setup, only `form` bindings apply, and any other printable key types itself.
+Bindings are grouped by where they apply. The task list uses `task_list` and `global` bindings, the reports view uses `reports` and `global`, and other views such as help use `global` alone. While a form is open, such as the add/edit task form, the filter panel or sync setup, only `form` bindings apply, and any other printable key types itself.
 
 ### `[keybindings.global]`
 
@@ -89,4 +89,6 @@ The day, week, month and today actions move the calendar, so they only act in ca
 
 LazyTask warns at startup, naming the entry by its dotted path such as `keybindings.global.quit`, when an entry names an action it does not have, when a key string does not parse, or when two entries in one section bind the same key. The action in a rejected entry keeps its default key.
 
-A configured key takes over another action's default on that key: with `quit = "d"` in `[keybindings.global]` and nothing else, `d` quits and `done_task` still works in the task list because `task_list` is checked first. With `add_task = "e"` in `[keybindings.task_list]`, `e` adds a task and `edit_task` has no key until you give it one.
+A key you configure takes over every default on that key in the views where its section applies, including defaults from other sections. With `quit = "d"` in `[keybindings.global]` and nothing else, `d` quits everywhere, including the task list, and `done_task` has no key until you give it one. With `add_task = "q"` in `[keybindings.task_list]`, `q` adds a task in the task list and still quits in the other views.
+
+When two configured keys apply in the same view, the view's own section wins over `global`. Among defaults, the same rule holds, though the defaults never overlap. The help overlay lists only keys that do something in at least one view.

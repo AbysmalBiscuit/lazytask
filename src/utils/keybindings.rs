@@ -469,17 +469,29 @@ impl fmt::Display for Key {
     }
 }
 
+/// One action's key, and whether it came from config or the defaults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Bound {
+    binding: Binding,
+    key: Key,
+    configured: bool,
+}
+
 /// The keys in effect: each action's configured key, or its default.
+///
+/// A key press searches the sections active in its context, and a
+/// configured key in any of them wins over every default on that key. So a
+/// configured key takes over the defaults other sections have on it,
+/// wherever both sections are active.
 #[derive(Debug, Clone)]
 pub struct Keymap {
-    bindings: Vec<(Binding, Key)>,
+    bound: Vec<Bound>,
 }
 
 impl Keymap {
     /// Builds the keymap from the config, with a warning for each config
-    /// entry it could not use. A configured key wins over another action's
-    /// default on that key; an entry that cannot be used leaves its action
-    /// on its default.
+    /// entry it could not use. An entry that cannot be used leaves its
+    /// action on its default.
     pub fn from_config(config: &KeyBindingsConfig) -> (Self, Vec<String>) {
         let mut warnings = Vec::new();
         let mut configured: Vec<(Binding, Key)> = Vec::new();
@@ -511,56 +523,70 @@ impl Keymap {
             }
         }
 
-        let bindings = Binding::all()
-            .filter_map(|binding| {
-                if let Some(&(_, key)) = configured.iter().find(|(b, _)| *b == binding) {
-                    return Some((binding, key));
-                }
-                let key = binding
-                    .default_key()?
-                    .parse::<Key>()
-                    .expect("default keys parse");
-                let taken = configured
-                    .iter()
-                    .any(|(other, k)| other.section() == binding.section() && *k == key);
-                (!taken).then_some((binding, key))
-            })
+        let bound = Binding::all()
+            .filter_map(
+                |binding| match configured.iter().find(|(b, _)| *b == binding) {
+                    Some(&(_, key)) => Some(Bound {
+                        binding,
+                        key,
+                        configured: true,
+                    }),
+                    None => Some(Bound {
+                        binding,
+                        key: binding.default_key()?.parse().expect("default keys parse"),
+                        configured: false,
+                    }),
+                },
+            )
             .collect();
 
-        (Keymap { bindings }, warnings)
+        (Keymap { bound }, warnings)
+    }
+
+    /// The binding `key` resolves to in `context`: configured keys first,
+    /// then defaults, each in the context's section order.
+    fn resolve(&self, context: InputContext, key: Key) -> Option<&Bound> {
+        [true, false].into_iter().find_map(|configured| {
+            context.sections().iter().find_map(|&section| {
+                self.bound.iter().find(|b| {
+                    b.configured == configured && b.binding.section() == section && b.key == key
+                })
+            })
+        })
+    }
+
+    /// Whether some context resolves this binding's key to it.
+    fn is_effective(&self, bound: &Bound) -> bool {
+        InputContext::iter().any(|context| {
+            context.sections().contains(&bound.binding.section())
+                && self.resolve(context, bound.key) == Some(bound)
+        })
     }
 
     /// The action `event` triggers in `context`. In a form, a printable key
     /// that is not bound types itself.
     pub fn action(&self, context: InputContext, event: KeyEvent) -> Action {
-        let key = Key::from(event);
-        let bound = context.sections().iter().find_map(|&section| {
-            self.bindings
-                .iter()
-                .find(|(binding, k)| binding.section() == section && *k == key)
-                .map(|(binding, _)| binding.action())
-        });
-        match (bound, event.code) {
-            (Some(action), _) => action,
+        match (self.resolve(context, Key::from(event)), event.code) {
+            (Some(bound), _) => bound.binding.action(),
             (None, KeyCode::Char(c)) if context == InputContext::Form => Action::Character(c),
             (None, _) => Action::None,
         }
     }
 
-    /// The key bound to `binding`, if any.
+    /// The key that triggers `binding`, if any.
     pub fn key(&self, binding: impl Into<Binding>) -> Option<Key> {
         let binding = binding.into();
-        self.bindings
+        self.bound
             .iter()
-            .find(|(b, _)| *b == binding)
-            .map(|&(_, key)| key)
+            .find(|b| b.binding == binding && self.is_effective(b))
+            .map(|b| b.key)
     }
 
-    /// The bindings in `section`, in help-overlay order.
+    /// The keys in effect in `section`, in help-overlay order.
     pub fn bindings(&self, section: Section) -> impl Iterator<Item = (Binding, Key)> + '_ {
-        self.bindings
+        self.bound
             .iter()
-            .filter(move |(binding, _)| binding.section() == section)
-            .copied()
+            .filter(move |b| b.binding.section() == section && self.is_effective(b))
+            .map(|b| (b.binding, b.key))
     }
 }
