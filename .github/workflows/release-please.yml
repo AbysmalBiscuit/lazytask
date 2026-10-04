@@ -1,0 +1,27 @@
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Maintains the release PR and, on merge, creates the tag + GitHub Release.
+  # The `Release` workflow (cargo-dist) builds the binaries and installers and
+  # uploads them to that Release when the tag is pushed.
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          # A PAT, not GITHUB_TOKEN: events caused by GITHUB_TOKEN start no
+          # workflows, so its tag push would never run the Release workflow
+          # and its release PR would get no CI.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
