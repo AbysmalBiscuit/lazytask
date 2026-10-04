@@ -1774,6 +1774,7 @@ dependencies = [
  "enum_dispatch",
  "notify",
  "ratatui",
+ "reqwest",
  "schemars",
  "serde",
  "serde_ignored",

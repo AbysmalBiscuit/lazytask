@@ -397,14 +397,39 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
         );
         return check;
     }
+    let remote = match &target.config {
+        ServerConfig::Remote { url, client_id, .. } => Some((url.clone(), *client_id)),
+        _ => None,
+    };
     match tokio::time::timeout(SERVER_TIMEOUT, first_version(target.config)).await {
         Ok(Ok(GetVersionResult::Version { .. })) => {
             check.note("reachable, and the encryption secret decrypts its history")
         }
-        Ok(Ok(GetVersionResult::NoSuchVersion)) => check.warn(
-            "answered, but with no history, so doctor cannot confirm it is a sync server \
-                 that knows this client or check the encryption secret",
-        ),
+        Ok(Ok(GetVersionResult::NoSuchVersion)) => {
+            let reason = match &remote {
+                Some((url, client_id)) => {
+                    tokio::time::timeout(SERVER_TIMEOUT, not_found_reason(url, *client_id))
+                        .await
+                        .ok()
+                        .flatten()
+                }
+                None => None,
+            };
+            match (reason.as_deref(), remote) {
+                (Some("no such client"), Some((_, client_id))) => check.warn(format!(
+                    "the server does not know client {client_id}: this replica has never \
+                     synced, or sync.server.client_id is wrong"
+                )),
+                (Some("no such version"), _) => check.warn(
+                    "the server knows this client but holds no history yet, so the \
+                     encryption secret cannot be checked",
+                ),
+                _ => check.warn(
+                    "answered, but with no history, so doctor cannot confirm it is a sync \
+                     server that knows this client or check the encryption secret",
+                ),
+            }
+        }
         Ok(Err(err)) => check.fail(format!("unreachable or refused: {err:#}")),
         Err(_) => check.fail(format!(
             "no answer within {} seconds",
@@ -419,4 +444,26 @@ async fn check_sync_server(target: Option<SyncTarget>, contact: bool) -> Check {
 async fn first_version(config: ServerConfig) -> anyhow::Result<GetVersionResult> {
     let mut server = config.into_server().await?;
     Ok(server.get_child_version(Uuid::nil()).await?)
+}
+
+/// The body of a taskchampion-sync-server's 404 for the client's first
+/// version: `no such client` or `no such version`. Only the body tells an
+/// unknown client from one with no history; TaskChampion reads both as no
+/// such version. `None` when the answer is not a 404 with a text body.
+async fn not_found_reason(url: &str, client_id: Uuid) -> Option<String> {
+    let url = format!(
+        "{}/v1/client/get-child-version/{}",
+        url.trim_end_matches('/'),
+        Uuid::nil()
+    );
+    let response = reqwest::Client::new()
+        .get(url)
+        .header("X-Client-Id", client_id.to_string())
+        .send()
+        .await
+        .ok()?;
+    if response.status() != reqwest::StatusCode::NOT_FOUND {
+        return None;
+    }
+    response.text().await.ok()
 }

@@ -414,54 +414,119 @@ fn taskrc_in_an_unsearchable_directory_fails() {
     assert!(!run.success, "exited zero:\n{}", run.stdout);
 }
 
-#[test]
-fn with_sync_flag_a_server_answering_not_found_is_a_warning() {
-    use std::io::{BufRead, BufReader, Write};
+/// An HTTP server answering every request with a 404 whose body is `body`,
+/// as taskchampion-sync-server does when it has no version to give.
+struct NotFoundServer {
+    url: String,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    requests: std::thread::JoinHandle<Vec<String>>,
+}
 
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}", listener.local_addr().unwrap());
-    listener.set_nonblocking(true).unwrap();
-    let server = std::thread::spawn(move || {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        let stream = loop {
-            match listener.accept() {
-                Ok((stream, _)) => break stream,
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    assert!(
-                        std::time::Instant::now() < deadline,
-                        "doctor --sync never contacted the server"
-                    );
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+impl NotFoundServer {
+    fn start(body: &'static str) -> Self {
+        use std::io::{BufRead, BufReader, ErrorKind, Write};
+        use std::sync::atomic::Ordering;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stopped = stop.clone();
+        let requests = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            loop {
+                let stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        if stopped.load(Ordering::SeqCst) {
+                            return requests;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        continue;
+                    }
+                    Err(err) => panic!("accept: {err}"),
+                };
+                stream.set_nonblocking(false).unwrap();
+                let mut reader = BufReader::new(stream);
+                let mut request_line = String::new();
+                reader.read_line(&mut request_line).unwrap();
+                let mut line = String::new();
+                while reader.read_line(&mut line).unwrap() > 2 {
+                    line.clear();
                 }
-                Err(err) => panic!("accept: {err}"),
+                let response = format!(
+                    "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                reader.get_mut().write_all(response.as_bytes()).unwrap();
+                requests.push(request_line);
             }
-        };
-        stream.set_nonblocking(false).unwrap();
-        let mut reader = BufReader::new(stream);
-        let mut request_line = String::new();
-        reader.read_line(&mut request_line).unwrap();
-        let mut line = String::new();
-        while reader.read_line(&mut line).unwrap() > 2 {
-            line.clear();
+        });
+        NotFoundServer {
+            url,
+            stop,
+            requests,
         }
-        reader
-            .get_mut()
-            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-            .unwrap();
-        request_line
-    });
+    }
+
+    /// The request line of every request the server answered.
+    fn finish(self) -> Vec<String> {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.requests.join().unwrap()
+    }
+}
+
+/// `doctor --sync` against a server answering 404 with `body`: the run and
+/// its Sync server check.
+fn sync_against_not_found(body: &'static str) -> (Run, String) {
+    let server = NotFoundServer::start(body);
     let doctor = Doctor::new();
-    sync_server_taskrc(&doctor, &url);
+    sync_server_taskrc(&doctor, &server.url);
 
     let run = doctor.run(&["--sync"]);
 
-    let request_line = server.join().unwrap();
+    let requests = server.finish();
     assert!(
-        request_line.starts_with("GET /v1/client/get-child-version/"),
-        "{request_line}"
+        !requests.is_empty()
+            && requests
+                .iter()
+                .all(|r| r.starts_with("GET /v1/client/get-child-version/")),
+        "requests: {requests:?}"
     );
     let check = run.check("Sync server");
+    (run, check)
+}
+
+#[test]
+fn with_sync_flag_a_server_answering_not_found_is_a_warning() {
+    let (run, check) = sync_against_not_found("");
+
     assert!(check.starts_with("[warn]"), "{check}");
     assert!(check.contains("cannot confirm"), "{check}");
+    assert!(run.success, "exited non-zero:\n{}", run.stdout);
+}
+
+#[test]
+fn with_sync_flag_an_unknown_client_is_named() {
+    let (run, check) = sync_against_not_found("no such client");
+
+    assert!(check.starts_with("[warn]"), "{check}");
+    assert!(
+        check.contains(&format!("does not know client {CLIENT_ID}")),
+        "{check}"
+    );
+    assert!(check.contains("sync.server.client_id is wrong"), "{check}");
+    assert!(run.success, "exited non-zero:\n{}", run.stdout);
+}
+
+#[test]
+fn with_sync_flag_a_known_client_without_history_is_named() {
+    let (run, check) = sync_against_not_found("no such version");
+
+    assert!(check.starts_with("[warn]"), "{check}");
+    assert!(
+        check.contains("knows this client but holds no history"),
+        "{check}"
+    );
     assert!(run.success, "exited non-zero:\n{}", run.stdout);
 }
