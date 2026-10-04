@@ -34,7 +34,20 @@ dist's CI fails when the workflow and its config disagree, so commit both.
 
 ### Token
 
-The `release-please` workflow authenticates with the `RELEASE_PLEASE_TOKEN` repository secret, a personal access token with read/write access to contents and pull requests on this repository. It cannot use the default `GITHUB_TOKEN`: events caused by `GITHUB_TOKEN` start no workflows, so the tag push would never run the `Release` workflow and the release PR would get no CI.
+The `release-please` workflow authenticates with the `RELEASE_PLEASE_TOKEN` repository secret, a personal access token. It cannot use the default `GITHUB_TOKEN`: events caused by `GITHUB_TOKEN` start no workflows, so the tag push would never run the `Release` workflow and the release PR would get no CI.
+
+The secret is not created by any workflow. A maintainer creates it, and the `release-please` workflow fails until it exists:
+
+1. On GitHub, open Settings, then Developer settings, then Personal access tokens, then Fine-grained tokens, and generate a new token.
+2. Set the resource owner to `AbysmalBiscuit` and repository access to only `AbysmalBiscuit/lazytask`.
+3. Under repository permissions, set Contents and Pull requests to Read and write.
+4. Store the token as the repository secret. `gh` prompts for the value:
+
+```bash
+gh secret set RELEASE_PLEASE_TOKEN -R AbysmalBiscuit/lazytask
+```
+
+When the token expires, the workflow fails again. Generate a new one and set the secret again the same way.
 
 ## Artifacts
 
