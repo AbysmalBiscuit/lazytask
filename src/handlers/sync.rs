@@ -8,7 +8,7 @@ use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::taskchampion::{SyncSettings, TaskChampionIntegration};
-use crate::taskrc::TaskrcFile;
+use crate::taskrc::{TaskrcFile, ENCRYPTION_SECRET};
 use crate::ui::components::sync_config::SyncConfig;
 
 pub use crate::ui::components::sync_config::SyncConfigResult;
@@ -157,7 +157,7 @@ impl SyncHandler {
         Ok(SyncConfig {
             server_url: value(&["sync.server.url", "sync.server.origin"]),
             client_id: value(&["sync.server.client_id"]),
-            encryption_secret: value(&["sync.encryption_secret"]),
+            encryption_secret: value(&[ENCRYPTION_SECRET]),
         })
     }
 
@@ -187,7 +187,7 @@ impl SyncHandler {
         taskrc.set(&[
             ("sync.server.url", &config.server_url),
             ("sync.server.client_id", &config.client_id),
-            ("sync.encryption_secret", &config.encryption_secret),
+            (ENCRYPTION_SECRET, &config.encryption_secret),
         ])?;
 
         let path = taskrc.path().display();

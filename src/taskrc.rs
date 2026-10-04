@@ -14,7 +14,7 @@ use crate::utils::helpers::expand_tilde;
 /// include cycles.
 const MAX_INCLUDE_DEPTH: usize = 10;
 
-const ENCRYPTION_SECRET: &str = "sync.encryption_secret";
+pub const ENCRYPTION_SECRET: &str = "sync.encryption_secret";
 
 /// A taskrc on disk, with the launch environment its includes and values
 /// resolve against.
@@ -167,7 +167,7 @@ impl Taskrc {
         let value = |key| self.get(key).map(str::to_string);
         let value_or_empty = |key| value(key).unwrap_or_default();
         let encryption_secret =
-            || value("sync.encryption_secret").context("sync.encryption_secret is required");
+            || value(ENCRYPTION_SECRET).with_context(|| format!("{ENCRYPTION_SECRET} is required"));
 
         if let Some(server_dir) = self.get("sync.local.server_dir") {
             return Ok(Some(SyncSettings::Local {
@@ -208,11 +208,10 @@ impl Taskrc {
         let Some(url) = value("sync.server.url").or_else(|| value("sync.server.origin")) else {
             return Ok(None);
         };
-        let (Some(client_id), Some(encryption_secret)) = (
-            value("sync.server.client_id"),
-            value("sync.encryption_secret"),
-        ) else {
-            bail!("sync.server.client_id and sync.encryption_secret are required");
+        let (Some(client_id), Some(encryption_secret)) =
+            (value("sync.server.client_id"), value(ENCRYPTION_SECRET))
+        else {
+            bail!("sync.server.client_id and {ENCRYPTION_SECRET} are required");
         };
         Ok(Some(SyncSettings::Server {
             url,
