@@ -761,7 +761,8 @@ async fn an_empty_server_url_is_refused_and_the_modal_keeps_its_fields() -> Resu
     app.wait_for("Server URL is required").await?;
     assert!(!taskrc.exists(), "a refused save wrote the taskrc");
 
-    app.press(KeyCode::Tab);
+    app.press(KeyCode::Down);
+    app.press(KeyCode::Down);
     app.type_text("https://tw.example.com");
     app.press(KeyCode::Enter);
     app.wait_for("Sync settings saved").await?;
@@ -788,21 +789,83 @@ async fn saving_refuses_a_secret_the_taskrc_reads_as_a_comment() -> Result<()> {
 }
 
 #[tokio::test]
-async fn saving_over_a_local_target_notes_that_taskwarrior_still_prefers_it() -> Result<()> {
+async fn saving_under_a_cloud_target_notes_that_taskwarrior_still_prefers_it() -> Result<()> {
     let fx = Fixture::new()?;
-    let local = format!("sync.local.server_dir={}\n", fx.path("server").display());
-    let taskrc = fx.write("taskrc", &local)?;
+    let gcp = "sync.gcp.bucket=tasks\n";
+    let taskrc = fx.write("taskrc", gcp)?;
     #[cfg(unix)]
     set_mode(&taskrc, 0o600)?;
 
     let mut app = fx.launch(&taskrc).await?;
     save_new_server(&app, "s3cret");
-    app.wait_for("Taskwarrior syncs to sync.local.server_dir until it is removed")
+    app.wait_for("Taskwarrior syncs to sync.gcp.bucket until it is removed")
         .await?;
 
     assert_eq!(
         std::fs::read_to_string(&taskrc)?,
-        format!("{local}{}", server_block(CLIENT_ID, "s3cret"))
+        format!("{gcp}{}", server_block(CLIENT_ID, "s3cret"))
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn saving_a_local_server_dir_makes_it_the_sync_target() -> Result<()> {
+    let fx = Fixture::new()?;
+    let taskrc = fx.path("taskrc");
+    let server_dir = fx.path("server");
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.press(KeyCode::Up);
+    app.type_text(&server_dir.display().to_string());
+    app.press(KeyCode::Enter);
+    app.wait_for("Sync settings saved").await?;
+
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!("sync.local.server_dir={}\n", server_dir.display())
+    );
+    assert_eq!(
+        app.app.taskchampion.sync_settings(),
+        Some(&SyncSettings::Local {
+            server_dir: Some(server_dir)
+        })
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn clearing_the_local_server_dir_hands_sync_to_the_server() -> Result<()> {
+    let fx = Fixture::new()?;
+    let server_dir = fx.path("server").display().to_string();
+    let taskrc = fx.write(
+        "taskrc",
+        &format!(
+            "sync.local.server_dir={server_dir}\n{}",
+            server_block(CLIENT_ID, "s3cret")
+        ),
+    )?;
+    #[cfg(unix)]
+    set_mode(&taskrc, 0o600)?;
+
+    let mut app = fx.launch(&taskrc).await?;
+    app.open_sync_modal();
+    app.press(KeyCode::Up);
+    app.retype(&server_dir, "");
+    app.press(KeyCode::Enter);
+    let screen = app.wait_for("Sync settings saved").await?;
+
+    assert!(!screen.contains("Taskwarrior syncs to"), "{screen}");
+    assert_eq!(
+        std::fs::read_to_string(&taskrc)?,
+        format!(
+            "sync.local.server_dir=\n{}",
+            server_block(CLIENT_ID, "s3cret")
+        )
+    );
+    assert!(matches!(
+        app.app.taskchampion.sync_settings(),
+        Some(SyncSettings::Server(_))
+    ));
     Ok(())
 }

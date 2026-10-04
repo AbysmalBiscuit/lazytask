@@ -17,6 +17,8 @@ use crate::ui::theme::Theme;
 #[derive(Debug, Clone, Default)]
 pub struct SyncConfig {
     pub server: ServerSettings,
+    /// `sync.local.server_dir`, which wins over the server when set.
+    pub server_dir: String,
 }
 
 #[derive(Debug, Clone)]
@@ -25,11 +27,12 @@ pub enum SyncConfigResult {
     Cancel,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum Field {
     ServerUrl,
     ClientId,
     EncryptionSecret,
+    LocalServerDir,
 }
 
 impl Field {
@@ -37,15 +40,17 @@ impl Field {
         match self {
             Field::ServerUrl => Field::ClientId,
             Field::ClientId => Field::EncryptionSecret,
-            Field::EncryptionSecret => Field::ServerUrl,
+            Field::EncryptionSecret => Field::LocalServerDir,
+            Field::LocalServerDir => Field::ServerUrl,
         }
     }
 
     fn prev(self) -> Self {
         match self {
-            Field::ServerUrl => Field::EncryptionSecret,
+            Field::ServerUrl => Field::LocalServerDir,
             Field::ClientId => Field::ServerUrl,
             Field::EncryptionSecret => Field::ClientId,
+            Field::LocalServerDir => Field::EncryptionSecret,
         }
     }
 
@@ -54,6 +59,7 @@ impl Field {
             Field::ServerUrl => "Server URL",
             Field::ClientId => "Client ID (UUID)",
             Field::EncryptionSecret => "Encryption Secret",
+            Field::LocalServerDir => "Local server dir (used instead of the server when set)",
         }
     }
 }
@@ -104,6 +110,7 @@ impl SyncConfigWidget {
                         client_id: server.client_id.trim().to_string(),
                         encryption_secret: server.encryption_secret.clone(),
                     },
+                    server_dir: self.values.server_dir.trim().to_string(),
                 };
                 return Ok(Some(SyncConfigResult::Save(config)));
             }
@@ -128,6 +135,7 @@ impl SyncConfigWidget {
             Field::ServerUrl => &mut self.values.server.url,
             Field::ClientId => &mut self.values.server.client_id,
             Field::EncryptionSecret => &mut self.values.server.encryption_secret,
+            Field::LocalServerDir => &mut self.values.server_dir,
         }
     }
 
@@ -136,7 +144,7 @@ impl SyncConfigWidget {
             return;
         }
 
-        let popup = centered_rect(60, 50, area);
+        let popup = centered_rect(60, 60, area);
         f.render_widget(Clear, popup);
 
         let block = Block::default()
@@ -162,19 +170,35 @@ impl SyncConfigWidget {
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
+                Constraint::Length(3),
                 Constraint::Min(1),
             ])
             .split(inner);
 
         let server = &self.values.server;
         self.render_field(f, chunks[0], Field::ServerUrl, &server.url, false, theme);
-        self.render_field(f, chunks[1], Field::ClientId, &server.client_id, false, theme);
+        self.render_field(
+            f,
+            chunks[1],
+            Field::ClientId,
+            &server.client_id,
+            false,
+            theme,
+        );
         self.render_field(
             f,
             chunks[2],
             Field::EncryptionSecret,
             &server.encryption_secret,
             true,
+            theme,
+        );
+        self.render_field(
+            f,
+            chunks[3],
+            Field::LocalServerDir,
+            &self.values.server_dir,
+            false,
             theme,
         );
 
@@ -187,7 +211,7 @@ impl SyncConfigWidget {
             Span::raw(" cancel"),
         ]))
         .alignment(Alignment::Center);
-        f.render_widget(hint, chunks[3]);
+        f.render_widget(hint, chunks[4]);
     }
 
     fn render_field(
@@ -199,13 +223,11 @@ impl SyncConfigWidget {
         mask: bool,
         theme: &Theme,
     ) {
-        let active = matches!(
-            (field, self.field),
-            (Field::ServerUrl, Field::ServerUrl)
-                | (Field::ClientId, Field::ClientId)
-                | (Field::EncryptionSecret, Field::EncryptionSecret)
-        );
-        let border_color = if active { theme.accent } else { theme.muted };
+        let border_color = if field == self.field {
+            theme.accent
+        } else {
+            theme.muted
+        };
         let display: String = if mask {
             "*".repeat(value.chars().count())
         } else {

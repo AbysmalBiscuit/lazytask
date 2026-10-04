@@ -141,9 +141,10 @@ impl SyncHandler {
         }
     }
 
-    /// The sync server the taskrc sets, as far as it is filled in, even when
-    /// it is incomplete or another sync target wins. Empty without a taskrc.
-    pub fn saved_server(&self) -> Result<SyncConfig> {
+    /// The sync server and local server dir the taskrc sets, as far as they
+    /// are filled in, even when incomplete or another sync target wins.
+    /// Empty without a taskrc.
+    pub fn saved_config(&self) -> Result<SyncConfig> {
         let Some(taskrc) = &self.taskrc else {
             return Ok(SyncConfig::default());
         };
@@ -160,34 +161,45 @@ impl SyncHandler {
                 client_id: value(&["sync.server.client_id"]),
                 encryption_secret: value(&[ENCRYPTION_SECRET]),
             },
+            server_dir: value(&["sync.local.server_dir"]),
         })
     }
 
-    /// Saves `config` to the taskrc as its sync server, then syncs to the
-    /// target the taskrc now selects. That stays a local directory or cloud
-    /// bucket while the taskrc names one, as it does for `task sync`.
+    /// Saves `config` to the taskrc, each filled field setting its key and
+    /// each emptied one clearing it, then syncs to the target the taskrc now
+    /// selects. The server fields are required without a local server dir.
+    /// A cloud bucket in the taskrc still wins over the server, as it does
+    /// for `task sync`.
     pub async fn configure_sync(
         &mut self,
         taskchampion: &mut TaskChampionIntegration,
         config: &SyncConfig,
     ) -> Result<String> {
-        let server = &config.server;
-        for (label, value) in [
-            ("Server URL", &server.url),
-            ("Client ID", &server.client_id),
-            ("Encryption secret", &server.encryption_secret),
-        ] {
-            ensure!(!value.is_empty(), "{label} is required");
+        let SyncConfig { server, server_dir } = config;
+        if server_dir.is_empty() {
+            for (label, value) in [
+                ("Server URL", &server.url),
+                ("Client ID", &server.client_id),
+                ("Encryption secret", &server.encryption_secret),
+            ] {
+                ensure!(
+                    !value.is_empty(),
+                    "{label} is required without a local server dir"
+                );
+            }
         }
-        server
-            .client_id
-            .parse::<Uuid>()
-            .context("Client ID must be a UUID")?;
+        if !server.client_id.is_empty() {
+            server
+                .client_id
+                .parse::<Uuid>()
+                .context("Client ID must be a UUID")?;
+        }
         let taskrc = self
             .taskrc
             .as_ref()
             .context("No taskrc to save to: set TASKRC or [taskwarrior] taskrc_path")?;
         taskrc.set(&[
+            ("sync.local.server_dir", server_dir),
             ("sync.server.url", &server.url),
             ("sync.server.client_id", &server.client_id),
             (ENCRYPTION_SECRET, &server.encryption_secret),
@@ -200,8 +212,7 @@ impl SyncHandler {
             .and_then(|target| target.context("it names no sync target"))
             .with_context(|| format!("Saved to {path}, but its sync settings are unusable"))?;
         let preferred_key = match &settings {
-            SyncSettings::Server { .. } => None,
-            SyncSettings::Local { .. } => Some("sync.local.server_dir"),
+            SyncSettings::Server(_) | SyncSettings::Local { .. } => None,
             SyncSettings::Aws { .. } => Some("sync.aws.bucket"),
             SyncSettings::Gcp { .. } => Some("sync.gcp.bucket"),
         };

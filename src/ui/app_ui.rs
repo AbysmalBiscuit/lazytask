@@ -528,7 +528,7 @@ impl AppUI {
                     }
                 }
             }
-            Action::SyncConfig => match sync_handler.saved_server() {
+            Action::SyncConfig => match sync_handler.saved_config() {
                 Ok(saved) => self.sync_config_widget.activate(saved),
                 Err(e) => self.set_status_message(format!("❌ Cannot read the taskrc: {e:#}")),
             },

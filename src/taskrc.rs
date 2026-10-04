@@ -39,7 +39,8 @@ impl TaskrcFile {
 
     /// Sets each changed key on the line that assigns it, or its deprecated
     /// synonym, in whichever file holds it, or appends it to this file,
-    /// created mode 0600 when missing. A file that gets `sync.encryption_secret`
+    /// created mode 0600 when missing. An empty value clears a key that is
+    /// set, as `key=`, which Taskwarrior reads as unset. A file that gets `sync.encryption_secret`
     /// is first made mode 0600 when others can read it. Writes nothing when a
     /// value would not read back as given or that file cannot be made private.
     pub fn set(&self, assignments: &[(&str, &str)]) -> Result<()> {
@@ -48,16 +49,18 @@ impl TaskrcFile {
         let mut appended = Vec::new();
         let mut secret_file = None;
         for &(key, value) in assignments {
-            ensure_reads_back(key, value, &self.env)?;
             let current = taskrc
                 .values
                 .get(key)
                 .or_else(|| deprecated_synonym(key).and_then(|synonym| taskrc.values.get(synonym)));
-            if current.is_some_and(|assigned| assigned.value == value) {
+            if current.map_or(value.is_empty(), |assigned| assigned.value == value) {
                 continue;
             }
-            if key == ENCRYPTION_SECRET {
-                secret_file = Some(current.map_or(&self.path, |assigned| &assigned.file));
+            if !value.is_empty() {
+                ensure_reads_back(key, value, &self.env)?;
+                if key == ENCRYPTION_SECRET {
+                    secret_file = Some(current.map_or(&self.path, |assigned| &assigned.file));
+                }
             }
             match current {
                 Some(assigned) => edits

@@ -136,11 +136,25 @@ As in Taskwarrior's `task sync`, the first target whose key is set wins:
 3. `sync.gcp.bucket`: a Google Cloud Storage bucket. Needs `sync.encryption_secret`; `sync.gcp.credential_path` names a service-account key, otherwise Application Default Credentials are used
 4. `sync.server.url`, or its deprecated synonym `sync.server.origin` (`sync.server.url` wins): a TaskChampion sync server. Needs `sync.server.client_id` (a UUID) and `sync.encryption_secret`
 
-When a target is set, sync works from launch without the sync config modal. If the target is missing a key it needs, sync stays unconfigured and lazytask shows a warning at startup. The sync config modal only sets up a sync server; cloud buckets are configured through the taskrc.
+When a target is set, sync works from launch without the sync config modal. If the target is missing a key it needs, sync stays unconfigured and lazytask shows a warning at startup. The sync config modal sets up a sync server or a local directory; cloud buckets are configured through the taskrc.
 
 #### Saving the sync config modal
 
-The sync config modal (`Shift+S`) opens filled in with the taskrc's `sync.server.url` (or `sync.server.origin`), `sync.server.client_id` and `sync.encryption_secret`, as far as they are set, even when they are incomplete or another target wins. Saving it writes `sync.server.url`, `sync.server.client_id` and `sync.encryption_secret` to the taskrc lazytask read at startup, so `task sync` and the next launch use them:
+The sync config modal (`Shift+S`) has four fields, each standing for one taskrc key:
+
+| Field | Key |
+|-------|-----|
+| Server URL | `sync.server.url`, filled from `sync.server.origin` when only that is set |
+| Client ID | `sync.server.client_id` |
+| Encryption Secret | `sync.encryption_secret` |
+| Local server dir | `sync.local.server_dir` |
+
+It opens filled in with the taskrc's values, as far as they are set, even when they are incomplete or another target wins. Saving it writes them to the taskrc lazytask read at startup, so `task sync` and the next launch use them. A filled field sets its key. An emptied field clears a key that is set by writing `key=`, which Taskwarrior and lazytask read as unset.
+
+With the local server dir filled in, sync goes to that directory and the server fields are optional. With it empty, the server URL, client ID and secret are required, and sync goes to the server.
+
+How a save edits the taskrc:
+
 
 - A key already assigned is changed on the line of the assignment in effect, in whichever file holds it, included files too. The line keeps its indentation and any comment after the value. A `sync.server.origin` line, when it is the only server URL, is rewritten as `sync.server.url`.
 - A key assigned nowhere is appended to the main taskrc, using its line ending (`\n` or `\r\n`). With no taskrc at that path, one is created holding only the sync keys, readable only by you (mode 0600).
@@ -148,11 +162,11 @@ The sync config modal (`Shift+S`) opens filled in with the taskrc's `sync.server
 - Every other line, comment and include stays as it was.
 - The file that gets `sync.encryption_secret` is set to mode 0600 first when other users can read it.
 
-lazytask then syncs to the target the saved taskrc selects. While the taskrc also sets `sync.local.server_dir`, `sync.aws.bucket` or `sync.gcp.bucket`, that target still wins, as it does for `task sync`, and the footer says so until you remove it.
+lazytask then syncs to the target the saved taskrc selects. While the taskrc also sets `sync.aws.bucket` or `sync.gcp.bucket`, that bucket still wins over the server, as it does for `task sync`, and the footer says so until you remove it.
 
 A save is refused, and nothing is written, when:
 
-- A field is empty, or the client ID is not a UUID
+- The local server dir is empty and a server field is empty, or the client ID is not a UUID
 - A value would not read back as typed: a taskrc value cannot contain `#` or start or end with a space, and a leading `~` or a `$NAME` in it expands
 - `sync.encryption_secret` would go into a file other users can read, and lazytask cannot change its mode, for example because you do not own it. Make the file the message names private with `chmod 600`, then save again
 
