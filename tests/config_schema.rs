@@ -101,6 +101,21 @@ fn schema_init_adds_the_header_when_a_directive_sits_below_toml() {
 }
 
 #[test]
+fn schema_init_updates_the_config_flag_file_given_after_the_subcommand() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let original = "[ui]\nshow_help_bar = false\n";
+    std::fs::write(&path, original).unwrap();
+
+    lazytask(&["schema", "init", "--config", path.to_str().unwrap()]);
+
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        format!("#:schema {SCHEMA_ID}\n{original}")
+    );
+}
+
+#[test]
 fn schema_init_writes_a_starter_that_loads_as_the_defaults() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("lazytask").join("config.toml");

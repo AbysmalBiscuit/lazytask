@@ -15,7 +15,7 @@ use lazytask::schema::{self, InitOutcome};
 )]
 struct Cli {
     /// Configuration file path
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     config: Option<String>,
 
     /// Verbose output
