@@ -104,7 +104,7 @@ fn data_location_defaults_to_dot_task_in_home() -> anyhow::Result<()> {
 
     let location = config
         .taskwarrior
-        .resolve_data_location(None, Path::new("/home/me"));
+        .resolve_data_location(None, Some(Path::new("/home/me")))?;
 
     assert_eq!(location, PathBuf::from("/home/me/.task"));
     Ok(())
@@ -116,7 +116,7 @@ fn taskdata_wins_over_the_home_default() -> anyhow::Result<()> {
 
     let location = config
         .taskwarrior
-        .resolve_data_location(Some("/srv/tasks".into()), Path::new("/home/me"));
+        .resolve_data_location(Some("/srv/tasks".into()), Some(Path::new("/home/me")))?;
 
     assert_eq!(location, PathBuf::from("/srv/tasks"));
     Ok(())
@@ -128,7 +128,7 @@ fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Res
 
     let location = config
         .taskwarrior
-        .resolve_data_location(Some("/srv/tasks".into()), Path::new("/home/me"));
+        .resolve_data_location(Some("/srv/tasks".into()), Some(Path::new("/home/me")))?;
 
     assert_eq!(location, PathBuf::from("/opt/tasks"));
     Ok(())
@@ -140,7 +140,7 @@ fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
 
     let location = config
         .taskwarrior
-        .resolve_data_location(None, Path::new("/home/me"));
+        .resolve_data_location(None, Some(Path::new("/home/me")))?;
 
     assert_eq!(location, PathBuf::from("/home/me/tasks/db"));
     Ok(())
@@ -152,8 +152,30 @@ fn leading_tilde_in_taskdata_expands_to_home() -> anyhow::Result<()> {
 
     let location = config
         .taskwarrior
-        .resolve_data_location(Some("~/tilde".into()), Path::new("/home/me"));
+        .resolve_data_location(Some("~/tilde".into()), Some(Path::new("/home/me")))?;
 
     assert_eq!(location, PathBuf::from("/home/me/tilde"));
+    Ok(())
+}
+
+#[test]
+fn absolute_taskdata_resolves_without_a_home_directory() -> anyhow::Result<()> {
+    let config = load_toml("")?.config;
+
+    let location = config
+        .taskwarrior
+        .resolve_data_location(Some("/srv/tasks".into()), None)?;
+
+    assert_eq!(location, PathBuf::from("/srv/tasks"));
+    Ok(())
+}
+
+#[test]
+fn home_default_without_a_home_directory_is_an_error() -> anyhow::Result<()> {
+    let config = load_toml("")?.config;
+
+    let result = config.taskwarrior.resolve_data_location(None, None);
+
+    assert!(result.is_err(), "resolved {:?}", result);
     Ok(())
 }
