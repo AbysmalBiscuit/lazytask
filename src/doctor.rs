@@ -19,6 +19,7 @@ use crate::schema::has_schema_header;
 use crate::taskchampion::SyncSettings;
 use crate::taskrc::Taskrc;
 
+/// How a check or finding came out, ordered from best to worst.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Status {
     /// Not run; its finding says why.
@@ -41,6 +42,7 @@ impl Status {
     }
 }
 
+/// One thing a check found, with how serious it is.
 #[derive(Debug, Clone)]
 pub struct Finding {
     pub status: Status,
@@ -96,12 +98,14 @@ impl Check {
     }
 }
 
+/// Every check doctor ran, in the order it ran them.
 #[derive(Debug, Clone)]
 pub struct Report {
     pub checks: Vec<Check>,
 }
 
 impl Report {
+    /// Whether any check failed, which makes doctor exit non-zero.
     pub fn failed(&self) -> bool {
         self.checks
             .iter()

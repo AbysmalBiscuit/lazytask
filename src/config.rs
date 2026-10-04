@@ -155,6 +155,7 @@ pub enum PathSource {
     Default,
 }
 
+/// A resolved taskrc or data directory path and where it came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedPath {
     pub path: PathBuf,
