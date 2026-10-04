@@ -48,7 +48,6 @@
 
 - ✅ `config/default.toml` - Main application settings
 - ✅ `config/themes.toml` - 4 complete themes (Catppuccin, Dracula, Gruvbox)
-- ✅ `config/keybindings.toml` - Comprehensive keyboard shortcuts
 - ✅ Auto-detection of `~/.taskrc` and `TASKDATA` paths
 - ✅ Environment variable support (`TASKRC`, `XDG_CONFIG_HOME`)
 
