@@ -142,6 +142,25 @@ impl Default for SyncConfig {
     }
 }
 
+/// Where a resolved taskrc or data directory path came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathSource {
+    /// lazytask's config file.
+    Config,
+    /// `TASKRC` for the taskrc, `TASKDATA` for the data directory.
+    EnvVar,
+    /// The taskrc's `data.location`.
+    Taskrc,
+    /// A location Taskwarrior reads when nothing names one.
+    Default,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedPath {
+    pub path: PathBuf,
+    pub source: PathSource,
+}
+
 impl TaskwarriorConfig {
     /// The taskrc to read, found the way Taskwarrior finds it: `taskrc_path`,
     /// then `taskrc_var` (the `TASKRC` variable), then `~/.taskrc` if it
@@ -154,17 +173,26 @@ impl TaskwarriorConfig {
         taskrc_var: Option<OsString>,
         xdg_config_home_var: Option<OsString>,
         home: Option<&Path>,
-    ) -> Result<Option<PathBuf>> {
+    ) -> Result<Option<ResolvedPath>> {
         let named = self
             .taskrc_path
             .clone()
-            .or_else(|| taskrc_var.filter(|v| !v.is_empty()).map(PathBuf::from));
-        if let Some(path) = named {
-            return expand_tilde(&path, home).map(Some);
+            .map(|path| (path, PathSource::Config))
+            .or_else(|| {
+                taskrc_var
+                    .filter(|v| !v.is_empty())
+                    .map(|var| (PathBuf::from(var), PathSource::EnvVar))
+            });
+        if let Some((path, source)) = named {
+            let path = expand_tilde(&path, home)?;
+            return Ok(Some(ResolvedPath { path, source }));
         }
         let home_taskrc = home.map(|home| home.join(".taskrc"));
         if home_taskrc.as_ref().is_some_and(|path| path.exists()) {
-            return Ok(home_taskrc);
+            return Ok(home_taskrc.map(|path| ResolvedPath {
+                path,
+                source: PathSource::Default,
+            }));
         }
         let config_home = match xdg_config_home_var.filter(|v| !v.is_empty()) {
             Some(var) => Some(expand_tilde(Path::new(&var), home)?),
@@ -173,7 +201,10 @@ impl TaskwarriorConfig {
         let xdg_taskrc = config_home
             .map(|config_home| config_home.join("task").join("taskrc"))
             .filter(|path| path.exists());
-        Ok(xdg_taskrc.or(home_taskrc))
+        Ok(xdg_taskrc.or(home_taskrc).map(|path| ResolvedPath {
+            path,
+            source: PathSource::Default,
+        }))
     }
 
     /// The TaskChampion data directory, first match wins: `data_location`,
@@ -185,14 +216,22 @@ impl TaskwarriorConfig {
         taskdata_var: Option<OsString>,
         taskrc: &Taskrc,
         home: Option<&Path>,
-    ) -> Result<PathBuf> {
-        let location = self
+    ) -> Result<ResolvedPath> {
+        let (location, source) = self
             .data_location
             .clone()
-            .or_else(|| taskdata_var.map(PathBuf::from))
-            .or_else(|| taskrc.data_location())
-            .unwrap_or_else(|| PathBuf::from("~/.task"));
-        expand_tilde(&location, home)
+            .map(|path| (path, PathSource::Config))
+            .or_else(|| taskdata_var.map(|var| (PathBuf::from(var), PathSource::EnvVar)))
+            .or_else(|| {
+                taskrc
+                    .data_location()
+                    .map(|path| (path, PathSource::Taskrc))
+            })
+            .unwrap_or_else(|| (PathBuf::from("~/.task"), PathSource::Default));
+        Ok(ResolvedPath {
+            path: expand_tilde(&location, home)?,
+            source,
+        })
     }
 }
 
@@ -256,8 +295,13 @@ impl Config {
             }
         };
 
+        Self::parse(&config_contents)
+    }
+
+    /// Parses the contents of a config file.
+    pub fn parse(contents: &str) -> Result<LoadedConfig> {
         let mut unknown_keys = Vec::new();
-        let config = toml::de::Deserializer::parse(&config_contents)
+        let config = toml::de::Deserializer::parse(contents)
             .and_then(|document| {
                 serde_ignored::deserialize(document, |path| unknown_keys.push(path.to_string()))
             })

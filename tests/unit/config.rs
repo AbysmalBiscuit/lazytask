@@ -136,7 +136,7 @@ fn data_location_defaults_to_dot_task_in_home() -> anyhow::Result<()> {
         Some(Path::new("/home/me")),
     )?;
 
-    assert_eq!(location, PathBuf::from("/home/me/.task"));
+    assert_eq!(location.path, PathBuf::from("/home/me/.task"));
     Ok(())
 }
 
@@ -150,7 +150,7 @@ fn taskdata_wins_over_the_home_default() -> anyhow::Result<()> {
         Some(Path::new("/home/me")),
     )?;
 
-    assert_eq!(location, PathBuf::from("/srv/tasks"));
+    assert_eq!(location.path, PathBuf::from("/srv/tasks"));
     Ok(())
 }
 
@@ -164,7 +164,7 @@ fn config_data_location_wins_over_taskdata_and_the_home_default() -> anyhow::Res
         Some(Path::new("/home/me")),
     )?;
 
-    assert_eq!(location, PathBuf::from("/opt/tasks"));
+    assert_eq!(location.path, PathBuf::from("/opt/tasks"));
     Ok(())
 }
 
@@ -178,7 +178,7 @@ fn leading_tilde_in_data_location_expands_to_home() -> anyhow::Result<()> {
         Some(Path::new("/home/me")),
     )?;
 
-    assert_eq!(location, PathBuf::from("/home/me/tasks/db"));
+    assert_eq!(location.path, PathBuf::from("/home/me/tasks/db"));
     Ok(())
 }
 
@@ -192,7 +192,7 @@ fn leading_tilde_in_taskdata_expands_to_home() -> anyhow::Result<()> {
         Some(Path::new("/home/me")),
     )?;
 
-    assert_eq!(location, PathBuf::from("/home/me/tilde"));
+    assert_eq!(location.path, PathBuf::from("/home/me/tilde"));
     Ok(())
 }
 
@@ -206,7 +206,7 @@ fn absolute_taskdata_resolves_without_a_home_directory() -> anyhow::Result<()> {
         None,
     )?;
 
-    assert_eq!(location, PathBuf::from("/srv/tasks"));
+    assert_eq!(location.path, PathBuf::from("/srv/tasks"));
     Ok(())
 }
 
