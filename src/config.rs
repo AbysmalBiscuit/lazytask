@@ -94,7 +94,8 @@ fn action_keys<A: Bindable + IntoEnumIterator>(_: &mut SchemaGenerator) -> Schem
 #[serde(default)]
 pub struct TaskwarriorConfig {
     /// The taskrc to read. Empty or absent means the `TASKRC` variable, then
-    /// `~/.taskrc`.
+    /// `~/.taskrc`, or `$XDG_CONFIG_HOME/task/taskrc` (`~/.config/task/taskrc`
+    /// when that variable is unset) when only that file exists.
     #[serde(deserialize_with = "empty_path_as_none")]
     pub taskrc_path: Option<PathBuf>,
     /// The task data directory. Empty or absent means the `TASKDATA`
@@ -142,23 +143,36 @@ impl Default for SyncConfig {
 }
 
 impl TaskwarriorConfig {
-    /// The taskrc to read, first match wins: `taskrc_path`, then `taskrc_var`
-    /// (the `TASKRC` variable), then `~/.taskrc`. `None` when nothing names
-    /// one and there is no home directory.
+    /// The taskrc to read, found the way Taskwarrior finds it: `taskrc_path`,
+    /// then `taskrc_var` (the `TASKRC` variable), then `~/.taskrc` if it
+    /// exists, then `xdg_config_home_var` (the `XDG_CONFIG_HOME` variable,
+    /// `~/.config` when unset or empty) joined with `task/taskrc` if that
+    /// exists, then `~/.taskrc`. `None` when none of these is named or found
+    /// and there is no home directory.
     pub fn resolve_taskrc_path(
         &self,
         taskrc_var: Option<OsString>,
+        xdg_config_home_var: Option<OsString>,
         home: Option<&Path>,
     ) -> Result<Option<PathBuf>> {
         let named = self
             .taskrc_path
             .clone()
             .or_else(|| taskrc_var.filter(|v| !v.is_empty()).map(PathBuf::from));
-        match (named, home) {
-            (Some(path), _) => expand_tilde(&path, home).map(Some),
-            (None, Some(home)) => Ok(Some(home.join(".taskrc"))),
-            (None, None) => Ok(None),
+        if let Some(path) = named {
+            return expand_tilde(&path, home).map(Some);
         }
+        let home_taskrc = home.map(|home| home.join(".taskrc"));
+        if home_taskrc.as_ref().is_some_and(|path| path.exists()) {
+            return Ok(home_taskrc);
+        }
+        let xdg_taskrc = xdg_config_home_var
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| home.map(|home| home.join(".config")))
+            .map(|config_home| config_home.join("task").join("taskrc"))
+            .filter(|path| path.exists());
+        Ok(xdg_taskrc.or(home_taskrc))
     }
 
     /// The TaskChampion data directory, first match wins: `data_location`,
