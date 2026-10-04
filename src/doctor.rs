@@ -228,14 +228,23 @@ fn check_taskrc(config: &Config, env: &LaunchEnv) -> (Check, Taskrc) {
         PathSource::Taskrc | PathSource::Default => "default",
     };
     let mut check = Check::new(NAME, path.display(), label);
-    if !path.exists() {
-        let message = "not found, so Taskwarrior's defaults apply";
-        if source == PathSource::Default {
-            check.note(message);
-        } else {
-            check.warn(message);
+    match path.try_exists() {
+        Ok(true) => {}
+        Ok(false) => {
+            let message = "not found, so Taskwarrior's defaults apply";
+            if source == PathSource::Default {
+                check.note(message);
+            } else {
+                check.warn(message);
+            }
+            return (check, Taskrc::default());
         }
-        return (check, Taskrc::default());
+        Err(err) => {
+            check.fail(format!(
+                "cannot be checked: {err}; the later checks read no taskrc"
+            ));
+            return (check, Taskrc::default());
+        }
     }
     match Taskrc::load(&path, env) {
         Ok(taskrc) => (check, taskrc),
@@ -273,9 +282,18 @@ async fn check_data_dir(
         PathSource::Default => "default",
     };
     let mut check = Check::new(NAME, path.display(), source);
-    if !path.exists() {
-        check.warn("does not exist; lazytask creates it on first start");
-    } else if !path.is_dir() {
+    match path.try_exists() {
+        Ok(true) => {}
+        Ok(false) => {
+            check.warn("does not exist; lazytask creates it on first start");
+            return (check, Some(path));
+        }
+        Err(err) => {
+            check.fail(format!("cannot be checked: {err}"));
+            return (check, Some(path));
+        }
+    }
+    if !path.is_dir() {
         check.fail("is not a directory");
     } else if !path.join(REPLICA_FILE).exists() {
         check.warn(format!(

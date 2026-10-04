@@ -393,3 +393,23 @@ fn invalid_sync_settings_fail() {
     assert!(check.starts_with("[fail]"), "{check}");
     assert!(check.contains("client_id must be a UUID"), "{check}");
 }
+
+#[cfg(unix)]
+#[test]
+fn taskrc_in_an_unsearchable_directory_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let doctor = Doctor::new();
+    doctor.clean_default_config();
+    let taskrc = doctor.file("locked/taskrc", "");
+    let locked = taskrc.parent().unwrap().to_path_buf();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let doctor = doctor.env("TASKRC", &taskrc);
+
+    let run = doctor.run(&[]);
+
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let check = run.check("Taskrc");
+    assert!(check.starts_with("[fail]"), "{check}");
+    assert!(!run.success, "exited zero:\n{}", run.stdout);
+}
