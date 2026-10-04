@@ -82,17 +82,19 @@ impl Fixture {
         }
     }
 
-    /// Writes a taskrc at `rel`, creating its directories, whose
-    /// `data.location` is `data/<name>`.
-    fn taskrc_naming(&self, rel: &str, name: &str) -> Result<PathBuf> {
+    /// `data_subdir` is a directory under `data/`.
+    fn write_taskrc_with_data(&self, rel: &str, data_subdir: &str) -> Result<PathBuf> {
         let path = self.path(rel);
         std::fs::create_dir_all(path.parent().unwrap())?;
-        std::fs::write(&path, self.data_location_line(name))?;
+        std::fs::write(&path, self.data_location_line(data_subdir))?;
         Ok(path)
     }
 
-    fn data_location_line(&self, name: &str) -> String {
-        format!("data.location={}\n", self.path("data").join(name).display())
+    fn data_location_line(&self, data_subdir: &str) -> String {
+        format!(
+            "data.location={}\n",
+            self.path("data").join(data_subdir).display()
+        )
     }
 }
 
@@ -349,8 +351,8 @@ async fn variables_expand_in_include_paths_and_values() -> Result<()> {
 #[tokio::test]
 async fn without_a_home_taskrc_the_xdg_taskrc_names_the_replica() -> Result<()> {
     let fx = Fixture::new()?;
-    fx.taskrc_naming("home/.config/task/taskrc", "dot-config")?;
-    fx.taskrc_naming("xdg/task/taskrc", "xdg")?;
+    fx.write_taskrc_with_data("home/.config/task/taskrc", "dot-config")?;
+    fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
     std::fs::create_dir(fx.path("empty-xdg"))?;
 
     for (env, expected) in [
@@ -376,10 +378,10 @@ async fn without_a_home_taskrc_the_xdg_taskrc_names_the_replica() -> Result<()> 
 #[tokio::test]
 async fn taskrc_precedence_is_config_then_taskrc_var_then_home_then_xdg() -> Result<()> {
     let fx = Fixture::new()?;
-    fx.taskrc_naming("xdg/task/taskrc", "xdg")?;
-    let home = fx.taskrc_naming("home/.taskrc", "home")?;
-    let var = fx.taskrc_naming("var.taskrc", "var")?;
-    let named = fx.taskrc_naming("named.taskrc", "config")?;
+    fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
+    let home = fx.write_taskrc_with_data("home/.taskrc", "home")?;
+    let var = fx.write_taskrc_with_data("var.taskrc", "var")?;
+    let named = fx.write_taskrc_with_data("named.taskrc", "config")?;
     let config = fx.write(
         "config.toml",
         &format!("[taskwarrior]\ntaskrc_path = \"{}\"\n", named.display()),
@@ -843,7 +845,7 @@ async fn saving_without_a_taskrc_creates_one_holding_only_the_sync_keys() -> Res
 #[tokio::test]
 async fn saving_with_only_an_xdg_taskrc_writes_into_it() -> Result<()> {
     let fx = Fixture::new()?;
-    let xdg_taskrc = fx.taskrc_naming("xdg/task/taskrc", "xdg")?;
+    let xdg_taskrc = fx.write_taskrc_with_data("xdg/task/taskrc", "xdg")?;
 
     let mut app = fx.launch_with(fx.xdg_env("xdg")).await?;
     save_new_server(&app, "s3cret");
