@@ -138,30 +138,9 @@ async fn unknown_config_keys_are_named_in_tui_warning() {
     )
     .expect("write config");
 
-    let mut session = Session::open(
-        Some(config_path.to_str().unwrap()),
-        LaunchEnv {
-            taskrc_var: Some(tmp.path().join("no-taskrc").into()),
-            taskdata_var: Some(tmp.path().join("data").into()),
-            home: None,
-            ..LaunchEnv::default()
-        },
-    )
-    .await
-    .expect("session opens");
+    let session = open_session(&tmp, &config_path).await;
     assert!(!session.config.ui.show_help_bar);
-
-    let mut ui = AppUI::new(&session.config).expect("AppUI::new");
-    ui.show_config_warnings(&session.warnings);
-    let sync_handler = SyncHandler::new();
-    ui.load_tasks(&mut session.taskchampion)
-        .await
-        .expect("load_tasks");
-
-    let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
-    terminal
-        .draw(|f| ui.render_with_sync(f, &sync_handler))
-        .expect("draw");
+    let terminal = render_session(session).await;
 
     assert!(
         buffer_contains(&terminal, "ui.colour"),
@@ -200,19 +179,47 @@ fn lazytask_refuses_to_start_when_quit_has_no_key() {
     );
 }
 
-async fn render_with_config(cfg: Config) -> Terminal<TestBackend> {
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
+/// Opens a session from `config_path` the way startup does, with no taskrc.
+async fn open_session(tmp: &tempfile::TempDir, config_path: &std::path::Path) -> Session {
+    Session::open(
+        Some(config_path.to_str().unwrap()),
+        LaunchEnv {
+            taskrc_var: Some(tmp.path().join("no-taskrc").into()),
+            taskdata_var: Some(tmp.path().join("data").into()),
+            home: None,
+            ..LaunchEnv::default()
+        },
+    )
+    .await
+    .expect("session opens")
+}
+
+/// Builds the UI for `session` the way startup does, startup warnings
+/// included, and draws one frame.
+async fn render_session(mut session: Session) -> Terminal<TestBackend> {
+    let mut ui = AppUI::new(&session.config).expect("AppUI::new");
+    ui.show_config_warnings(&session.warnings);
+    ui.load_tasks(&mut session.taskchampion)
         .await
-        .expect("engine");
-    let mut ui = AppUI::new(&cfg).expect("AppUI::new");
-    ui.show_config_warnings(&[]);
-    ui.load_tasks(&mut engine).await.expect("load_tasks");
+        .expect("load_tasks");
     let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
     terminal
         .draw(|f| ui.render_with_sync(f, &SyncHandler::new()))
         .expect("draw");
     terminal
+}
+
+async fn render_with_config(config: Config) -> Terminal<TestBackend> {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let taskchampion = TaskChampionIntegration::new(tmp.path().to_path_buf())
+        .await
+        .expect("engine");
+    render_session(Session {
+        config,
+        warnings: Vec::new(),
+        taskchampion,
+    })
+    .await
 }
 
 #[tokio::test]
@@ -268,16 +275,13 @@ async fn unknown_default_view_warns_and_opens_task_list() {
 #[tokio::test]
 async fn config_warnings_and_unknown_keys_show_together() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let mut ui = AppUI::new(&with_default_view("kanban")).expect("AppUI::new");
-    ui.show_config_warnings(&["Unknown config keys: ui.colour".to_string()]);
-    let mut engine = TaskChampionIntegration::new(tmp.path().to_path_buf())
-        .await
-        .expect("engine");
-    ui.load_tasks(&mut engine).await.expect("load_tasks");
-    let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
-    terminal
-        .draw(|f| ui.render_with_sync(f, &SyncHandler::new()))
-        .expect("draw");
+    let config_path = tmp.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[ui]\ndefault_view = \"kanban\"\ncolour = \"red\"\n",
+    )
+    .expect("write config");
+    let terminal = render_session(open_session(&tmp, &config_path).await).await;
 
     assert!(buffer_contains(&terminal, "kanban"), "view warning missing");
     assert!(
