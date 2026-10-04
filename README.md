@@ -213,7 +213,15 @@ echo "Use this client_id in LazyTask: $CLIENT_ID"
 4. Press **Enter** to save, **Esc** to close the modal.
 5. Press **`s`** to sync.
 
-> ⚠️ Sync settings are currently **held in memory only** and not persisted across launches. You must re-enter them each session. Persistent storage is on the roadmap.
+Settings entered in the modal last only for the session. To keep them, put them in your taskrc, where `task` reads them too; lazytask configures sync from it at startup:
+
+```ini
+sync.server.url=http://localhost:8810
+sync.server.client_id=<CLIENT_ID>
+sync.encryption_secret=<secret>
+```
+
+See [Configuration](docs/configuration.md#taskrc) for the keys lazytask reads.
 
 ## Architecture
 
@@ -289,7 +297,8 @@ lazytask shares Taskwarrior's TaskChampion database. The data directory resolves
 
 1. `[taskwarrior] data_location` in the lazytask config
 2. The `TASKDATA` environment variable
-3. `~/.task`, Taskwarrior's default
+3. `data.location` in your taskrc
+4. `~/.task`, Taskwarrior's default
 
 A leading `~` in the chosen path expands to the home directory.
 

@@ -64,9 +64,23 @@ Available columns:
 
 ```toml
 [taskwarrior]
-taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset (auto-detect)
-data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then ~/.task
+taskrc_path = "/path/to/.taskrc"     # Empty string or absent means unset: TASKRC, then ~/.taskrc
+data_location = "~/path/to/data"     # Empty string or absent means unset: TASKDATA, then the taskrc, then ~/.task
 ```
+
+### Taskrc
+
+lazytask reads Taskwarrior's taskrc at startup, so it stores and syncs tasks where `task` does. It never writes to the taskrc. A missing taskrc is not an error.
+
+The file follows taskrc(5): `key=value` lines, `#` comments, and `include <file>`, where a relative include path is taken from the directory of the file that includes it and a leading `~` is the home directory. A later assignment overrides an earlier one. Any other line stops startup with an error naming its file and line number.
+
+lazytask uses these keys:
+
+- `data.location`: the data directory, when neither `[taskwarrior] data_location` nor `TASKDATA` is set
+- `sync.local.server_dir`: sync to a local directory; takes precedence over a sync server, as in Taskwarrior
+- `sync.server.url` (or its deprecated synonym `sync.server.origin`; `sync.server.url` wins), `sync.server.client_id`, `sync.encryption_secret`: sync to a TaskChampion sync server
+
+When either sync target is set, sync works from launch without the sync config modal. The GCP and AWS sync keys are not read, since lazytask does not support those backends.
 
 ### Keybindings
 
