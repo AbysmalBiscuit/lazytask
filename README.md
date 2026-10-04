@@ -253,7 +253,7 @@ src/
     └── validation.rs
 ```
 
-The data flow is simple: `App::run` polls crossterm events, `InputHandler` maps each `KeyEvent` to an `Action`, and `AppUI::handle_action` mutates the engine and view state. The engine (`TaskChampionIntegration`) builds `Operations` and commits them to the replica via TaskChampion's API. There is **no CLI shim, no JSON IPC, no `task` invocation** — every read and write goes through the embedded SQLite-backed replica.
+The data flow is simple: `App::run` polls crossterm events, `AppUI::action` maps each `KeyEvent` to an `Action` through the keymap, and `AppUI::handle_action` mutates the engine and view state. The engine (`TaskChampionIntegration`) builds `Operations` and commits them to the replica via TaskChampion's API. There is **no CLI shim, no JSON IPC, no `task` invocation** — every read and write goes through the embedded SQLite-backed replica.
 
 ## Configuration
 

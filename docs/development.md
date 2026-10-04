@@ -66,7 +66,7 @@ src/
 │   └── themes.rs        # Color schemes
 │
 ├── handlers/            # Event and command processing
-│   ├── input.rs         # Key/mouse input processing
+│   ├── input.rs         # The Action enum
 │   ├── commands.rs      # Command validation/execution
 │   ├── navigation.rs    # View switching logic
 │   └── sync.rs          # Background sync operations
@@ -106,7 +106,6 @@ pub struct App {
     pub config: Config,
     pub terminal: AppTerminal,
     pub ui: AppUI,
-    pub input_handler: InputHandler,
     pub should_quit: bool,
 }
 ```

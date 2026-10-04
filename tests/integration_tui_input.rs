@@ -1,5 +1,5 @@
 // Headless TUI input tests. Drives the same pipeline the live binary uses
-// (InputHandler -> Action -> AppUI::handle_action) with synthetic crossterm
+// (AppUI::action -> Action -> AppUI::handle_action) with synthetic crossterm
 // KeyEvents, then renders into a TestBackend so we can assert both
 // state changes (engine contents, has_active_form, status messages) and
 // what the user actually sees on screen.
@@ -8,11 +8,10 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use lazytask::config::Config;
 use lazytask::data::models::TaskStatus;
-use lazytask::handlers::input::{Action, InputHandler};
+use lazytask::handlers::input::Action;
 use lazytask::handlers::sync::SyncHandler;
 use lazytask::taskchampion::TaskChampionIntegration;
 use lazytask::ui::app_ui::AppUI;
-use lazytask::utils::keybindings::InputContext;
 use ratatui::{backend::TestBackend, Terminal};
 use tempfile::TempDir;
 
@@ -20,7 +19,6 @@ struct Driver {
     ui: AppUI,
     engine: TaskChampionIntegration,
     sync_handler: SyncHandler,
-    input: InputHandler,
     terminal: Terminal<TestBackend>,
     quit: bool,
     _tmp: TempDir,
@@ -52,13 +50,11 @@ impl Driver {
         let mut sync_handler = SyncHandler::new();
         let engine = TaskChampionIntegration::new(tmp.path().to_path_buf()).await?;
         sync_handler.initialize(&engine)?;
-        let input = InputHandler::new(&cfg);
         let terminal = Terminal::new(TestBackend::new(width, height))?;
         Ok(Driver {
             ui,
             engine,
             sync_handler,
-            input,
             terminal,
             quit: false,
             _tmp: tmp,
@@ -80,9 +76,7 @@ impl Driver {
     /// Drives one keystroke through the same pipeline as App::run.
     async fn press(&mut self, code: KeyCode, mods: KeyModifiers) -> Result<Action> {
         let event = KeyEvent::new(code, mods);
-        let action = self
-            .input
-            .handle_key_event_with_context(event, self.ui.input_context());
+        let action = self.ui.action(event);
         match action {
             Action::Quit => {
                 self.quit = true;
@@ -205,7 +199,7 @@ async fn unusable_keybindings_warn_and_keep_the_default() -> Result<()> {
 
 #[tokio::test]
 async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
-    let d = Driver::from_toml(
+    let mut d = Driver::from_toml(
         120,
         40,
         "[keybindings.global]\nhelp = \"f2\"\nrefresh = \"Ctrl++\"\nreports = \"Alt+Home\"\n\n\
@@ -213,54 +207,32 @@ async fn key_strings_parse_to_the_keys_terminals_send() -> Result<()> {
          [keybindings.form]\nnext_field = \"Shift+Tab\"\nprev_field = \"Ctrl+Shift+x\"\n",
     )
     .await?;
+    d.load().await?;
 
-    for (code, mods, context, expected) in [
-        (
-            KeyCode::F(2),
-            KeyModifiers::NONE,
-            InputContext::TaskList,
-            Action::Help,
-        ),
-        (
-            KeyCode::Char('+'),
-            KeyModifiers::CONTROL,
-            InputContext::TaskList,
-            Action::Refresh,
-        ),
-        (
-            KeyCode::Home,
-            KeyModifiers::ALT,
-            InputContext::TaskList,
-            Action::Reports,
-        ),
-        (
-            KeyCode::Insert,
-            KeyModifiers::NONE,
-            InputContext::TaskList,
-            Action::AddTask,
-        ),
-        (
-            KeyCode::Char(' '),
-            KeyModifiers::NONE,
-            InputContext::TaskList,
-            Action::DoneTask,
-        ),
-        (
-            KeyCode::BackTab,
-            KeyModifiers::SHIFT,
-            InputContext::Form,
-            Action::Tab,
-        ),
+    let task_list_keys = [
+        (KeyCode::F(2), KeyModifiers::NONE, Action::Help),
+        (KeyCode::Char('+'), KeyModifiers::CONTROL, Action::Refresh),
+        (KeyCode::Home, KeyModifiers::ALT, Action::Reports),
+        (KeyCode::Char(' '), KeyModifiers::NONE, Action::DoneTask),
+        (KeyCode::Insert, KeyModifiers::NONE, Action::AddTask),
+    ];
+    for (code, mods, expected) in task_list_keys {
+        let action = d.ui.action(KeyEvent::new(code, mods));
+        assert_eq!(action, expected, "{code:?} with {mods:?}");
+    }
+
+    d.key(KeyCode::Insert).await?;
+    assert!(d.ui.has_active_form(), "Insert should open the add form");
+    let form_keys = [
+        (KeyCode::BackTab, KeyModifiers::SHIFT, Action::Tab),
         (
             KeyCode::Char('X'),
             KeyModifiers::CONTROL | KeyModifiers::SHIFT,
-            InputContext::Form,
             Action::MoveUp,
         ),
-    ] {
-        let action = d
-            .input
-            .handle_key_event_with_context(KeyEvent::new(code, mods), context);
+    ];
+    for (code, mods, expected) in form_keys {
+        let action = d.ui.action(KeyEvent::new(code, mods));
         assert_eq!(action, expected, "{code:?} with {mods:?}");
     }
     Ok(())
@@ -711,9 +683,7 @@ async fn shift_s_maps_to_sync_config_however_the_terminal_reports_it() -> Result
         (KeyCode::Char('S'), KeyModifiers::NONE),
         (KeyCode::Char('s'), KeyModifiers::SHIFT),
     ] {
-        let action = d
-            .input
-            .handle_key_event_with_context(KeyEvent::new(code, mods), InputContext::TaskList);
+        let action = d.ui.action(KeyEvent::new(code, mods));
         assert!(
             matches!(action, Action::SyncConfig),
             "{code:?} with {mods:?} should map to SyncConfig, got {action:?}"

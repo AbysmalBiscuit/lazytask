@@ -16,6 +16,8 @@ use crate::ui::components::sync_status::SyncStatusWidget;
 use crate::ui::components::task_form::{TaskForm, TaskFormResult};
 use crate::ui::views::main_view::MainView;
 use crate::ui::views::reports_view::{DateNavigation, ReportsView};
+use crossterm::event::KeyEvent;
+
 use crate::utils::keybindings::{InputContext, Keymap, Section};
 
 pub enum AppView {
@@ -97,8 +99,13 @@ impl AppUI {
             || self.sync_config_widget.is_active()
     }
 
-    /// Where the next key press goes, which decides the bindings it uses.
-    pub fn input_context(&self) -> InputContext {
+    /// The action a key press triggers, from the bindings of the view or
+    /// form that has focus.
+    pub fn action(&self, key: KeyEvent) -> Action {
+        self.keymap.action(self.input_context(), key)
+    }
+
+    fn input_context(&self) -> InputContext {
         if self.has_active_form() {
             return InputContext::Form;
         }
