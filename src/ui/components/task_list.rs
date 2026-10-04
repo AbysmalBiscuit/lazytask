@@ -30,7 +30,7 @@ impl Column {
     /// Resolves configured column names, ignoring case and keeping the
     /// first of any repeats. Returns the columns and the names that match no
     /// column.
-    pub fn resolve<'a>(names: &'a [String]) -> (Vec<Column>, Vec<&'a str>) {
+    pub fn resolve(names: &[String]) -> (Vec<Column>, Vec<&str>) {
         let mut columns = Vec::new();
         let mut unknown = Vec::new();
         for name in names {
