@@ -52,6 +52,12 @@ description = "Run all tests"
 run = ["cargo", "test", "--all-targets", "--locked", "--no-fail-fast"]
 guard = true
 
+[tasks.schema]
+description = "Regenerate schema/lazytask-config.json from the config types"
+run = ["cargo", "test", "--test", "config_schema", "--locked"]
+guard = true
+env = { LAZYTASK_UPDATE_SCHEMA = "1" }
+
 [tasks.run]
 description = "Run the lazytask TUI"
 run = ["cargo", "run", "--locked"]
